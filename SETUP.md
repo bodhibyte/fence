@@ -73,7 +73,65 @@ Targets that need signing:
 - SelfControl Killer
 - SCKillerHelper
 
-## Step 6: Build and Run
+## Step 6: Update Code Signing Requirements (CRITICAL)
+
+If you're building with your own Apple Developer certificate, you **must** update the code signing requirements in several files. The app uses SMJobBless to install a privileged helper, which requires the signing certificates to match specific requirements.
+
+### Find Your Team ID
+
+Your Team ID is visible in Xcode under Signing & Capabilities, or run:
+```bash
+security find-identity -v -p codesigning | grep "Apple Development"
+```
+The Team ID is the 10-character string in parentheses (e.g., `L5YX8CH3F5`).
+
+### Files to Update
+
+Replace the original Team ID (`EG6ZYP3AQH`) with your Team ID in these files:
+
+#### 1. `Info.plist` - SMPrivilegedExecutables (line ~61)
+#### 2. `Daemon/selfcontrold-Info.plist` - SMAuthorizedClients (line ~55)
+#### 3. `selfcontrol-cli-Info.plist` - SMPrivilegedExecutables (line ~56)
+#### 4. `Daemon/SCDaemon.m` - Runtime validation (line ~162)
+#### 5. `SelfControl.xcodeproj/project.pbxproj` - DEVELOPMENT_TEAM entries
+
+**Quick find-and-replace:**
+```bash
+# Replace Team ID in all files (change YOUR_TEAM_ID to your actual Team ID)
+find . -name "*.plist" -o -name "*.m" -o -name "project.pbxproj" | \
+  xargs sed -i '' 's/EG6ZYP3AQH/YOUR_TEAM_ID/g'
+```
+
+### Add Apple Development Certificate Support
+
+The default code signing requirements only allow Mac App Store or Developer ID certificates. For local development with "Apple Development" certificates, you need to add the Apple Development OID (`1.2.840.113635.100.6.1.12`).
+
+In the same 4 files above, update the certificate requirements from:
+```
+certificate leaf[field.1.2.840.113635.100.6.1.9] /* exists */ or certificate 1[field.1.2.840.113635.100.6.2.6] /* exists */ and certificate leaf[field.1.2.840.113635.100.6.1.13] /* exists */
+```
+
+To:
+```
+certificate leaf[field.1.2.840.113635.100.6.1.9] /* exists */ or certificate leaf[field.1.2.840.113635.100.6.1.12] /* exists */ or certificate 1[field.1.2.840.113635.100.6.2.6] /* exists */ and certificate leaf[field.1.2.840.113635.100.6.1.13] /* exists */
+```
+
+**Certificate OIDs explained:**
+- `1.2.840.113635.100.6.1.9` = Mac App Store
+- `1.2.840.113635.100.6.1.12` = Apple Development (for local builds)
+- `1.2.840.113635.100.6.1.13` = Developer ID Application
+
+### Remove Old Helper (if previously installed)
+
+If you've run SelfControl before with a different signing, remove the old helper:
+```bash
+sudo rm -f /Library/PrivilegedHelperTools/org.eyebeam.selfcontrold
+sudo rm -f /Library/LaunchDaemons/org.eyebeam.selfcontrold.plist
+```
+
+Then do a clean build in Xcode (⇧⌘K).
+
+## Step 7: Build and Run
 
 1. Select **SelfControl** scheme (top left)
 2. Press **Cmd+B** to build
