@@ -8,21 +8,25 @@
 #import "SCSentry.h"
 #import "SCSettings.h"
 
-#ifndef TESTING
+// Only include Sentry if available and not testing
+#if !defined(TESTING) && __has_include(<Sentry/Sentry.h>)
+#define SENTRY_ENABLED 1
 #import <Sentry/Sentry.h>
+#else
+#define SENTRY_ENABLED 0
 #endif
 
 @implementation SCSentry
 
 //org.eyebeam.SelfControl
 + (void)startSentry:(NSString*)componentId {
-#ifndef TESTING
+#if SENTRY_ENABLED
     [SentrySDK startWithConfigureOptions:^(SentryOptions *options) {
         options.dsn = @"https://58fbe7145368418998067f88896007b2@o504820.ingest.sentry.io/5592195";
         options.releaseName = [NSString stringWithFormat: @"%@%@", componentId, SELFCONTROL_VERSION_STRING];
         options.enableAutoSessionTracking = NO;
         options.environment = @"dev";
-        
+
         // make sure no data leaves the device if error reporting isn't enabled
         options.beforeSend = ^SentryEvent * _Nullable(SentryEvent * _Nonnull event) {
             if ([SCSentry errorReportingEnabled]) {
@@ -112,7 +116,7 @@
     [defaultsDict removeObjectForKey: @"SULastCheckTime"];
     [defaultsDict removeObjectForKey: @"SULastProfileSubmissionDate"];
 
-#ifndef TESTING
+#if SENTRY_ENABLED
     [SentrySDK configureScope:^(SentryScope * _Nonnull scope) {
         [scope setContextValue: defaultsDict forKey: @"NSUserDefaults"];
     }];
@@ -120,7 +124,7 @@
 }
 
 + (void)addBreadcrumb:(NSString*)message category:(NSString*)category {
-#ifndef TESTING
+#if SENTRY_ENABLED
     SentryBreadcrumb* crumb = [[SentryBreadcrumb alloc] init];
     crumb.level = kSentryLevelInfo;
     crumb.category = category;
@@ -146,7 +150,7 @@
     NSLog(@"Reporting error %@ to Sentry...", error);
     [[SCSettings sharedSettings] updateSentryContext];
     [SCSentry updateDefaultsContext];
-#ifndef TESTING
+#if SENTRY_ENABLED
     [SentrySDK captureError: error];
 #endif
 }
@@ -168,8 +172,8 @@
     NSLog(@"Reporting message %@ to Sentry...", message);
     [[SCSettings sharedSettings] updateSentryContext];
     [SCSentry updateDefaultsContext];
-    
-#ifndef TESTING
+
+#if SENTRY_ENABLED
     if (block != nil) {
         [SentrySDK captureMessage: message withScopeBlock: block];
     } else {
