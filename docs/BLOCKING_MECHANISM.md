@@ -191,16 +191,13 @@ Every 1 second (SCDaemonBlockMethods.m:~200):
 
 ---
 
-## Adding App Blocking: Design Proposal
+## App Blocking Implementation
 
-### The Gap
+### Overview
 
-Currently SelfControl blocks **network destinations**. It has no concept of **applications**. A blocked app can still:
-- Run and perform local operations
-- Use local network (127.0.0.1)
-- Interact with user
+SelfControl now supports blocking **applications** in addition to network destinations. Blocked apps are immediately terminated when launched.
 
-### Proposed Architecture
+### Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
@@ -211,186 +208,126 @@ Currently SelfControl blocks **network destinations**. It has no concept of **ap
 │                                                                          │
 │   Wall 2: Packet Filter (PF Rules) ............. [EXISTING]             │
 │                                                                          │
-│   Wall 3: App Blocker (Process Control) ........ [NEW]                  │
+│   Wall 3: App Blocker (Process Control) ........ [IMPLEMENTED]          │
 │   ┌───────────────────────────────────────────────────────────────┐     │
-│   │  OPTION A: Process Monitor + Kill                             │     │
-│   │  - Poll running processes every 0.5 seconds                   │     │
-│   │  - Match against blocked bundle IDs                           │     │
-│   │  - Send SIGKILL to matching processes                         │     │
-│   │  Pros: Simple, no kernel/SIP issues                           │     │
-│   │  Cons: App briefly opens before being killed                  │     │
-│   ├───────────────────────────────────────────────────────────────┤     │
-│   │  OPTION B: Endpoint Security Framework                        │     │
-│   │  - System Extension intercepts process creation               │     │
-│   │  - Block before app window appears                            │     │
-│   │  Pros: Clean prevention, no flicker                           │     │
-│   │  Cons: Requires notarization, entitlements, user approval     │     │
+│   │  Process Monitor + Kill (AppBlocker singleton)                │     │
+│   │  - Polls running processes every 500ms via libproc            │     │
+│   │  - Extracts bundle ID from .app/Contents/Info.plist           │     │
+│   │  - Kills matching processes with SIGTERM/SIGKILL              │     │
+│   │  - Singleton pattern ensures persistence across method calls  │     │
 │   └───────────────────────────────────────────────────────────────┘     │
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Implementation Option A: Process Monitor (Recommended)
+### Implementation Details
 
-**Why:** Simpler, fits existing architecture, no notarization changes needed
+**Key Design Decisions:**
 
-**New Files to Create:**
+1. **Singleton Pattern:** `[AppBlocker sharedBlocker]` ensures the blocker persists for the daemon's lifetime, independent of BlockManager's lifecycle. This was critical because BlockManager is a local variable that gets deallocated after `finalizeBlock`.
 
-1. **`Block Management/AppBlocker.h`**
+2. **libproc APIs:** Uses `proc_listpids()` and `proc_pidpath()` instead of `NSWorkspace` because the daemon runs as root without a GUI session.
+
+3. **Bundle ID Extraction:** Walks up the executable path to find `.app` bundle, then reads `Info.plist` to get `CFBundleIdentifier`.
+
+**Core Implementation (`Block Management/AppBlocker.m`):**
 ```objc
-@interface AppBlocker : NSObject
-
-@property (readonly) NSSet<NSString*>* blockedBundleIDs;
-
-- (void)addBlockedApp:(NSString*)bundleID;
-- (void)startMonitoring;
-- (void)stopMonitoring;
-- (NSArray<NSRunningApplication*>*)findAndKillBlockedApps;
-
-@end
-```
-
-2. **`Block Management/AppBlocker.m`**
-```objc
-@implementation AppBlocker {
-    NSMutableSet<NSString*>* _blockedBundleIDs;
-    dispatch_source_t _monitorTimer;
-}
-
-- (void)startMonitoring {
-    // Create timer on daemon queue
-    _monitorTimer = dispatch_source_create(
-        DISPATCH_SOURCE_TYPE_TIMER, 0, 0,
-        dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0)
-    );
-
-    // Fire every 500ms
-    dispatch_source_set_timer(_monitorTimer,
-        dispatch_time(DISPATCH_TIME_NOW, 0),
-        500 * NSEC_PER_MSEC,
-        50 * NSEC_PER_MSEC
-    );
-
-    dispatch_source_set_event_handler(_monitorTimer, ^{
-        [self findAndKillBlockedApps];
++ (instancetype)sharedBlocker {
+    static AppBlocker* shared = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        shared = [[AppBlocker alloc] init];
     });
-
-    dispatch_resume(_monitorTimer);
+    return shared;
 }
 
-- (NSArray<NSRunningApplication*>*)findAndKillBlockedApps {
-    NSMutableArray* killed = [NSMutableArray array];
+- (NSArray<NSNumber*>*)findAndKillBlockedApps {
+    // Get all PIDs via libproc (daemon-safe, no NSWorkspace)
+    int numPids = proc_listpids(PROC_ALL_PIDS, 0, NULL, 0);
+    pid_t* pids = malloc(sizeof(pid_t) * numPids);
+    proc_listpids(PROC_ALL_PIDS, 0, pids, sizeof(pid_t) * numPids);
 
-    for (NSRunningApplication* app in [[NSWorkspace sharedWorkspace] runningApplications]) {
-        if ([_blockedBundleIDs containsObject:app.bundleIdentifier]) {
-            [app forceTerminate];
-            [killed addObject:app];
+    for (int i = 0; i < numPids; i++) {
+        // Get executable path
+        char pathBuffer[PROC_PIDPATHINFO_MAXSIZE];
+        proc_pidpath(pids[i], pathBuffer, sizeof(pathBuffer));
 
-            // Log the kill
-            NSLog(@"SelfControl: Blocked app %@ (PID %d)",
-                  app.bundleIdentifier, app.processIdentifier);
+        // Extract bundle ID from .app/Contents/Info.plist
+        NSString* bundleID = [self bundleIDFromExecutablePath:path];
+
+        if ([blockedBundleIDs containsObject:bundleID]) {
+            kill(pids[i], SIGTERM);  // Graceful termination
         }
     }
-
-    return killed;
+    free(pids);
 }
-
-@end
 ```
 
 ### Integration Points
 
-**1. SCBlockEntry.m - Add app support:**
+**1. SCBlockEntry.m - App entry parsing:**
 ```objc
-// Add new property
-@property (nonatomic, strong) NSString* appBundleID;
-
-// New init method
-- (instancetype)initWithAppBundleID:(NSString*)bundleID {
-    self = [super init];
-    if (self) {
-        _appBundleID = bundleID;
-        _hostname = nil;  // Not a network block
-    }
-    return self;
-}
-
-// Modify parsing to detect app: prefix
-- (instancetype)initWithString:(NSString*)entryString {
+// Parses "app:com.bundle.id" format
++ (SCBlockEntry*)entryFromString:(NSString*)entryString {
     if ([entryString hasPrefix:@"app:"]) {
-        return [self initWithAppBundleID:
-            [entryString substringFromIndex:4]];
+        SCBlockEntry* entry = [[SCBlockEntry alloc] init];
+        entry.appBundleID = [entryString substringFromIndex:4];
+        entry.hostname = nil;  // Not a network block
+        return entry;
     }
     // ... existing hostname parsing
 }
+
+- (BOOL)isAppEntry {
+    return self.appBundleID != nil && self.appBundleID.length > 0;
+}
 ```
 
-**2. BlockManager.m - Handle app entries:**
+**2. BlockManager.m - Routes app entries to AppBlocker:**
 ```objc
-// Add AppBlocker instance
-@property (nonatomic, strong) AppBlocker* appBlocker;
+// Uses singleton
+_appBlocker = [AppBlocker sharedBlocker];
 
-- (void)prepareToAddBlock {
-    // ... existing code
-    self.appBlocker = [[AppBlocker alloc] init];
+- (void)addBlockEntryFromString:(NSString*)entryString {
+    SCBlockEntry* entry = [SCBlockEntry entryFromString:entryString];
+
+    // App entries bypass hostname-related logic
+    if ([entry isAppEntry]) {
+        [self addBlockEntry:entry];
+        return;
+    }
+    // ... existing subdomain/related entry logic
 }
 
 - (void)addBlockEntry:(SCBlockEntry*)entry {
-    if (entry.appBundleID) {
+    if ([entry isAppEntry]) {
         [self.appBlocker addBlockedApp:entry.appBundleID];
-    } else {
-        // ... existing network blocking
+        return;
     }
+    // ... existing network blocking
 }
 
 - (void)finalizeBlock {
     // ... existing code
-    [self.appBlocker startMonitoring];
-}
-```
-
-**3. SCDaemonBlockMethods.m - Add to checkup:**
-```objc
-- (void)checkupBlock {
-    // ... existing checkup code
-
-    // Also check app blocking
-    AppBlocker* appBlocker = self.blockManager.appBlocker;
-    if (appBlocker) {
-        [appBlocker findAndKillBlockedApps];
+    if (self.appBlocker.blockedBundleIDs.count > 0) {
+        [self.appBlocker startMonitoring];
     }
 }
 ```
 
-**4. SCSettings.m - Store app blocklist:**
+**3. UI - DomainListWindowController.m:**
 ```objc
-// Add new key
-NSString* const kActiveAppBlocklist = @"ActiveAppBlocklist";
-
-// In settings dictionary
-- (NSArray<NSString*>*)activeAppBlocklist {
-    return [self valueForKey:kActiveAppBlocklist];
-}
-```
-
-**5. UI Changes - DomainListWindowController.m:**
-```objc
-// Add segmented control: Websites | Apps
-// When Apps selected, show app picker
-
+// "Add App" button opens app picker
 - (IBAction)addAppToBlocklist:(id)sender {
     NSOpenPanel* panel = [NSOpenPanel openPanel];
     panel.allowedContentTypes = @[UTTypeApplication];
     panel.directoryURL = [NSURL fileURLWithPath:@"/Applications"];
 
-    [panel beginSheetModalForWindow:self.window
-                  completionHandler:^(NSModalResponse result) {
+    [panel beginSheetModalForWindow:self.window completionHandler:^(NSModalResponse result) {
         if (result == NSModalResponseOK) {
             NSBundle* appBundle = [NSBundle bundleWithURL:panel.URL];
-            NSString* entry = [NSString stringWithFormat:@"app:%@",
-                appBundle.bundleIdentifier];
+            NSString* entry = [NSString stringWithFormat:@"app:%@", appBundle.bundleIdentifier];
             [self.blocklist addObject:entry];
-            [self.blocklistTableView reloadData];
         }
     }];
 }
@@ -509,19 +446,17 @@ open -a Safari
 
 ---
 
-## Summary: Files to Modify
+## Summary: Files Changed
 
-| File | Change Type | Description |
-|------|-------------|-------------|
-| `Block Management/AppBlocker.m/h` | **NEW** | Process monitor + killer |
-| `Block Management/SCBlockEntry.m/h` | Modify | Add `appBundleID` property |
-| `Block Management/BlockManager.m` | Modify | Integrate AppBlocker |
-| `Daemon/SCDaemonBlockMethods.m` | Modify | Add app check to checkup |
-| `Common/SCSettings.m` | Modify | Add `ActiveAppBlocklist` |
-| `DomainListWindowController.m` | Modify | Add app picker UI |
-| `DomainListWindowController.xib` | Modify | Add segmented control |
+| File | Status | Description |
+|------|--------|-------------|
+| `Block Management/AppBlocker.h/m` | ✅ Implemented | Singleton process monitor, libproc-based |
+| `Block Management/SCBlockEntry.h/m` | ✅ Implemented | `appBundleID` property, `isAppEntry` method |
+| `Block Management/BlockManager.m` | ✅ Implemented | Routes app entries, uses singleton |
+| `DomainListWindowController.m` | ✅ Implemented | "Add App" button with app picker |
+| `Base.lproj/DomainList.xib` | ✅ Implemented | Add App button in UI |
 
-**Estimated Complexity:** ~500 lines of new code, ~100 lines of modifications
+**Implementation Stats:** ~300 lines of new code in AppBlocker, ~50 lines modifications elsewhere
 
 ---
 

@@ -10,7 +10,7 @@
 |--------------|-----------|-----------|
 | Understand the architecture | [SYSTEM_ARCHITECTURE.md](../SYSTEM_ARCHITECTURE.md) | - |
 | Understand blocking | [BLOCKING_MECHANISM.md](BLOCKING_MECHANISM.md) | `BlockManager.m`, `PacketFilter.m`, `HostFileBlocker.m` |
-| Add app blocking | [BLOCKING_MECHANISM.md#adding-app-blocking](BLOCKING_MECHANISM.md#adding-app-blocking-design-proposal) | Create `AppBlocker.m` |
+| Understand app blocking | [BLOCKING_MECHANISM.md#app-blocking](BLOCKING_MECHANISM.md#app-blocking-implementation) | `AppBlocker.m`, `SCBlockEntry.m` |
 | Modify the UI | - | `AppController.m`, `*.xib` files |
 | Add XPC methods | - | `SCDaemonProtocol.h`, `SCDaemonXPC.m`, `SCXPCClient.m` |
 | Debug block issues | [BLOCKING_MECHANISM.md](BLOCKING_MECHANISM.md) | `SCDaemonBlockMethods.m:checkupBlock` |
@@ -93,7 +93,8 @@ SelfControl/
 │   ├── BlockManager.m ─────────────── Orchestrator
 │   ├── HostFileBlocker.m ──────────── /etc/hosts
 │   ├── PacketFilter.m ─────────────── PF firewall
-│   └── SCBlockEntry.m ─────────────── Entry data model
+│   ├── AppBlocker.m ─────────────────  App process killer (singleton)
+│   └── SCBlockEntry.m ─────────────── Entry data model (hosts + apps)
 │
 ├── 🔧 COMMON LAYER (Common/)
 │   ├── SCSettings.m ───────────────── Persistent settings
