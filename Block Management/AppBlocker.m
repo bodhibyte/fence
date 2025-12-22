@@ -27,6 +27,15 @@ static const uint64_t APP_BLOCK_POLL_LEEWAY_MS = 50;
 
 @implementation AppBlocker
 
++ (instancetype)sharedBlocker {
+    static AppBlocker* shared = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        shared = [[AppBlocker alloc] init];
+    });
+    return shared;
+}
+
 - (instancetype)init {
     if (self = [super init]) {
         _mutableBlockedBundleIDs = [NSMutableSet set];
@@ -125,7 +134,12 @@ static const uint64_t APP_BLOCK_POLL_LEEWAY_MS = 50;
             // Found app bundle, read Info.plist
             NSString* plistPath = [path stringByAppendingPathComponent:@"Contents/Info.plist"];
             NSDictionary* info = [NSDictionary dictionaryWithContentsOfFile:plistPath];
-            return info[@"CFBundleIdentifier"];
+            NSString* bundleID = info[@"CFBundleIdentifier"];
+            // Debug: log only if this looks like a user app (not system)
+            if (bundleID && ![path hasPrefix:@"/System"] && ![path hasPrefix:@"/usr"]) {
+                // NSLog(@"AppBlocker: Path %@ -> bundleID %@", path, bundleID);
+            }
+            return bundleID;
         }
         path = [path stringByDeletingLastPathComponent];
     }
@@ -169,6 +183,9 @@ static const uint64_t APP_BLOCK_POLL_LEEWAY_MS = 50;
     int actualCount = proc_listpids(PROC_ALL_PIDS, 0, pids, (int)(sizeof(pid_t) * (size_t)numPids));
     actualCount = actualCount / (int)sizeof(pid_t);
 
+    NSLog(@"AppBlocker: Polling - checking %d processes against %lu blocked apps: %@",
+          actualCount, (unsigned long)currentBlockedIDs.count, currentBlockedIDs);
+
     for (int i = 0; i < actualCount; i++) {
         pid_t pid = pids[i];
         if (pid == 0) continue;
@@ -186,6 +203,13 @@ static const uint64_t APP_BLOCK_POLL_LEEWAY_MS = 50;
         // Get bundle ID from executable path
         NSString* bundleID = [self bundleIDFromExecutablePath:execPath];
         if (!bundleID) continue;
+
+        // Log apps that match or might match blocked apps (for debugging)
+        for (NSString* blockedID in currentBlockedIDs) {
+            if ([bundleID containsString:blockedID] || [blockedID containsString:bundleID]) {
+                NSLog(@"AppBlocker: Checking app %@ (PID %d) against blocked %@", bundleID, pid, blockedID);
+            }
+        }
 
         // Check if this app should be blocked
         if ([currentBlockedIDs containsObject:bundleID]) {

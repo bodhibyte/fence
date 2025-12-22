@@ -67,7 +67,7 @@ BOOL appendMode = NO;
         addedBlockEntries = [NSMutableSet set];
 
         // Initialize app blocker for blocking applications
-        _appBlocker = [[AppBlocker alloc] init];
+        _appBlocker = [AppBlocker sharedBlocker];
 	}
 
 	return self;
@@ -134,6 +134,9 @@ BOOL appendMode = NO;
 	[pf startBlock];
 
     // Start app blocker monitoring if any apps are blocked
+    NSLog(@"BlockManager: finalizeBlock - appBlocker has %lu apps: %@",
+          (unsigned long)self.appBlocker.blockedBundleIDs.count,
+          self.appBlocker.blockedBundleIDs);
     if (self.appBlocker.blockedBundleIDs.count > 0) {
         [self.appBlocker startMonitoring];
         NSLog(@"BlockManager: Started app blocking for %lu apps",
@@ -214,6 +217,7 @@ BOOL appendMode = NO;
 
     // App entries don't have hostnames - route directly to addBlockEntry
     if ([entry isAppEntry]) {
+        NSLog(@"BlockManager: Processing app entry: %@", entry.appBundleID);
         [self addBlockEntry: entry];
         return;
     }

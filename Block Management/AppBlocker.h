@@ -12,6 +12,9 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface AppBlocker : NSObject
 
+/// Shared singleton instance - persists for the lifetime of the daemon
++ (instancetype)sharedBlocker;
+
 /// Set of bundle IDs to block (e.g., "com.apple.Terminal")
 @property (nonatomic, readonly) NSSet<NSString*>* blockedBundleIDs;
 
