@@ -220,118 +220,13 @@ SelfControl now supports blocking **applications** in addition to network destin
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Implementation Details
+### Key Design Decisions
 
-**Key Design Decisions:**
-
-1. **Singleton Pattern:** `[AppBlocker sharedBlocker]` ensures the blocker persists for the daemon's lifetime, independent of BlockManager's lifecycle. This was critical because BlockManager is a local variable that gets deallocated after `finalizeBlock`.
-
-2. **libproc APIs:** Uses `proc_listpids()` and `proc_pidpath()` instead of `NSWorkspace` because the daemon runs as root without a GUI session.
-
-3. **Bundle ID Extraction:** Walks up the executable path to find `.app` bundle, then reads `Info.plist` to get `CFBundleIdentifier`.
-
-**Core Implementation (`Block Management/AppBlocker.m`):**
-```objc
-+ (instancetype)sharedBlocker {
-    static AppBlocker* shared = nil;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-        shared = [[AppBlocker alloc] init];
-    });
-    return shared;
-}
-
-- (NSArray<NSNumber*>*)findAndKillBlockedApps {
-    // Get all PIDs via libproc (daemon-safe, no NSWorkspace)
-    int numPids = proc_listpids(PROC_ALL_PIDS, 0, NULL, 0);
-    pid_t* pids = malloc(sizeof(pid_t) * numPids);
-    proc_listpids(PROC_ALL_PIDS, 0, pids, sizeof(pid_t) * numPids);
-
-    for (int i = 0; i < numPids; i++) {
-        // Get executable path
-        char pathBuffer[PROC_PIDPATHINFO_MAXSIZE];
-        proc_pidpath(pids[i], pathBuffer, sizeof(pathBuffer));
-
-        // Extract bundle ID from .app/Contents/Info.plist
-        NSString* bundleID = [self bundleIDFromExecutablePath:path];
-
-        if ([blockedBundleIDs containsObject:bundleID]) {
-            kill(pids[i], SIGTERM);  // Graceful termination
-        }
-    }
-    free(pids);
-}
-```
-
-### Integration Points
-
-**1. SCBlockEntry.m - App entry parsing:**
-```objc
-// Parses "app:com.bundle.id" format
-+ (SCBlockEntry*)entryFromString:(NSString*)entryString {
-    if ([entryString hasPrefix:@"app:"]) {
-        SCBlockEntry* entry = [[SCBlockEntry alloc] init];
-        entry.appBundleID = [entryString substringFromIndex:4];
-        entry.hostname = nil;  // Not a network block
-        return entry;
-    }
-    // ... existing hostname parsing
-}
-
-- (BOOL)isAppEntry {
-    return self.appBundleID != nil && self.appBundleID.length > 0;
-}
-```
-
-**2. BlockManager.m - Routes app entries to AppBlocker:**
-```objc
-// Uses singleton
-_appBlocker = [AppBlocker sharedBlocker];
-
-- (void)addBlockEntryFromString:(NSString*)entryString {
-    SCBlockEntry* entry = [SCBlockEntry entryFromString:entryString];
-
-    // App entries bypass hostname-related logic
-    if ([entry isAppEntry]) {
-        [self addBlockEntry:entry];
-        return;
-    }
-    // ... existing subdomain/related entry logic
-}
-
-- (void)addBlockEntry:(SCBlockEntry*)entry {
-    if ([entry isAppEntry]) {
-        [self.appBlocker addBlockedApp:entry.appBundleID];
-        return;
-    }
-    // ... existing network blocking
-}
-
-- (void)finalizeBlock {
-    // ... existing code
-    if (self.appBlocker.blockedBundleIDs.count > 0) {
-        [self.appBlocker startMonitoring];
-    }
-}
-```
-
-**3. UI - DomainListWindowController.m:**
-```objc
-// "Add App" button opens app picker
-- (IBAction)addAppToBlocklist:(id)sender {
-    NSOpenPanel* panel = [NSOpenPanel openPanel];
-    panel.allowedContentTypes = @[UTTypeApplication];
-    panel.directoryURL = [NSURL fileURLWithPath:@"/Applications"];
-
-    [panel beginSheetModalForWindow:self.window completionHandler:^(NSModalResponse result) {
-        if (result == NSModalResponseOK) {
-            NSBundle* appBundle = [NSBundle bundleWithURL:panel.URL];
-            NSString* entry = [NSString stringWithFormat:@"app:%@", appBundle.bundleIdentifier];
-            [self.blocklist addObject:entry];
-        }
-    }];
-}
-```
+| Decision | Rationale |
+|----------|-----------|
+| Singleton `[AppBlocker sharedBlocker]` | BlockManager is local var, gets deallocated after `finalizeBlock` |
+| libproc APIs (`proc_listpids`, `proc_pidpath`) | Daemon runs as root without GUI session, can't use NSWorkspace |
+| Bundle ID from `.app/Contents/Info.plist` | Reliable way to get CFBundleIdentifier from executable path |
 
 ### Block Entry Format (Extended)
 
@@ -446,17 +341,17 @@ open -a Safari
 
 ---
 
-## Summary: Files Changed
+## App Blocking: Quick Reference
 
-| File | Status | Description |
-|------|--------|-------------|
-| `Block Management/AppBlocker.h/m` | ✅ Implemented | Singleton process monitor, libproc-based |
-| `Block Management/SCBlockEntry.h/m` | ✅ Implemented | `appBundleID` property, `isAppEntry` method |
-| `Block Management/BlockManager.m` | ✅ Implemented | Routes app entries, uses singleton |
-| `DomainListWindowController.m` | ✅ Implemented | "Add App" button with app picker |
-| `Base.lproj/DomainList.xib` | ✅ Implemented | Add App button in UI |
-
-**Implementation Stats:** ~300 lines of new code in AppBlocker, ~50 lines modifications elsewhere
+| Task | File | Method |
+|------|------|--------|
+| Get singleton | `AppBlocker.m` | `+sharedBlocker` |
+| Add blocked app | `AppBlocker.m` | `-addBlockedApp:` |
+| Start polling | `AppBlocker.m` | `-startMonitoring` |
+| Kill blocked apps | `AppBlocker.m` | `-findAndKillBlockedApps` |
+| Parse app entry | `SCBlockEntry.m` | `+entryFromString:` |
+| Check if app entry | `SCBlockEntry.m` | `-isAppEntry` |
+| Route to blocker | `BlockManager.m` | `-addBlockEntry:` |
 
 ---
 

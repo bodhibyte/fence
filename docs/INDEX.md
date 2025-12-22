@@ -54,22 +54,17 @@
 ```
 
 ### Block Activation Flow
-```
-User clicks "Start" ──► App validates ──► XPC to daemon ──► Store settings
-                                                                  │
-         ┌────────────────────────────────────────────────────────┘
-         ▼
-    BlockManager ──► For each entry:
-         │              ├── Parse hostname:port/mask
-         │              ├── Resolve DNS to IPs
-         │              ├── Add to /etc/hosts
-         │              └── Add PF rules
-         │
-         └──► Finalize:
-                  ├── Write /etc/hosts
-                  ├── Run pfctl -f /etc/pf.conf
-                  ├── Start 1-second checkup timer
-                  └── Reply success to app
+```mermaid
+flowchart LR
+    A[User clicks Start] --> B[XPC to daemon]
+    B --> C[BlockManager]
+    C --> D{Entry type?}
+    D -->|hostname| E[HostFileBlocker + PacketFilter]
+    D -->|app:bundleID| F[AppBlocker singleton]
+    E --> G[finalizeBlock]
+    F --> G
+    G --> H[Start checkup timer]
+    G --> I[Start app monitor 500ms]
 ```
 
 ---
@@ -176,21 +171,6 @@ SelfControl/
 1. Verify code signing (app and daemon)
 2. Check Info.plist SMPrivilegedExecutables
 3. Ensure daemon binary in `/Library/PrivilegedHelperTools/`
-
----
-
-## File Size Reference
-
-| File | Lines | Complexity |
-|------|-------|------------|
-| AppController.m | ~806 | High - main controller |
-| BlockManager.m | ~531 | High - blocking orchestrator |
-| SCDaemonBlockMethods.m | ~388 | High - daemon operations |
-| TimerWindowController.m | ~450 | Medium - timer UI |
-| SCSettings.m | ~300 | Medium - settings |
-| HostFileBlocker.m | ~250 | Medium - hosts file |
-| PacketFilter.m | ~180 | Low - PF rules |
-| SCBlockEntry.m | ~120 | Low - data model |
 
 ---
 
