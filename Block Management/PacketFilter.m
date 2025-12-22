@@ -7,6 +7,7 @@
 //
 
 #import "PacketFilter.h"
+#import "SCDebugUtilities.h"
 
 NSString* const kPfctlExecutablePath = @"/sbin/pfctl";
 NSString* const kPFConfPath = @"/etc/pf.conf";
@@ -169,6 +170,14 @@ NSFileHandle* appendFileHandle;
 }
 
 - (int)startBlock {
+#ifdef DEBUG
+    // Check debug override - if blocking is disabled, skip PF configuration
+    if ([SCDebugUtilities isDebugBlockingDisabled]) {
+        NSLog(@"DEBUG: Skipping PF block activation - debug override enabled");
+        return 0;
+    }
+#endif
+
 	[self addSelfControlConfig];
 	[self writeConfiguration];
 

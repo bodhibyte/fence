@@ -89,7 +89,7 @@ NSString* const SETTINGS_FILE_DIR = @"/usr/local/etc/";
 
         @"BlockIsRunning": @NO, // tells us whether a block is actually running on the system (to the best of our knowledge)
         @"TamperingDetected": @NO,
-        
+
         // block settings
         // the user sets these in defaults, then when a block is started they're copied over to settings
         @"EvaluateCommonSubdomains": @YES,
@@ -102,7 +102,11 @@ NSString* const SETTINGS_FILE_DIR = @"/usr/local/etc/";
         @"EnableErrorReporting": @([SCMiscUtilities systemThirdPartyCrashReportingEnabled]),
 
         @"SettingsVersionNumber": @0,
-        @"LastSettingsUpdate": [NSDate distantPast] // special value that keeps track of when we last updated our settings
+        @"LastSettingsUpdate": [NSDate distantPast], // special value that keeps track of when we last updated our settings
+
+        // Debug mode setting - only respected in DEBUG builds
+        // Allows disabling ALL blocking for safe development
+        @"DebugBlockingDisabled": @NO
     };
 }
 

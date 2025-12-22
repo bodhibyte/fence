@@ -32,11 +32,30 @@
     return [[SCBlockEntry alloc] initWithHostname: hostname];
 }
 
++ (instancetype)entryWithAppBundleID:(NSString*)bundleID {
+    SCBlockEntry* entry = [[SCBlockEntry alloc] init];
+    entry.appBundleID = bundleID;
+    entry.hostname = nil;
+    entry.port = 0;
+    entry.maskLen = 0;
+    return entry;
+}
+
 + (instancetype)entryFromString:(NSString*)hostString {
     // don't do anything with blank hostnames, however they got on the list...
     // otherwise they could end up screwing up the block
     if (![[hostString stringByTrimmingCharactersInSet: [NSCharacterSet whitespaceAndNewlineCharacterSet]] length]) {
         return nil;
+    }
+
+    // Handle app: prefix for app blocking
+    if ([hostString hasPrefix:@"app:"]) {
+        NSString* bundleID = [[hostString substringFromIndex:4]
+            stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+        if (bundleID.length == 0) {
+            return nil;
+        }
+        return [SCBlockEntry entryWithAppBundleID:bundleID];
     }
 
     NSString* hostname;
@@ -81,7 +100,14 @@
 }
 
 - (NSString*)description {
+    if ([self isAppEntry]) {
+        return [NSString stringWithFormat: @"[Entry: appBundleID = %@]", self.appBundleID];
+    }
     return [NSString stringWithFormat: @"[Entry: hostname = %@, port = %ld, maskLen = %ld]", self.hostname, (long)self.port, (long)self.maskLen];
+}
+
+- (BOOL)isAppEntry {
+    return self.appBundleID != nil && self.appBundleID.length > 0;
 }
 
 // method implementations of isEqual, isEqualToEntry, and hash are based on this answer from StackOverflow: https://stackoverflow.com/q/254281
@@ -97,7 +123,15 @@
 - (BOOL)isEqualToEntry:(SCBlockEntry*)otherEntry {
     if (otherEntry == nil) return NO;
     if (self == otherEntry) return YES;
-    
+
+    // Handle app entries
+    if ([self isAppEntry] || [otherEntry isAppEntry]) {
+        // Both must be app entries with matching bundle IDs
+        if (![self isAppEntry] || ![otherEntry isAppEntry]) return NO;
+        return [self.appBundleID isEqualToString:otherEntry.appBundleID];
+    }
+
+    // Handle network entries (existing logic)
     if ([self.hostname isEqualToString: otherEntry.hostname] && self.port == otherEntry.port && self.maskLen == otherEntry.maskLen) {
         return YES;
     } else {
@@ -108,7 +142,14 @@
 - (NSUInteger)hash {
     NSUInteger prime = 31;
     NSUInteger result = 1;
-    
+
+    // Hash app entries differently
+    if ([self isAppEntry]) {
+        result = prime * result + [self.appBundleID hash];
+        return result;
+    }
+
+    // Hash network entries (existing logic)
     if (self.hostname == nil) {
         result = prime * result;
     } else {

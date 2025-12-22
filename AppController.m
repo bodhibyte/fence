@@ -32,6 +32,7 @@
 #import "SCBlockFileReaderWriter.h"
 #import "SCUIUtilities.h"
 #import <TransformerKit/NSValueTransformer+TransformerKit.h>
+#import "SCDebugUtilities.h"
 
 @interface AppController () {}
 
@@ -430,6 +431,12 @@
 		[unsupportedVersionAlert addButtonWithTitle: NSLocalizedString(@"OK", nil)];
 		[unsupportedVersionAlert runModal];
 	}
+
+#ifdef DEBUG
+    // Set up debug menu (only in DEBUG builds)
+    [self setupDebugMenu];
+    [self updateDebugIndicator];
+#endif
 }
 
 - (void)applicationWillTerminate:(NSNotification *)notification {
@@ -802,5 +809,95 @@
     [[NSWorkspace sharedWorkspace] openURL: url];
 }
 
+#pragma mark - Debug Menu (DEBUG builds only)
+
+#ifdef DEBUG
+
+- (void)setupDebugMenu {
+    NSMenu* mainMenu = [NSApp mainMenu];
+
+    // Create Debug menu
+    NSMenuItem* debugMenuItem = [[NSMenuItem alloc] initWithTitle:@"Debug"
+                                                           action:nil
+                                                    keyEquivalent:@""];
+    NSMenu* debugMenu = [[NSMenu alloc] initWithTitle:@"Debug"];
+
+    // Add "Disable All Blocking" item
+    NSMenuItem* disableBlockingItem = [[NSMenuItem alloc]
+        initWithTitle:@"Disable All Blocking"
+               action:@selector(toggleDebugBlocking:)
+        keyEquivalent:@""];
+    disableBlockingItem.target = self;
+    [debugMenu addItem:disableBlockingItem];
+
+    // Add separator
+    [debugMenu addItem:[NSMenuItem separatorItem]];
+
+    // Add info label
+    NSMenuItem* infoItem = [[NSMenuItem alloc]
+        initWithTitle:@"(DEBUG BUILD ONLY)"
+               action:nil
+        keyEquivalent:@""];
+    infoItem.enabled = NO;
+    [debugMenu addItem:infoItem];
+
+    debugMenuItem.submenu = debugMenu;
+
+    // Insert before Help menu
+    NSInteger helpIndex = [mainMenu indexOfItemWithTitle:@"Help"];
+    if (helpIndex != -1) {
+        [mainMenu insertItem:debugMenuItem atIndex:helpIndex];
+    } else {
+        [mainMenu addItem:debugMenuItem];
+    }
+}
+
+- (IBAction)toggleDebugBlocking:(id)sender {
+    BOOL currentState = [SCDebugUtilities isDebugBlockingDisabled];
+    [SCDebugUtilities setDebugBlockingDisabled:!currentState];
+
+    // Update the window title to show debug mode is active
+    [self updateDebugIndicator];
+
+    // Show alert to confirm
+    NSAlert* alert = [[NSAlert alloc] init];
+    if (!currentState) {
+        // Just enabled debug mode
+        [alert setMessageText:@"Debug Mode Enabled"];
+        [alert setInformativeText:@"ALL blocking is now disabled. This includes:\n"
+                                  @"- Website blocking (hosts file + firewall)\n"
+                                  @"- App blocking\n\n"
+                                  @"The block timer will continue but rules won't be enforced."];
+        [alert setAlertStyle:NSAlertStyleWarning];
+    } else {
+        // Just disabled debug mode
+        [alert setMessageText:@"Debug Mode Disabled"];
+        [alert setInformativeText:@"Blocking is now active again."];
+    }
+    [alert addButtonWithTitle:@"OK"];
+    [alert runModal];
+}
+
+- (void)updateDebugIndicator {
+    if ([SCDebugUtilities isDebugBlockingDisabled]) {
+        // Show visual indicator - change window title
+        [initialWindow_ setTitle:@"SelfControl [DEBUG - BLOCKING DISABLED]"];
+    } else {
+        [initialWindow_ setTitle:@"SelfControl"];
+    }
+}
+
+- (BOOL)validateMenuItem:(NSMenuItem*)menuItem {
+    if (menuItem.action == @selector(toggleDebugBlocking:)) {
+        // Update checkmark state
+        menuItem.state = [SCDebugUtilities isDebugBlockingDisabled]
+                         ? NSControlStateValueOn
+                         : NSControlStateValueOff;
+        return YES;
+    }
+    return YES;
+}
+
+#endif
 
 @end

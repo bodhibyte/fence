@@ -26,6 +26,7 @@
 
 @class SCBlockEntry;
 @class HostFileBlockerSet;
+@class AppBlocker;
 
 @interface BlockManager : NSObject {
 	NSOperationQueue* opQueue;
@@ -38,6 +39,9 @@
 	BOOL includeLinkedDomains;
     NSMutableSet* addedBlockEntries;
 }
+
+/// App blocker instance for killing blocked applications
+@property (nonatomic, strong, readonly) AppBlocker* appBlocker;
 
 - (BlockManager*)initAsAllowlist:(BOOL)allowlist;
 - (BlockManager*)initAsAllowlist:(BOOL)allowlist allowLocal:(BOOL)local;

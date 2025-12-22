@@ -110,4 +110,7 @@
 - (IBAction)importIncomingMailServersFromMailMate:(id)sender;
 - (IBAction)importOutgoingMailServersFromMailMate:(id)sender;
 
+// Add an app to the blocklist by selecting from Applications folder
+- (IBAction)addAppToBlocklist:(id)sender;
+
 @end

@@ -21,6 +21,7 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #import "HostFileBlocker.h"
+#import "SCDebugUtilities.h"
 
 NSString* const kHostFileBlockerPath = @"/etc/hosts";
 NSString* const kHostFileBlockerSelfControlHeader = @"# BEGIN SELFCONTROL BLOCK";
@@ -78,6 +79,14 @@ NSString* const kDefaultHostsFileContents = @"##\n"
 }
 
 - (BOOL)writeNewFileContents {
+#ifdef DEBUG
+    // Check debug override - if blocking is disabled, skip hosts file modification
+    if ([SCDebugUtilities isDebugBlockingDisabled]) {
+        NSLog(@"DEBUG: Skipping hosts file modification - debug override enabled");
+        return YES;
+    }
+#endif
+
 	[strLock lock];
 
 	BOOL ret = [newFileContents writeToFile: hostFilePath atomically: YES encoding: stringEnc error: NULL];

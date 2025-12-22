@@ -23,6 +23,7 @@
 
 #import "DomainListWindowController.h"
 #import "AppController.h"
+#import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 
 @implementation DomainListWindowController
 
@@ -179,6 +180,18 @@
 	[cell setTextColor: NSColor.textColor];
 	NSString* str = [[cell title] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
 	if([str isEqual: @""]) return;
+
+    // Handle app entries - show them in purple with app name
+    if ([str hasPrefix:@"app:"]) {
+        NSString* bundleID = [str substringFromIndex:4];
+        NSString* appName = [self appNameForBundleID:bundleID];
+        if (appName) {
+            [cell setStringValue:[NSString stringWithFormat:@"[App] %@ (%@)", appName, bundleID]];
+        }
+        [cell setTextColor:[NSColor systemPurpleColor]];
+        return;
+    }
+
 	if([defaults_ boolForKey: @"HighlightInvalidHosts"]) {
 		// Validate the value as either an IP or a hostname.  In case of failure,
 		// we'll make its text color red.
@@ -328,6 +341,61 @@
 }
 - (IBAction)importOutgoingMailServersFromMailMate:(id)sender {
 	[self addHostArray: [HostImporter outgoingMailHostnamesFromMailMate]];
+}
+
+#pragma mark - App Blocking
+
+- (NSString*)appNameForBundleID:(NSString*)bundleID {
+    NSString* appPath = [[NSWorkspace sharedWorkspace]
+        absolutePathForAppBundleWithIdentifier:bundleID];
+    if (appPath) {
+        return [[NSFileManager defaultManager] displayNameAtPath:appPath];
+    }
+    return nil;
+}
+
+- (IBAction)addAppToBlocklist:(id)sender {
+    NSOpenPanel* panel = [NSOpenPanel openPanel];
+    panel.allowsMultipleSelection = YES;
+    panel.canChooseDirectories = NO;
+    panel.canChooseFiles = YES;
+    panel.directoryURL = [NSURL fileURLWithPath:@"/Applications"];
+    panel.message = @"Select applications to block";
+    panel.prompt = @"Add to Blocklist";
+
+    // Only allow .app bundles
+    if (@available(macOS 11.0, *)) {
+        panel.allowedContentTypes = @[UTTypeApplication];
+    } else {
+        panel.allowedFileTypes = @[@"app"];
+    }
+
+    [panel beginSheetModalForWindow:self.window
+                  completionHandler:^(NSModalResponse result) {
+        if (result == NSModalResponseOK) {
+            NSMutableArray* appsToAdd = [NSMutableArray array];
+
+            for (NSURL* appURL in panel.URLs) {
+                NSBundle* appBundle = [NSBundle bundleWithURL:appURL];
+                NSString* bundleID = appBundle.bundleIdentifier;
+
+                if (bundleID) {
+                    NSString* entry = [NSString stringWithFormat:@"app:%@", bundleID];
+
+                    // Avoid duplicates
+                    if (![self->domainList_ containsObject:entry]) {
+                        [appsToAdd addObject:entry];
+                    }
+                } else {
+                    NSLog(@"Warning: Could not get bundle ID for %@", appURL);
+                }
+            }
+
+            if (appsToAdd.count > 0) {
+                [self addHostArray:appsToAdd];
+            }
+        }
+    }];
 }
 
 @end

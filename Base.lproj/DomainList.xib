@@ -223,6 +223,21 @@ CA
                             <binding destination="48" name="hidden" keyPath="self.readOnly" id="vhI-TF-9cM"/>
                         </connections>
                     </button>
+                    <button toolTip="Add App" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="addAppBtn">
+                        <rect key="frame" x="84" y="13" width="70" height="24"/>
+                        <constraints>
+                            <constraint firstAttribute="height" constant="22" id="addAppHeight"/>
+                            <constraint firstAttribute="width" relation="greaterThanOrEqual" constant="70" id="addAppWidth"/>
+                        </constraints>
+                        <buttonCell key="cell" type="smallSquare" title="Add App" bezelStyle="smallSquare" imagePosition="overlaps" alignment="center" borderStyle="border" inset="2" id="addAppCell">
+                            <behavior key="behavior" pushIn="YES" lightByBackground="YES" lightByGray="YES"/>
+                            <font key="font" metaFont="system"/>
+                        </buttonCell>
+                        <connections>
+                            <action selector="addAppToBlocklist:" target="48" id="addAppAction"/>
+                            <binding destination="48" name="hidden" keyPath="self.readOnly" id="addAppHidden"/>
+                        </connections>
+                    </button>
                     <textField horizontalHuggingPriority="251" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="lHN-D1-jGr">
                         <rect key="frame" x="8" y="18" width="299" height="16"/>
                         <textFieldCell key="cell" lineBreakMode="clipping" title="Blocklist can't be edited while a block is running." id="1dB-UV-aOg">
@@ -253,7 +268,10 @@ CA
                     <constraint firstItem="42" firstAttribute="height" secondItem="46" secondAttribute="height" id="dNk-LL-rDy"/>
                     <constraint firstAttribute="bottom" secondItem="lHN-D1-jGr" secondAttribute="bottom" constant="18" id="epw-9Y-l55"/>
                     <constraint firstItem="46" firstAttribute="leading" secondItem="42" secondAttribute="trailing" constant="8" id="es4-fs-34f"/>
-                    <constraint firstItem="79" firstAttribute="leading" relation="greaterThanOrEqual" secondItem="46" secondAttribute="trailing" constant="68" id="f0U-dk-hxf"/>
+                    <constraint firstItem="addAppBtn" firstAttribute="leading" secondItem="46" secondAttribute="trailing" constant="8" id="addAppLeading"/>
+                    <constraint firstItem="addAppBtn" firstAttribute="top" secondItem="12" secondAttribute="bottom" constant="15" id="addAppTop"/>
+                    <constraint firstAttribute="bottom" secondItem="addAppBtn" secondAttribute="bottom" constant="14" id="addAppBottom"/>
+                    <constraint firstItem="79" firstAttribute="leading" relation="greaterThanOrEqual" secondItem="addAppBtn" secondAttribute="trailing" constant="8" id="f0U-dk-hxf"/>
                     <constraint firstItem="12" firstAttribute="top" secondItem="2" secondAttribute="top" constant="-1" id="hBt-rQ-Thw"/>
                     <constraint firstAttribute="bottom" secondItem="109" secondAttribute="bottom" constant="5" id="i2N-WQ-0WO"/>
                     <constraint firstItem="lHN-D1-jGr" firstAttribute="top" secondItem="12" secondAttribute="bottom" constant="17" id="mtd-sn-bTG"/>

@@ -26,6 +26,11 @@
 #include <sys/socket.h>
 #include <netdb.h>
 #import "HostFileBlockerSet.h"
+#import "AppBlocker.h"
+
+@interface BlockManager ()
+@property (nonatomic, strong, readwrite) AppBlocker* appBlocker;
+@end
 
 @implementation BlockManager
 
@@ -60,6 +65,9 @@ BOOL appendMode = NO;
 		includeCommonSubdomains = blockCommon;
 		includeLinkedDomains = includeLinked;
         addedBlockEntries = [NSMutableSet set];
+
+        // Initialize app blocker for blocking applications
+        _appBlocker = [[AppBlocker alloc] init];
 	}
 
 	return self;
@@ -124,6 +132,13 @@ BOOL appendMode = NO;
 	}
 
 	[pf startBlock];
+
+    // Start app blocker monitoring if any apps are blocked
+    if (self.appBlocker.blockedBundleIDs.count > 0) {
+        [self.appBlocker startMonitoring];
+        NSLog(@"BlockManager: Started app blocking for %lu apps",
+              (unsigned long)self.appBlocker.blockedBundleIDs.count);
+    }
 }
 
 - (void)enqueueBlockEntry:(SCBlockEntry*)entry {
@@ -136,7 +151,7 @@ BOOL appendMode = NO;
 - (void)addBlockEntry:(SCBlockEntry*)entry {
     // nil entries = something didn't parse right
     if (entry == nil) return;
-    
+
     // NSMutableSet is NOT thread-safe
     @synchronized (addedBlockEntries) {
         // don't try to block the same thing twice
@@ -144,6 +159,12 @@ BOOL appendMode = NO;
             return;
         }
         [addedBlockEntries addObject: entry];
+    }
+
+    // Handle app entries - add to app blocker instead of network blockers
+    if ([entry isAppEntry]) {
+        [self.appBlocker addBlockedApp:entry.appBundleID];
+        return;
     }
 
 	BOOL isIP = [entry.hostname isValidIPAddress];
@@ -210,6 +231,10 @@ BOOL appendMode = NO;
 }
 
 - (BOOL)clearBlock {
+    // Stop app blocker monitoring
+    [self.appBlocker stopMonitoring];
+    [self.appBlocker clearAllBlockedApps];
+
 	[pf stopBlock: false];
 	BOOL pfSuccess = ![pf containsSelfControlBlock];
 
@@ -253,6 +278,10 @@ BOOL appendMode = NO;
 }
 
 - (BOOL)forceClearBlock {
+    // Stop app blocker monitoring
+    [self.appBlocker stopMonitoring];
+    [self.appBlocker clearAllBlockedApps];
+
 	[pf stopBlock: YES];
 	BOOL pfSuccess = ![pf containsSelfControlBlock];
 
