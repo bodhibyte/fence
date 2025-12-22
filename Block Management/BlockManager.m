@@ -212,6 +212,12 @@ BOOL appendMode = NO;
     // nil means that we don't have anything valid to block in this entry
     if (entry == nil) return;
 
+    // App entries don't have hostnames - route directly to addBlockEntry
+    if ([entry isAppEntry]) {
+        [self addBlockEntry: entry];
+        return;
+    }
+
     // enqueue new entries _before_ running this one, so they can happen in parallel
     NSArray<SCBlockEntry*>* relatedEntries = [self relatedBlockEntriesForEntry: entry];
     for (SCBlockEntry* relatedEntry in relatedEntries) {
