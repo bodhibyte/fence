@@ -74,12 +74,16 @@
 // Copied from Apple's EvenBetterAuthorizationSample
 - (void)connectToHelperTool {
     assert([NSThread isMainThread]);
-    NSLog(@"Connecting to helper tool, daemon connection is %@", self.daemonConnection);
-    
+    NSLog(@"SCXPCClient: === connectToHelperTool CALLED ===");
+    NSLog(@"SCXPCClient: Current daemonConnection = %@", self.daemonConnection);
+
     [self setupAuthorization];
-    
+    NSLog(@"SCXPCClient: Authorization setup complete");
+
     if (self.daemonConnection == nil) {
+        NSLog(@"SCXPCClient: Creating new NSXPCConnection to org.eyebeam.selfcontrold...");
         self.daemonConnection = [[NSXPCConnection alloc] initWithMachServiceName: @"org.eyebeam.selfcontrold" options: NSXPCConnectionPrivileged];
+        NSLog(@"SCXPCClient: NSXPCConnection created: %@", self.daemonConnection);
         self.daemonConnection.remoteObjectInterface = [NSXPCInterface interfaceWithProtocol:@protocol(SCDaemonProtocol)];
         #pragma clang diagnostic push
         #pragma clang diagnostic ignored "-Warc-retain-cycles"
@@ -127,10 +131,13 @@
         };
 
         #pragma clang diagnostic pop
+        NSLog(@"SCXPCClient: Handlers configured, calling resume...");
         [self.daemonConnection resume];
-                
-        NSLog(@"Started helper connection!");
+        NSLog(@"SCXPCClient: Connection resumed! daemonConnection = %@", self.daemonConnection);
+    } else {
+        NSLog(@"SCXPCClient: Connection already exists, skipping creation");
     }
+    NSLog(@"SCXPCClient: === connectToHelperTool COMPLETE ===");
 }
 
 - (BOOL)isConnected {

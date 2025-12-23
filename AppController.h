@@ -22,6 +22,7 @@
 
 // Forward declaration to avoid compiler weirdness
 @class TimerWindowController;
+@class SCSafetyCheckWindowController;
 
 #import <Cocoa/Cocoa.h>
 #import "DomainListWindowController.h"
@@ -56,6 +57,10 @@
 }
 
 @property (assign) BOOL addingBlock;
+
+#ifdef DEBUG
+@property (nonatomic, strong) SCSafetyCheckWindowController* safetyCheckWindowController;
+#endif
 
 // Called when the block duration slider is moved.  Updates the label that gives
 // the block duration in words (hours and minutes).

@@ -11,9 +11,11 @@
 		1869042B4D754EE781990073 /* AppBlocker.m in Sources */ = {isa = PBXBuildFile; fileRef = 2B4CBC9BC7A744309802C589 /* AppBlocker.m */; };
 		1BD67B4BD6AD4D2390C3C1ED /* SCDebugUtilities.m in Sources */ = {isa = PBXBuildFile; fileRef = 520B6A02C0CE497EBCB5CCF3 /* SCDebugUtilities.m */; };
 		1F27973C853B40AD9E95BB1E /* SCDebugUtilities.m in Sources */ = {isa = PBXBuildFile; fileRef = 520B6A02C0CE497EBCB5CCF3 /* SCDebugUtilities.m */; };
+		1FEB91F11AD92FF528C0B287 /* SCStartupSafetyCheck.m in Sources */ = {isa = PBXBuildFile; fileRef = 3F481A9B3BB13815269D74D1 /* SCStartupSafetyCheck.m */; };
 		2C6099A14B934A17B6C0087E /* AppBlocker.m in Sources */ = {isa = PBXBuildFile; fileRef = 2B4CBC9BC7A744309802C589 /* AppBlocker.m */; };
 		2E8D61630CBF4913A09D51DA /* AppBlocker.m in Sources */ = {isa = PBXBuildFile; fileRef = 2B4CBC9BC7A744309802C589 /* AppBlocker.m */; };
 		3F838215472444C2AFF3BAF1 /* SCDebugUtilities.m in Sources */ = {isa = PBXBuildFile; fileRef = 520B6A02C0CE497EBCB5CCF3 /* SCDebugUtilities.m */; };
+		540B226FDF11861FAE35D654 /* SCVersionTracker.m in Sources */ = {isa = PBXBuildFile; fileRef = 8BFF51A1C4A177184F1D9ACF /* SCVersionTracker.m */; };
 		5E6BEEBB5C6E29DADDB344CF /* libPods-selfcontrol-cli.a in Frameworks */ = {isa = PBXBuildFile; fileRef = C85A094F15E20A0DB58665A8 /* libPods-selfcontrol-cli.a */; };
 		63BAC9E58A69B15D342B0E29 /* libPods-org.eyebeam.selfcontrold.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 8BF3973D41997900DF147B24 /* libPods-org.eyebeam.selfcontrold.a */; };
 		8CA8987104D2956493D6AF6B /* Pods_SelfControl_SelfControlTests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F41DEF1E3926B4CF3AE2B76C /* Pods_SelfControl_SelfControlTests.framework */; };
@@ -21,6 +23,7 @@
 		8D11072F0486CEB800E47090 /* Cocoa.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1058C7A1FEA54F0111CA2CBB /* Cocoa.framework */; };
 		973D399C86DA47548569330F /* AppBlocker.m in Sources */ = {isa = PBXBuildFile; fileRef = 2B4CBC9BC7A744309802C589 /* AppBlocker.m */; };
 		ACA557C33180494282B827BE /* SCDebugUtilities.m in Sources */ = {isa = PBXBuildFile; fileRef = 520B6A02C0CE497EBCB5CCF3 /* SCDebugUtilities.m */; };
+		B53EE81BF3FB170B3676BB71 /* SCSafetyCheckWindowController.m in Sources */ = {isa = PBXBuildFile; fileRef = 5AA687B207D9494C0056038B /* SCSafetyCheckWindowController.m */; };
 		CB0385E119D77051004614B6 /* PreferencesAdvancedViewController.xib in Resources */ = {isa = PBXBuildFile; fileRef = CB0385DD19D77051004614B6 /* PreferencesAdvancedViewController.xib */; };
 		CB0385E219D77051004614B6 /* PreferencesGeneralViewController.xib in Resources */ = {isa = PBXBuildFile; fileRef = CB0385DF19D77051004614B6 /* PreferencesGeneralViewController.xib */; };
 		CB066F6C2652037E0076964D /* HostFileBlocker.m in Sources */ = {isa = PBXBuildFile; fileRef = CBB0AE290FA74566006229B3 /* HostFileBlocker.m */; };
@@ -536,6 +539,7 @@
 		0534B42090794A569FD6AAA4 /* SCDebugUtilities.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = SCDebugUtilities.h; path = Common/SCDebugUtilities.h; sourceTree = SOURCE_ROOT; };
 		1058C7A1FEA54F0111CA2CBB /* Cocoa.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Cocoa.framework; path = /System/Library/Frameworks/Cocoa.framework; sourceTree = "<absolute>"; };
 		1FF38B4CA7B04483AB6E70BB /* AppBlocker.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AppBlocker.h; sourceTree = "<group>"; };
+		2387372C4819C994AC3040AB /* SCVersionTracker.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = SCVersionTracker.h; path = Common/Utility/SCVersionTracker.h; sourceTree = "<group>"; };
 		29B97316FDCFA39411CA2CEA /* main.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
 		29B97324FDCFA39411CA2CEA /* AppKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AppKit.framework; path = /System/Library/Frameworks/AppKit.framework; sourceTree = "<absolute>"; };
 		29B97325FDCFA39411CA2CEA /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = /System/Library/Frameworks/Foundation.framework; sourceTree = "<absolute>"; };
@@ -544,8 +548,10 @@
 		32CA4F630368D1EE00C91783 /* SelfControl_Prefix.pch */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = SelfControl_Prefix.pch; sourceTree = "<group>"; };
 		3EF418F71CC7F7FA002D99E8 /* nl */ = {isa = PBXFileReference; fileEncoding = 10; lastKnownFileType = text.plist.strings; name = nl; path = nl.lproj/Localizable.strings; sourceTree = "<group>"; };
 		3EF418F81CC7F7FA002D99E8 /* nl */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = nl; path = nl.lproj/InfoPlist.strings; sourceTree = "<group>"; };
+		3F481A9B3BB13815269D74D1 /* SCStartupSafetyCheck.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = SCStartupSafetyCheck.m; path = Common/SCStartupSafetyCheck.m; sourceTree = "<group>"; };
 		50CA92A5EB2C31792CA00641 /* Pods-SelfControl Killer.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-SelfControl Killer.debug.xcconfig"; path = "Pods/Target Support Files/Pods-SelfControl Killer/Pods-SelfControl Killer.debug.xcconfig"; sourceTree = "<group>"; };
 		520B6A02C0CE497EBCB5CCF3 /* SCDebugUtilities.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = SCDebugUtilities.m; path = Common/SCDebugUtilities.m; sourceTree = SOURCE_ROOT; };
+		5AA687B207D9494C0056038B /* SCSafetyCheckWindowController.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; path = SCSafetyCheckWindowController.m; sourceTree = "<group>"; };
 		5FA850E53EB64C54A1404AEF /* Pods-SelfControl.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-SelfControl.release.xcconfig"; path = "Pods/Target Support Files/Pods-SelfControl/Pods-SelfControl.release.xcconfig"; sourceTree = "<group>"; };
 		640D40CB16D6E962003034B3 /* it */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.strings; name = it; path = it.lproj/Localizable.strings; sourceTree = "<group>"; };
 		640D40CC16D6E962003034B3 /* it */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = it; path = it.lproj/InfoPlist.strings; sourceTree = "<group>"; };
@@ -553,8 +559,10 @@
 		69102D5CD4E9672D0EFBF25B /* Pods-selfcontrol-cli.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-selfcontrol-cli.release.xcconfig"; path = "Pods/Target Support Files/Pods-selfcontrol-cli/Pods-selfcontrol-cli.release.xcconfig"; sourceTree = "<group>"; };
 		6EBDE7B29D92764A409E4FDA /* Pods_SelfControl.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_SelfControl.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		77CFA479BA7C3ECBC15F96D7 /* Pods-org.eyebeam.selfcontrold.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-org.eyebeam.selfcontrold.debug.xcconfig"; path = "Pods/Target Support Files/Pods-org.eyebeam.selfcontrold/Pods-org.eyebeam.selfcontrold.debug.xcconfig"; sourceTree = "<group>"; };
+		850662FA54D2CC4D4B5D099E /* SCStartupSafetyCheck.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = SCStartupSafetyCheck.h; path = Common/SCStartupSafetyCheck.h; sourceTree = "<group>"; };
 		86DAD6532C67CBE72E99084C /* Pods_SelfControl_Killer.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_SelfControl_Killer.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		8BF3973D41997900DF147B24 /* libPods-org.eyebeam.selfcontrold.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-org.eyebeam.selfcontrold.a"; sourceTree = BUILT_PRODUCTS_DIR; };
+		8BFF51A1C4A177184F1D9ACF /* SCVersionTracker.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = SCVersionTracker.m; path = Common/Utility/SCVersionTracker.m; sourceTree = "<group>"; };
 		8D1107310486CEB800E47090 /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		8D1107320486CEB800E47090 /* SelfControl.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SelfControl.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		949F9F8815B32EC6007B8B42 /* zh-Hans */ = {isa = PBXFileReference; fileEncoding = 10; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/Localizable.strings"; sourceTree = "<group>"; };
@@ -1481,6 +1489,7 @@
 		E1139D5A5B92C88FFF62718F /* Pods-SCKillerHelper.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-SCKillerHelper.release.xcconfig"; path = "Pods/Target Support Files/Pods-SCKillerHelper/Pods-SCKillerHelper.release.xcconfig"; sourceTree = "<group>"; };
 		E3346B8A670C55C686428776 /* Pods-SelfControl-SelfControlTests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-SelfControl-SelfControlTests.debug.xcconfig"; path = "Pods/Target Support Files/Pods-SelfControl-SelfControlTests/Pods-SelfControl-SelfControlTests.debug.xcconfig"; sourceTree = "<group>"; };
 		EBDF1B23AA44B10313D79203 /* Pods-SelfControl Killer.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-SelfControl Killer.release.xcconfig"; path = "Pods/Target Support Files/Pods-SelfControl Killer/Pods-SelfControl Killer.release.xcconfig"; sourceTree = "<group>"; };
+		EC9A7B9C279AFE0B72259B2B /* SCSafetyCheckWindowController.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; path = SCSafetyCheckWindowController.h; sourceTree = "<group>"; };
 		F0874F1ABF369B21F1CEADC1 /* Pods-org.eyebeam.selfcontrold.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-org.eyebeam.selfcontrold.release.xcconfig"; path = "Pods/Target Support Files/Pods-org.eyebeam.selfcontrold/Pods-org.eyebeam.selfcontrold.release.xcconfig"; sourceTree = "<group>"; };
 		F41DEF1E3926B4CF3AE2B76C /* Pods_SelfControl_SelfControlTests.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_SelfControl_SelfControlTests.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		F5B8CBEC19EE21C30026F3A5 /* SCTimeIntervalFormatter.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = SCTimeIntervalFormatter.h; sourceTree = "<group>"; };
@@ -1617,6 +1626,12 @@
 				CBB67D3225D6165B006E4BC9 /* ArgumentParser */,
 				CBB60BE41F13441F00DCB597 /* Distribution Build */,
 				DDDC709FF9E9196A96CA7BCF /* Pods */,
+				2387372C4819C994AC3040AB /* SCVersionTracker.h */,
+				8BFF51A1C4A177184F1D9ACF /* SCVersionTracker.m */,
+				850662FA54D2CC4D4B5D099E /* SCStartupSafetyCheck.h */,
+				3F481A9B3BB13815269D74D1 /* SCStartupSafetyCheck.m */,
+				EC9A7B9C279AFE0B72259B2B /* SCSafetyCheckWindowController.h */,
+				5AA687B207D9494C0056038B /* SCSafetyCheckWindowController.m */,
 			);
 			name = SelfControl;
 			sourceTree = "<group>";
@@ -3823,6 +3838,9 @@
 				CB953114262BC64F000C8309 /* SCDurationSlider.m in Sources */,
 				CBF3B574217BADD7006D5F52 /* SCSettings.m in Sources */,
 				CB25806616C237F10059C99A /* NSString+IPAddress.m in Sources */,
+				540B226FDF11861FAE35D654 /* SCVersionTracker.m in Sources */,
+				1FEB91F11AD92FF528C0B287 /* SCStartupSafetyCheck.m in Sources */,
+				B53EE81BF3FB170B3676BB71 /* SCSafetyCheckWindowController.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -4178,6 +4196,10 @@
 				GCC_OPTIMIZATION_LEVEL = 0;
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
 				GCC_PREFIX_HEADER = SelfControl_Prefix.pch;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
 				INFOPLIST_FILE = Info.plist;
 				INSTALL_PATH = "$(HOME)/Applications";
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
@@ -4397,6 +4419,7 @@
 				CLANG_ENABLE_OBJC_ARC = YES;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
+				CODE_SIGN_INJECT_BASE_ENTITLEMENTS = NO;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 410;

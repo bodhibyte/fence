@@ -51,7 +51,9 @@ float const INACTIVITY_LIMIT_SECS = 60 * 2; // 2 minutes
 }
 
 - (void)start {
+    NSLog(@"selfcontrold: start() - Resuming XPC listener...");
     [self.listener resume];
+    NSLog(@"selfcontrold: start() - XPC listener resumed");
 
     // if there's any evidence of a block (i.e. an official one running,
     // OR just block remnants remaining in hosts), we should start
@@ -60,19 +62,26 @@ float const INACTIVITY_LIMIT_SECS = 60 * 2; // 2 minutes
     // we do NOT run checkup if there's no block, because it can result
     // in the daemon actually unloading itself before the app has a chance
     // to start the block
+    NSLog(@"selfcontrold: start() - Checking for existing block...");
     if ([SCBlockUtilities anyBlockIsRunning] || [SCBlockUtilities blockRulesFoundOnSystem]) {
+        NSLog(@"selfcontrold: start() - Block found, starting checkup timer");
         [self startCheckupTimer];
     }
-    
+    NSLog(@"selfcontrold: start() - Block check complete");
+
+    NSLog(@"selfcontrold: start() - Starting inactivity timer...");
     [self startInactivityTimer];
     [self resetInactivityTimer];
-    
+    NSLog(@"selfcontrold: start() - Inactivity timer started");
+
+    NSLog(@"selfcontrold: start() - Starting hosts file watcher...");
     self.hostsFileWatcher = [SCFileWatcher watcherWithFile: @"/etc/hosts" block:^(NSError * _Nonnull error) {
         if ([SCBlockUtilities anyBlockIsRunning]) {
             NSLog(@"INFO: hosts file changed, checking block integrity");
             [SCDaemonBlockMethods checkBlockIntegrity];
         }
     }];
+    NSLog(@"selfcontrold: start() - Hosts file watcher started");
 }
 
 - (void)startCheckupTimer {
@@ -146,13 +155,19 @@ float const INACTIVITY_LIMIT_SECS = 60 * 2; // 2 minutes
 #pragma mark - NSXPCListenerDelegate
 
 - (BOOL)listener:(NSXPCListener *)listener shouldAcceptNewConnection:(NSXPCConnection *)newConnection {
+    NSLog(@"selfcontrold: === NEW CONNECTION ATTEMPT ===");
+    NSLog(@"selfcontrold: Connection from: %@", newConnection);
+
     // There is a potential security issue / race condition with matching based on PID, so we use the (technically private) auditToken instead
     audit_token_t auditToken = newConnection.auditToken;
     NSDictionary* guestAttributes = @{
         (id)kSecGuestAttributeAudit: [NSData dataWithBytes: &auditToken length: sizeof(audit_token_t)]
     };
     SecCodeRef guest;
-    if (SecCodeCopyGuestWithAttributes(NULL, (__bridge CFDictionaryRef _Nullable)(guestAttributes), kSecCSDefaultFlags, &guest) != errSecSuccess) {
+    OSStatus copyStatus = SecCodeCopyGuestWithAttributes(NULL, (__bridge CFDictionaryRef _Nullable)(guestAttributes), kSecCSDefaultFlags, &guest);
+    NSLog(@"selfcontrold: SecCodeCopyGuestWithAttributes status = %d", (int)copyStatus);
+    if (copyStatus != errSecSuccess) {
+        NSLog(@"selfcontrold: REJECTED - Failed to get guest code ref");
         return NO;
     }
     
@@ -161,26 +176,28 @@ float const INACTIVITY_LIMIT_SECS = 60 * 2; // 2 minutes
     // (plus the daemon didn't exist before 4.0 so there's really no reason they should want to run it!)
     SecRequirementCreateWithString(CFSTR("anchor apple generic and (identifier \"org.eyebeam.SelfControl\" or identifier \"org.eyebeam.selfcontrol-cli\") and info [CFBundleVersion] >= \"407\" and (certificate leaf[field.1.2.840.113635.100.6.1.9] /* exists */ or certificate leaf[field.1.2.840.113635.100.6.1.12] /* exists */ or certificate 1[field.1.2.840.113635.100.6.2.6] /* exists */ and certificate leaf[field.1.2.840.113635.100.6.1.13] /* exists */) and certificate leaf[subject.OU] = L5YX8CH3F5"), kSecCSDefaultFlags, &isSelfControlApp);
     OSStatus clientValidityStatus = SecCodeCheckValidity(guest, kSecCSDefaultFlags, isSelfControlApp);
-    
+    NSLog(@"selfcontrold: SecCodeCheckValidity status = %d", (int)clientValidityStatus);
+
     CFRelease(guest);
     CFRelease(isSelfControlApp);
-    
+
     if (clientValidityStatus) {
         NSError* error = [NSError errorWithDomain: NSOSStatusErrorDomain code: clientValidityStatus userInfo: nil];
-        NSLog(@"Rejecting XPC connection because of invalid client signing. Error was %@", error);
+        NSLog(@"selfcontrold: REJECTED - Invalid client signing (status %d). Error: %@", (int)clientValidityStatus, error);
         [SCSentry captureError: error];
         return NO;
     }
-    
+
+    NSLog(@"selfcontrold: Client validated! Setting up exported interface...");
     SCDaemonXPC* scdXPC = [[SCDaemonXPC alloc] init];
     newConnection.exportedInterface = [NSXPCInterface interfaceWithProtocol: @protocol(SCDaemonProtocol)];
     newConnection.exportedObject = scdXPC;
 
     [newConnection resume];
-    
-    NSLog(@"Accepted new connection!");
+
+    NSLog(@"selfcontrold: === CONNECTION ACCEPTED ===");
     [SCSentry addBreadcrumb: @"Daemon accepted new connection" category: @"daemon"];
-    
+
     return YES;
 }
 

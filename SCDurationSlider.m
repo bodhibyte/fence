@@ -42,7 +42,12 @@
 
 - (void)setMaxDuration:(NSInteger)maxDuration {
     _maxDuration = maxDuration;
+#ifdef DEBUG
+    // In DEBUG builds, allow 0.5 minute (30 seconds) minimum for safety check tests
+    [self setMinValue: 0.5];
+#else
     [self setMinValue: 1]; // never start a block shorter than 1 minute
+#endif
     [self setMaxValue: self.maxDuration];
 }
 

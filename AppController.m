@@ -33,6 +33,10 @@
 #import "SCUIUtilities.h"
 #import <TransformerKit/NSValueTransformer+TransformerKit.h>
 #import "SCDebugUtilities.h"
+#ifdef DEBUG
+#import "SCStartupSafetyCheck.h"
+#import "SCSafetyCheckWindowController.h"
+#endif
 
 @interface AppController () {}
 
@@ -436,12 +440,48 @@
     // Set up debug menu (only in DEBUG builds)
     [self setupDebugMenu];
     [self updateDebugIndicator];
+
+    // Check if safety test is needed (version changed since last test)
+    if ([SCStartupSafetyCheck safetyCheckNeeded]) {
+        // Delay slightly to let the app finish launching
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            [self showSafetyCheckPrompt];
+        });
+    }
 #endif
 }
 
 - (void)applicationWillTerminate:(NSNotification *)notification {
     [settings_ synchronizeSettings];
 }
+
+#ifdef DEBUG
+- (void)showSafetyCheckPrompt {
+    NSAlert* alert = [[NSAlert alloc] init];
+    [alert setMessageText:@"Safety Check Recommended"];
+    [alert setInformativeText:@"Your macOS or SelfControl version has changed since the last safety check. Would you like to run a 30-second test to verify blocking works correctly?"];
+    [alert addButtonWithTitle:@"Run Test"];
+    [alert addButtonWithTitle:@"Skip"];
+    [alert addButtonWithTitle:@"Remind Me Later"];
+
+    NSModalResponse response = [alert runModal];
+
+    if (response == NSAlertFirstButtonReturn) {
+        // Run Test
+        [self runSafetyCheck];
+    } else if (response == NSAlertSecondButtonReturn) {
+        // Skip - mark as tested
+        [SCStartupSafetyCheck skipSafetyCheck];
+    }
+    // Remind Me Later - do nothing, will prompt again next launch
+}
+
+- (void)runSafetyCheck {
+    self.safetyCheckWindowController = [[SCSafetyCheckWindowController alloc] init];
+    [self.safetyCheckWindowController showWindow:self];
+    [self.safetyCheckWindowController runSafetyCheck];
+}
+#endif
 
 - (void)reinstallDaemon {
     NSLog(@"Attempting to reinstall daemon...");
@@ -829,6 +869,14 @@
         keyEquivalent:@""];
     disableBlockingItem.target = self;
     [debugMenu addItem:disableBlockingItem];
+
+    // Add "Run Safety Check" item
+    NSMenuItem* safetyCheckItem = [[NSMenuItem alloc]
+        initWithTitle:@"Run Safety Check..."
+               action:@selector(runSafetyCheck)
+        keyEquivalent:@""];
+    safetyCheckItem.target = self;
+    [debugMenu addItem:safetyCheckItem];
 
     // Add separator
     [debugMenu addItem:[NSMenuItem separatorItem]];
