@@ -118,6 +118,13 @@
    - `addAppToBlocklist:` action opens app picker
    - App entries shown in purple with app name
 
+6. **Startup Safety Check** (`Common/SCStartupSafetyCheck.h/m`, `SCSafetyCheckWindowController.h/m`)
+   - Triggers on macOS or app version change (DEBUG builds only)
+   - Runs 30-second test blocking example.com + Calculator
+   - Verifies hosts, PF, and app blocking work
+   - Verifies cleanup after block expires
+   - Uses `SCVersionTracker` to detect version changes
+
 **Entry Format:**
 ```
 app:com.apple.Terminal     - Block Terminal

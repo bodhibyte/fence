@@ -16,7 +16,7 @@
 6. [Data Flow Diagrams](#6-data-flow-diagrams)
 7. [Module Reference](#7-module-reference)
 8. [Security Model](#8-security-model)
-9. [Debug Mode](#9-debug-mode)
+9. [Debug Features](#6-debug-features)
 10. [Quick Reference](#10-quick-reference)
 
 ---
@@ -619,24 +619,18 @@ flowchart TD
 
 ---
 
-## 6. Debug Mode
+## 6. Debug Features
 
-### 6.1 Safety Feature for Development
+All debug features are **DEBUG builds only** - compiled out of release builds via `#ifdef DEBUG`.
 
-Debug mode allows disabling ALL blocking during development. **Only available in DEBUG builds.**
+### 6.1 Disable All Blocking
 
-```objc
-#ifdef DEBUG
-    [self setupDebugMenu];
-#endif
-```
+Debug mode allows disabling ALL blocking during development.
 
-### 6.2 Access
-
-- **Menu:** Debug > Disable All Blocking
+- **Access:** Debug > Disable All Blocking menu
 - **Indicator:** Window title shows "[DEBUG - BLOCKING DISABLED]"
 
-### 6.3 What Gets Bypassed
+**What Gets Bypassed:**
 
 | Blocker | When debug mode ON |
 |---------|-------------------|
@@ -644,11 +638,52 @@ Debug mode allows disabling ALL blocking during development. **Only available in
 | HostFileBlocker.writeNewFileContents | Returns early, no hosts changes |
 | AppBlocker.findAndKillBlockedApps | Returns empty array, no kills |
 
-### 6.4 Safety Guarantees
+### 6.2 Startup Safety Check
 
-1. **Code compiled out of release builds** - `#ifdef DEBUG` wrapping
-2. **Double protection** - Setting exists but never read in release
-3. **Visual indicator** - Window title changes when active
+Automatically verifies blocking works correctly after macOS or app version changes.
+
+```mermaid
+flowchart LR
+    A[App launches] --> B{Version changed?}
+    B -->|No| C[Normal startup]
+    B -->|Yes| D[Show safety check dialog]
+    D --> E{User choice}
+    E -->|Skip| C
+    E -->|Run Test| F[30-second block test]
+    F --> G[Verify blocking]
+    G --> H[Wait for expiry]
+    H --> I[Verify cleanup]
+    I --> J[Show results]
+```
+
+**Trigger Conditions:**
+- First launch after macOS update
+- First launch after SelfControl app update
+- User can skip (versions marked as tested)
+
+**What Gets Tested:**
+
+| Test | Verifies |
+|------|----------|
+| Hosts block | example.com added to /etc/hosts |
+| PF block | Packet filter rules loaded |
+| App block | Calculator.app gets killed |
+| Hosts cleanup | example.com removed after expiry |
+| PF cleanup | Packet filter rules removed |
+| App cleanup | Calculator.app can run again |
+
+**Key Files:**
+
+| File | Purpose |
+|------|---------|
+| `Common/SCStartupSafetyCheck.h/m` | Test orchestration |
+| `Common/Utility/SCVersionTracker.h/m` | Version change detection |
+| `SCSafetyCheckWindowController.h/m` | Test UI window |
+
+**Test Parameters:**
+- Duration: 30 seconds
+- Network target: example.com
+- App target: com.apple.calculator (Calculator)
 
 ---
 
