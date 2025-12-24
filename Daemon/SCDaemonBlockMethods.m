@@ -49,6 +49,7 @@ NSTimeInterval CHECKUP_LOCK_TIMEOUT = 0.5; // use a shorter lock timeout for che
 
 
 + (void)startBlockWithControllingUID:(uid_t)controllingUID blocklist:(NSArray<NSString*>*)blocklist isAllowlist:(BOOL)isAllowlist endDate:(NSDate*)endDate blockSettings:(NSDictionary*)blockSettings authorization:(NSData *)authData reply:(void(^)(NSError* error))reply {
+    NSLog(@"🚀 DAEMON: startBlock CALLED, geteuid()=%d, getuid()=%d", geteuid(), getuid());
     if (![SCDaemonBlockMethods lockOrTimeout: reply]) {
         return;
     }
@@ -81,6 +82,9 @@ NSTimeInterval CHECKUP_LOCK_TIMEOUT = 0.5; // use a shorter lock timeout for che
     }
 
     SCSettings* settings = [SCSettings sharedSettings];
+    [settings reloadSettings];  // Ensure we have latest settings from disk before starting new block
+    NSLog(@"🔵 DAEMON: readOnly=%d, geteuid()=%d, SettingsVersion=%d",
+          settings.readOnly, geteuid(), [[settings valueForKey:@"SettingsVersionNumber"] intValue]);
     // update SCSettings with the blocklist and end date that've been requested
     [settings setValue: blocklist forKey: @"ActiveBlocklist"];
     [settings setValue: @(isAllowlist) forKey: @"ActiveBlockAsWhitelist"];
@@ -108,8 +112,11 @@ NSTimeInterval CHECKUP_LOCK_TIMEOUT = 0.5; // use a shorter lock timeout for che
     NSLog(@"Adding firewall rules...");
     [SCHelperToolUtilities installBlockRulesFromSettings];
     [settings setValue: @YES forKey: @"BlockIsRunning"];
-    
+
+    NSLog(@"🟠 DAEMON: About to syncSettingsAndWait after BlockIsRunning=YES, version=%d",
+          [[settings valueForKey:@"SettingsVersionNumber"] intValue]);
     NSError* syncErr = [settings syncSettingsAndWait: 5]; // synchronize ASAP since BlockIsRunning is a really important one
+    NSLog(@"🟠 DAEMON: syncSettingsAndWait returned, err=%@", syncErr);
     if (syncErr != nil) {
         NSLog(@"WARNING: Sync failed or timed out with error %@ after starting block", syncErr);
         [SCSentry captureError: syncErr];

@@ -4536,7 +4536,6 @@
 				GCC_PREPROCESSOR_DEFINITIONS = (
 					"$(inherited)",
 					"COCOAPODS=1",
-					"TESTING=1",
 				);
 				GCC_VERSION = "";
 				INFOPLIST_FILE = "Daemon/selfcontrold-Info.plist";
@@ -4583,7 +4582,6 @@
 				GCC_PREPROCESSOR_DEFINITIONS = (
 					"$(inherited)",
 					"COCOAPODS=1",
-					"TESTING=1",
 				);
 				GCC_VERSION = "";
 				INFOPLIST_FILE = "Daemon/selfcontrold-Info.plist";

@@ -66,11 +66,26 @@
 }
 
 + (void) removeBlockFromSettings {
+    NSLog(@"🟣 DEBUG: removeBlockFromSettings START");
     SCSettings* settings = [SCSettings sharedSettings];
+
+    NSLog(@"🟣 DEBUG: BEFORE clear - BlockEndDate=%@", [settings valueForKey:@"BlockEndDate"]);
+    NSLog(@"🟣 DEBUG: BEFORE clear - BlockIsRunning=%@", [settings valueForKey:@"BlockIsRunning"]);
+
     [settings setValue: @NO forKey: @"BlockIsRunning"];
     [settings setValue: nil forKey: @"BlockEndDate"];
     [settings setValue: nil forKey: @"ActiveBlocklist"];
     [settings setValue: nil forKey: @"ActiveBlockAsWhitelist"];
+
+    // Force immediate write to disk so next daemon gets correct version
+    NSError* syncErr = [settings syncSettingsAndWait: 5];
+    if (syncErr != nil) {
+        NSLog(@"WARNING: Sync failed after clearing block with error %@", syncErr);
+    }
+
+    NSLog(@"🟣 DEBUG: AFTER clear - BlockEndDate=%@", [settings valueForKey:@"BlockEndDate"]);
+    NSLog(@"🟣 DEBUG: AFTER clear - BlockIsRunning=%@", [settings valueForKey:@"BlockIsRunning"]);
+    NSLog(@"🟣 DEBUG: removeBlockFromSettings END");
 }
 
 @end

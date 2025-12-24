@@ -47,7 +47,17 @@ NSString* const SETTINGS_FILE_DIR = @"/usr/local/etc/";
         // otherwise, we won't/shouldn't have permissions to write to the settings file
         // in practice, what this means is that the daemon writes settings, and the app/CLI only read
         _readOnly = (geteuid() != 0);
-        
+
+#if TESTING
+        NSLog(@"SCSettings: Running in TESTING mode - disk writes are DISABLED");
+#else
+        if (_readOnly) {
+            NSLog(@"SCSettings: Read-only mode (non-root process)");
+        } else {
+            NSLog(@"SCSettings: Persistence enabled - writing to %@", [SCSettings securedSettingsFilePath]);
+        }
+#endif
+
         _settingsDict = nil;
         
         [[NSDistributedNotificationCenter defaultCenter] addObserver: self
@@ -212,9 +222,11 @@ NSString* const SETTINGS_FILE_DIR = @"/usr/local/etc/";
     }
 }
 - (void)writeSettingsWithCompletion:(nullable void(^)(NSError* _Nullable))completionBlock {
+    NSLog(@"🟢 SCSettings.writeSettings CALLED, readOnly=%d, geteuid()=%d", self.readOnly, geteuid());
     @synchronized (self) {
         if (self.readOnly) {
-            NSLog(@"WARNING: Read-only SCSettings instance can't write out settings");
+            NSLog(@"❌ CRITICAL: Read-only SCSettings can't write! readOnly=%d, geteuid()=%d, version=%d",
+                  self.readOnly, geteuid(), [[self valueForKey:@"SettingsVersionNumber"] intValue]);
             NSError* err = [SCErr errorWithCode: 600];
             [SCSentry captureError: err];
             if (completionBlock != nil) {
@@ -287,6 +299,8 @@ NSString* const SETTINGS_FILE_DIR = @"/usr/local/etc/";
                                     error: &chmodErr];
 
             if (writeSuccessful) {
+                NSLog(@"✅ SCSettings: Successfully wrote to disk at %@, version=%d",
+                      SCSettings.securedSettingsFilePath, [self.settingsDict[@"SettingsVersionNumber"] intValue]);
                 self.lastSynchronizedWithDisk = [NSDate date];
             }
 
@@ -314,6 +328,7 @@ NSString* const SETTINGS_FILE_DIR = @"/usr/local/etc/";
     }];
 }
 - (void)synchronizeSettingsWithCompletion:(nullable void (^)(NSError * _Nullable))completionBlock {
+    NSLog(@"🟡 SCSettings.synchronizeSettings CALLED, readOnly=%d, geteuid()=%d", self.readOnly, geteuid());
     [self reloadSettings];
     
     NSDate* lastSettingsUpdate = [self valueForKey: @"LastSettingsUpdate"];
@@ -529,7 +544,10 @@ NSString* const SETTINGS_FILE_DIR = @"/usr/local/etc/";
     }
 
     if (!noteMoreRecentThanSettings) {
-        NSLog(@"Ignoring setting change notification as %@ is older than %@", noteSettingUpdated, ourSettingsLastUpdated);
+        NSLog(@"🔴 IGNORED: Setting change notification (%@ --> %@) - note version %d vs our version %d, note time %@ vs our time %@",
+              note.userInfo[@"key"], note.userInfo[@"value"],
+              noteVersionNumber, ourSettingsVersionNumber,
+              noteSettingUpdated, ourSettingsLastUpdated);
     } else {
         NSLog(@"Accepting propagated change (%@ --> %@) since version %d is newer than %d and/or %@ is newer than %@", note.userInfo[@"key"], note.userInfo[@"value"], noteVersionNumber, ourSettingsVersionNumber, noteSettingUpdated, ourSettingsLastUpdated);
         

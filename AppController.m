@@ -188,16 +188,21 @@
 
 	if(blockIsOn) { // block is on
 		if(!blockWasOn) { // if we just switched states to on...
+            NSLog(@"🟢 DEBUG: Block just turned ON (blockWasOn=0 → blockIsOn=1)");
+            NSLog(@"🟢 DEBUG: BlockEndDate = %@", [[SCSettings sharedSettings] valueForKey:@"BlockEndDate"]);
+            NSLog(@"🟢 DEBUG: BlockIsRunning = %@", [[SCSettings sharedSettings] valueForKey:@"BlockIsRunning"]);
+
 			[self closeTimerWindow];
 			[self showTimerWindow];
 			[initialWindow_ close];
 			[self closeDomainList];
-            
+
             // apparently, a block is running, so make sure FirstBlockStarted is true
             [defaults_ setBool: YES forKey: @"FirstBlockStarted"];
 		}
     } else { // block is off
 		if(blockWasOn) { // if we just switched states to off...
+            NSLog(@"🟢 DEBUG: Block just turned OFF (blockWasOn=1 → blockIsOn=0)");
 			[timerWindowController_ blockEnded];
 
 			// Makes sure the domain list will refresh when it comes back

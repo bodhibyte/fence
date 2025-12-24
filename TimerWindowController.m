@@ -83,12 +83,22 @@
     // set up extend block dialog
     extendDurationSlider_.maxDuration = [defaults integerForKey: @"MaxBlockLength"];
 
-    if ([SCBlockUtilities modernBlockIsRunning]) {
+    NSLog(@"🟡 DEBUG: TimerWindowController.awakeFromNib - checking block state");
+    NSLog(@"🟡 DEBUG: BlockEndDate from settings = %@", [settings_ valueForKey:@"BlockEndDate"]);
+    NSLog(@"🟡 DEBUG: BlockIsRunning from settings = %@", [settings_ valueForKey:@"BlockIsRunning"]);
+
+    BOOL modernBlockRunning = [SCBlockUtilities modernBlockIsRunning];
+    NSLog(@"🟡 DEBUG: modernBlockIsRunning = %d", modernBlockRunning);
+
+    if (modernBlockRunning) {
         blockEndingDate_ = [settings_ valueForKey: @"BlockEndDate"];
+        NSLog(@"🟡 DEBUG: Set blockEndingDate_ = %@", blockEndingDate_);
+        NSLog(@"🟡 DEBUG: timeIntervalSinceNow = %f", [blockEndingDate_ timeIntervalSinceNow]);
     } else {
         // legacy block!
         blockEndingDate_ = [SCMigrationUtilities legacyBlockEndDate];
-        
+        NSLog(@"🟡 DEBUG: Legacy block - blockEndingDate_ = %@", blockEndingDate_);
+
         // if it's a legacy block, we will disable some features
         // since it's too difficult to get these working across versions.
         // the user will just have to wait until their next block to do these things!
@@ -101,6 +111,7 @@
 
     blocklistTeaserLabel_.stringValue = [SCUIUtilities blockTeaserStringWithMaxLength: 45];
 	[self updateTimerDisplay: nil];
+    NSLog(@"🟡 DEBUG: TimerWindowController.awakeFromNib - updateTimerDisplay called");
 
 	timerUpdater_ = [NSTimer timerWithTimeInterval: 1.0
 											target: self
