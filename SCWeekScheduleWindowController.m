@@ -90,6 +90,7 @@
     self.titleLabel.bezeled = NO;
     self.titleLabel.editable = NO;
     self.titleLabel.drawsBackground = NO;
+    self.titleLabel.autoresizingMask = NSViewMinYMargin; // Stay pinned to top
     [contentView addSubview:self.titleLabel];
 
     // Week label (right side)
@@ -100,7 +101,7 @@
     self.weekLabel.bezeled = NO;
     self.weekLabel.editable = NO;
     self.weekLabel.drawsBackground = NO;
-    self.weekLabel.autoresizingMask = NSViewMinXMargin;
+    self.weekLabel.autoresizingMask = NSViewMinXMargin | NSViewMinYMargin; // Stay at top-right
     [self updateWeekLabel];
     [contentView addSubview:self.weekLabel];
 
@@ -112,7 +113,7 @@
     self.statusView.layer.cornerRadius = 8;
     self.statusView.layer.borderWidth = 1.0;
     self.statusView.layer.borderColor = [NSColor.whiteColor colorWithAlphaComponent:0.15].CGColor;
-    self.statusView.autoresizingMask = NSViewWidthSizable;
+    self.statusView.autoresizingMask = NSViewWidthSizable | NSViewMinYMargin; // Stay pinned to top
     [contentView addSubview:self.statusView];
 
     self.statusStackView = [[NSStackView alloc] initWithFrame:NSMakeRect(12, 8, self.statusView.bounds.size.width - 24, 34)];
@@ -149,6 +150,7 @@
     self.addBundleButton.bezelStyle = NSBezelStyleRounded;
     self.addBundleButton.target = self;
     self.addBundleButton.action = @selector(addBundleClicked:);
+    self.addBundleButton.autoresizingMask = NSViewMaxYMargin; // Stay at bottom
     [contentView addSubview:self.addBundleButton];
 
     self.saveTemplateButton = [[NSButton alloc] initWithFrame:NSMakeRect(padding + 130, buttonY, 140, 30)];
@@ -156,6 +158,7 @@
     self.saveTemplateButton.bezelStyle = NSBezelStyleRounded;
     self.saveTemplateButton.target = self;
     self.saveTemplateButton.action = @selector(saveTemplateClicked:);
+    self.saveTemplateButton.autoresizingMask = NSViewMaxYMargin; // Stay at bottom
     [contentView addSubview:self.saveTemplateButton];
 
     self.commitButton = [[NSButton alloc] initWithFrame:NSMakeRect(contentView.bounds.size.width - padding - 150, buttonY, 150, 30)];
@@ -163,7 +166,7 @@
     self.commitButton.bezelStyle = NSBezelStyleRounded;
     self.commitButton.target = self;
     self.commitButton.action = @selector(commitClicked:);
-    self.commitButton.autoresizingMask = NSViewMinXMargin;
+    self.commitButton.autoresizingMask = NSViewMinXMargin | NSViewMaxYMargin; // Stay at bottom-right
     [contentView addSubview:self.commitButton];
 
     // Week starts on toggle
@@ -174,6 +177,7 @@
     weekStartLabel.bezeled = NO;
     weekStartLabel.editable = NO;
     weekStartLabel.drawsBackground = NO;
+    weekStartLabel.autoresizingMask = NSViewMaxYMargin; // Stay at bottom
     [contentView addSubview:weekStartLabel];
 
     self.weekStartControl = [[NSSegmentedControl alloc] initWithFrame:NSMakeRect(padding + 370, buttonY + 2, 100, 24)];
@@ -185,6 +189,7 @@
     self.weekStartControl.target = self;
     self.weekStartControl.action = @selector(weekStartChanged:);
     self.weekStartControl.selectedSegment = [SCScheduleManager sharedManager].weekStartsOnMonday ? 1 : 0;
+    self.weekStartControl.autoresizingMask = NSViewMaxYMargin; // Stay at bottom
     [contentView addSubview:self.weekStartControl];
 
     // Commitment label - below the commit button
@@ -195,7 +200,7 @@
     self.commitmentLabel.bezeled = NO;
     self.commitmentLabel.editable = NO;
     self.commitmentLabel.drawsBackground = NO;
-    self.commitmentLabel.autoresizingMask = NSViewMinXMargin;
+    self.commitmentLabel.autoresizingMask = NSViewMinXMargin | NSViewMaxYMargin; // Stay at bottom-right
     [contentView addSubview:self.commitmentLabel];
 }
 
@@ -210,6 +215,17 @@
                                              selector:@selector(scheduleDidChange:)
                                                  name:SCScheduleManagerDidChangeNotification
                                                object:nil];
+
+    // Observe window resize to update grid layout
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(windowDidResize:)
+                                                 name:NSWindowDidResizeNotification
+                                               object:self.window];
+}
+
+- (void)windowDidResize:(NSNotification *)note {
+    // Update grid view height when window resizes (e.g., fullscreen)
+    [self reloadData];
 }
 
 #pragma mark - Data
