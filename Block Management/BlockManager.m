@@ -288,16 +288,9 @@ BOOL appendMode = NO;
 
     // Clear all block settings to prevent stale data showing "Finishing" on next block
     if (clearedSuccessfully) {
-        NSLog(@"🔵 DEBUG: clearBlock - BEFORE removeBlockFromSettings");
-        NSLog(@"🔵 DEBUG: BlockEndDate BEFORE = %@", [[SCSettings sharedSettings] valueForKey:@"BlockEndDate"]);
-        NSLog(@"🔵 DEBUG: BlockIsRunning BEFORE = %@", [[SCSettings sharedSettings] valueForKey:@"BlockIsRunning"]);
-
         [SCBlockUtilities removeBlockFromSettings];  // Clears BlockIsRunning, BlockEndDate, etc.
         [[SCSettings sharedSettings] synchronizeSettings];
-
-        NSLog(@"🔵 DEBUG: clearBlock - AFTER removeBlockFromSettings + synchronize");
-        NSLog(@"🔵 DEBUG: BlockEndDate AFTER = %@", [[SCSettings sharedSettings] valueForKey:@"BlockEndDate"]);
-        NSLog(@"🔵 DEBUG: BlockIsRunning AFTER = %@", [[SCSettings sharedSettings] valueForKey:@"BlockIsRunning"]);
+        NSLog(@"INFO: Block settings cleared via removeBlockFromSettings");
     }
 
 	return clearedSuccessfully;
