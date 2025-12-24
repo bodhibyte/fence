@@ -37,6 +37,7 @@
 #ifdef DEBUG
 #import "SCStartupSafetyCheck.h"
 #import "SCSafetyCheckWindowController.h"
+#import "SCScheduleManager.h"
 #endif
 
 @interface AppController () {}
@@ -954,6 +955,14 @@
     safetyCheckItem.target = self;
     [debugMenu addItem:safetyCheckItem];
 
+    // Add "Reset Week Commitment" item
+    NSMenuItem* resetCommitmentItem = [[NSMenuItem alloc]
+        initWithTitle:@"Reset Week Commitment"
+               action:@selector(resetWeekCommitment:)
+        keyEquivalent:@""];
+    resetCommitmentItem.target = self;
+    [debugMenu addItem:resetCommitmentItem];
+
     // Add separator
     [debugMenu addItem:[NSMenuItem separatorItem]];
 
@@ -1020,6 +1029,36 @@
         [initialWindow_ setTitle:@"SelfControl [DEBUG - BLOCKING DISABLED]"];
     } else {
         [initialWindow_ setTitle:@"SelfControl"];
+    }
+}
+
+- (IBAction)resetWeekCommitment:(id)sender {
+    SCScheduleManager *manager = [SCScheduleManager sharedManager];
+    if (![manager isCommitted]) {
+        NSAlert *alert = [[NSAlert alloc] init];
+        alert.messageText = @"No Active Commitment";
+        alert.informativeText = @"You don't have an active week commitment to reset.";
+        [alert addButtonWithTitle:@"OK"];
+        [alert runModal];
+        return;
+    }
+
+    // Confirm reset
+    NSAlert *confirmAlert = [[NSAlert alloc] init];
+    confirmAlert.messageText = @"Reset Week Commitment?";
+    confirmAlert.informativeText = @"This will clear your week commitment, allowing you to modify schedules freely.\n\n(DEBUG ONLY - not available in release builds)";
+    [confirmAlert addButtonWithTitle:@"Reset"];
+    [confirmAlert addButtonWithTitle:@"Cancel"];
+    confirmAlert.alertStyle = NSAlertStyleWarning;
+
+    if ([confirmAlert runModal] == NSAlertFirstButtonReturn) {
+        [manager clearCommitmentForDebug];
+
+        NSAlert *doneAlert = [[NSAlert alloc] init];
+        doneAlert.messageText = @"Commitment Reset";
+        doneAlert.informativeText = @"Your week commitment has been cleared. You can now modify schedules.";
+        [doneAlert addButtonWithTitle:@"OK"];
+        [doneAlert runModal];
     }
 }
 

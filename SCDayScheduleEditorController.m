@@ -6,10 +6,12 @@
 #import "SCDayScheduleEditorController.h"
 
 // Constants for timeline view
-static const CGFloat kTimelineHeight = 300.0;
+static const CGFloat kTimelineHeight = 400.0;  // 33% larger for better visibility
 static const CGFloat kTimelineWidth = 60.0;
 static const CGFloat kSnapMinutes = 15.0;
 static const CGFloat kEdgeDetectionZone = 10.0; // Pixels near edge for resize detection
+static const CGFloat kTimelinePaddingTop = 12.0;    // Padding so 12am label isn't cut off
+static const CGFloat kTimelinePaddingBottom = 12.0; // Padding so bottom 12am label isn't cut off
 
 #pragma mark - SCTimelineView (Private)
 
@@ -20,6 +22,12 @@ static const CGFloat kEdgeDetectionZone = 10.0; // Pixels near edge for resize d
 @property (nonatomic, assign) BOOL isCommitted;
 @property (nonatomic, copy, nullable) void (^onWindowsChanged)(void);
 @property (nonatomic, copy, nullable) void (^onRequestTimeInput)(NSInteger suggestedMinutes);
+@property (nonatomic, copy, nullable) void (^onRequestEditBlock)(NSInteger blockIndex);
+@property (nonatomic, copy, nullable) void (^onRequestDeleteBlock)(NSInteger blockIndex);
+@property (nonatomic, strong) NSUndoManager *undoManager;
+
+// Selection state
+@property (nonatomic, assign) NSInteger selectedBlockIndex;
 
 // Drag state
 @property (nonatomic, assign) BOOL isDragging;
@@ -27,6 +35,7 @@ static const CGFloat kEdgeDetectionZone = 10.0; // Pixels near edge for resize d
 @property (nonatomic, assign) BOOL draggingStartEdge;
 @property (nonatomic, assign) BOOL draggingEndEdge;
 @property (nonatomic, assign) BOOL draggingWholeBlock;
+@property (nonatomic, assign) BOOL isCreatingNewBlock;
 @property (nonatomic, assign) CGFloat dragStartY;
 @property (nonatomic, assign) NSInteger dragStartMinutes;
 @property (nonatomic, strong, nullable) SCTimeRange *originalDragRange;
@@ -34,10 +43,13 @@ static const CGFloat kEdgeDetectionZone = 10.0; // Pixels near edge for resize d
 - (NSInteger)minutesFromY:(CGFloat)y;
 - (CGFloat)yFromMinutes:(NSInteger)minutes;
 - (NSInteger)snapToGrid:(NSInteger)minutes;
+- (NSInteger)windowIndexAtPoint:(NSPoint)point;
 
 @end
 
 @implementation SCTimelineView
+
+@synthesize undoManager = _undoManager;
 
 - (instancetype)initWithFrame:(NSRect)frame {
     self = [super initWithFrame:frame];
@@ -45,8 +57,131 @@ static const CGFloat kEdgeDetectionZone = 10.0; // Pixels near edge for resize d
         _allowedWindows = [NSMutableArray array];
         _bundleColor = [NSColor systemBlueColor];
         _draggingWindowIndex = -1;
+        _selectedBlockIndex = -1;
+        _undoManager = [[NSUndoManager alloc] init];
     }
     return self;
+}
+
+- (BOOL)acceptsFirstResponder {
+    return YES;
+}
+
+- (void)keyDown:(NSEvent *)event {
+    // Handle Delete and Backspace keys
+    unichar key = [[event charactersIgnoringModifiers] characterAtIndex:0];
+    if (key == NSDeleteCharacter || key == NSBackspaceCharacter || key == NSDeleteFunctionKey) {
+        if (self.selectedBlockIndex >= 0 && self.selectedBlockIndex < (NSInteger)self.allowedWindows.count) {
+            if (self.onRequestDeleteBlock) {
+                self.onRequestDeleteBlock(self.selectedBlockIndex);
+                self.selectedBlockIndex = -1;
+                [self setNeedsDisplay:YES];
+            }
+        }
+        return;
+    }
+    [super keyDown:event];
+}
+
+- (BOOL)performKeyEquivalent:(NSEvent *)event {
+    NSEventModifierFlags flags = [event modifierFlags] & NSEventModifierFlagDeviceIndependentFlagsMask;
+    NSString *chars = [event charactersIgnoringModifiers];
+
+    // Cmd+Z = Undo
+    if (flags == NSEventModifierFlagCommand && [chars isEqualToString:@"z"]) {
+        if ([self.undoManager canUndo]) {
+            [self.undoManager undo];
+            return YES;
+        }
+    }
+
+    // Cmd+Shift+Z = Redo
+    if (flags == (NSEventModifierFlagCommand | NSEventModifierFlagShift) && [chars isEqualToString:@"z"]) {
+        if ([self.undoManager canRedo]) {
+            [self.undoManager redo];
+            return YES;
+        }
+    }
+
+    return [super performKeyEquivalent:event];
+}
+
+- (void)addBlockWithUndo:(SCTimeRange *)block {
+    [[self.undoManager prepareWithInvocationTarget:self] removeBlockWithUndo:block];
+    [self.undoManager setActionName:@"Add Block"];
+
+    [self.allowedWindows addObject:block];
+    [self setNeedsDisplay:YES];
+    if (self.onWindowsChanged) self.onWindowsChanged();
+}
+
+- (void)removeBlockWithUndo:(SCTimeRange *)block {
+    NSUInteger index = [self.allowedWindows indexOfObject:block];
+    if (index == NSNotFound) return;
+
+    [[self.undoManager prepareWithInvocationTarget:self] insertBlockWithUndo:[block copy] atIndex:index];
+    [self.undoManager setActionName:@"Delete Block"];
+
+    [self.allowedWindows removeObjectAtIndex:index];
+
+    // Clear or adjust selection
+    if (self.selectedBlockIndex == (NSInteger)index) {
+        self.selectedBlockIndex = -1;
+    } else if (self.selectedBlockIndex > (NSInteger)index) {
+        self.selectedBlockIndex--;
+    }
+
+    [self setNeedsDisplay:YES];
+    if (self.onWindowsChanged) self.onWindowsChanged();
+}
+
+- (void)insertBlockWithUndo:(SCTimeRange *)block atIndex:(NSUInteger)index {
+    [[self.undoManager prepareWithInvocationTarget:self] removeBlockAtIndexWithUndo:index];
+    [self.undoManager setActionName:@"Add Block"];
+
+    if (index <= self.allowedWindows.count) {
+        [self.allowedWindows insertObject:block atIndex:index];
+    } else {
+        [self.allowedWindows addObject:block];
+    }
+    [self setNeedsDisplay:YES];
+    if (self.onWindowsChanged) self.onWindowsChanged();
+}
+
+- (void)removeBlockAtIndexWithUndo:(NSUInteger)index {
+    if (index >= self.allowedWindows.count) return;
+
+    SCTimeRange *block = [self.allowedWindows[index] copy];
+    [[self.undoManager prepareWithInvocationTarget:self] insertBlockWithUndo:block atIndex:index];
+    [self.undoManager setActionName:@"Delete Block"];
+
+    [self.allowedWindows removeObjectAtIndex:index];
+
+    // Clear or adjust selection
+    if (self.selectedBlockIndex == (NSInteger)index) {
+        self.selectedBlockIndex = -1;
+    } else if (self.selectedBlockIndex > (NSInteger)index) {
+        self.selectedBlockIndex--;
+    }
+
+    [self setNeedsDisplay:YES];
+    if (self.onWindowsChanged) self.onWindowsChanged();
+}
+
+- (void)updateBlockAtIndex:(NSUInteger)index toStart:(NSString *)start end:(NSString *)end {
+    if (index >= self.allowedWindows.count) return;
+
+    SCTimeRange *block = self.allowedWindows[index];
+    NSString *oldStart = [block.startTime copy];
+    NSString *oldEnd = [block.endTime copy];
+
+    [[self.undoManager prepareWithInvocationTarget:self] updateBlockAtIndex:index toStart:oldStart end:oldEnd];
+    [self.undoManager setActionName:@"Edit Block"];
+
+    block.startTime = start;
+    block.endTime = end;
+    [self setNeedsDisplay:YES];
+    if (self.onWindowsChanged) self.onWindowsChanged();
 }
 
 - (BOOL)isFlipped {
@@ -65,8 +200,10 @@ static const CGFloat kEdgeDetectionZone = 10.0; // Pixels near edge for resize d
     // Hour lines and labels
     [self drawHourMarkers];
 
-    // Draw allowed windows
-    for (NSUInteger i = 0; i < self.allowedWindows.count; i++) {
+    // Draw allowed windows - sort by duration descending so smaller blocks are drawn on top
+    NSArray *sortedIndices = [self windowIndicesSortedByDurationDescending];
+    for (NSNumber *indexNum in sortedIndices) {
+        NSUInteger i = [indexNum unsignedIntegerValue];
         SCTimeRange *window = self.allowedWindows[i];
         [self drawWindow:window atIndex:i];
     }
@@ -142,14 +279,25 @@ static const CGFloat kEdgeDetectionZone = 10.0; // Pixels near edge for resize d
 
     NSRect windowRect = NSMakeRect(35, startY, self.bounds.size.width - 40, height);
 
-    // Main fill
-    [[self.bundleColor colorWithAlphaComponent:0.7] setFill];
+    BOOL isSelected = (self.selectedBlockIndex == (NSInteger)index);
+
+    // Main fill - darker when selected
+    NSColor *fillColor = isSelected
+        ? [self.bundleColor colorWithAlphaComponent:0.9]
+        : [self.bundleColor colorWithAlphaComponent:0.7];
+
+    // Darken the color itself when selected
+    if (isSelected) {
+        fillColor = [[self.bundleColor blendedColorWithFraction:0.3 ofColor:[NSColor blackColor]] colorWithAlphaComponent:0.9];
+    }
+
+    [fillColor setFill];
     NSBezierPath *bgPath = [NSBezierPath bezierPathWithRoundedRect:windowRect xRadius:4 yRadius:4];
     [bgPath fill];
 
-    // Border
+    // Border - thicker when selected
     [[self.bundleColor colorWithAlphaComponent:1.0] setStroke];
-    [bgPath setLineWidth:1.5];
+    [bgPath setLineWidth:isSelected ? 2.5 : 1.5];
     [bgPath stroke];
 
     // Time labels
@@ -168,55 +316,115 @@ static const CGFloat kEdgeDetectionZone = 10.0; // Pixels near edge for resize d
 #pragma mark - Coordinate Conversion
 
 - (NSInteger)minutesFromY:(CGFloat)y {
-    CGFloat percent = y / self.bounds.size.height;
+    // Account for padding: usable area is between paddingTop and (height - paddingBottom)
+    CGFloat usableHeight = self.bounds.size.height - kTimelinePaddingTop - kTimelinePaddingBottom;
+    CGFloat adjustedY = y - kTimelinePaddingTop;
+    CGFloat percent = adjustedY / usableHeight;
     return (NSInteger)(percent * 24 * 60);
 }
 
 - (CGFloat)yFromMinutes:(NSInteger)minutes {
+    // Account for padding: map 0-1440 minutes to paddingTop..(height - paddingBottom)
+    CGFloat usableHeight = self.bounds.size.height - kTimelinePaddingTop - kTimelinePaddingBottom;
     CGFloat percent = minutes / (24.0 * 60.0);
-    return percent * self.bounds.size.height;
+    return kTimelinePaddingTop + (percent * usableHeight);
 }
 
 - (NSInteger)snapToGrid:(NSInteger)minutes {
     return ((NSInteger)round(minutes / kSnapMinutes)) * (NSInteger)kSnapMinutes;
 }
 
+#pragma mark - Z-ordering helpers
+
+/// Returns window indices sorted by duration descending (largest first, drawn first = behind)
+- (NSArray<NSNumber *> *)windowIndicesSortedByDurationDescending {
+    NSMutableArray *indices = [NSMutableArray array];
+    for (NSUInteger i = 0; i < self.allowedWindows.count; i++) {
+        [indices addObject:@(i)];
+    }
+    [indices sortUsingComparator:^NSComparisonResult(NSNumber *a, NSNumber *b) {
+        SCTimeRange *rangeA = self.allowedWindows[[a unsignedIntegerValue]];
+        SCTimeRange *rangeB = self.allowedWindows[[b unsignedIntegerValue]];
+        // Descending by duration (larger blocks first = drawn behind)
+        return [@([rangeB durationMinutes]) compare:@([rangeA durationMinutes])];
+    }];
+    return indices;
+}
+
+/// Returns window indices sorted by duration ascending (smallest first = checked first for clicks)
+- (NSArray<NSNumber *> *)windowIndicesSortedByDurationAscending {
+    NSMutableArray *indices = [NSMutableArray array];
+    for (NSUInteger i = 0; i < self.allowedWindows.count; i++) {
+        [indices addObject:@(i)];
+    }
+    [indices sortUsingComparator:^NSComparisonResult(NSNumber *a, NSNumber *b) {
+        SCTimeRange *rangeA = self.allowedWindows[[a unsignedIntegerValue]];
+        SCTimeRange *rangeB = self.allowedWindows[[b unsignedIntegerValue]];
+        // Ascending by duration (smaller blocks first = topmost = checked first)
+        return [@([rangeA durationMinutes]) compare:@([rangeB durationMinutes])];
+    }];
+    return indices;
+}
+
+/// Find window index at point, checking smaller (topmost) blocks first
+- (NSInteger)windowIndexAtPoint:(NSPoint)point {
+    NSArray *sortedIndices = [self windowIndicesSortedByDurationAscending];
+    for (NSNumber *indexNum in sortedIndices) {
+        NSInteger i = [indexNum integerValue];
+        SCTimeRange *window = self.allowedWindows[i];
+        CGFloat startY = [self yFromMinutes:[window startMinutes]];
+        CGFloat endY = [self yFromMinutes:[window endMinutes]];
+        NSRect windowRect = NSMakeRect(35, startY, self.bounds.size.width - 40, endY - startY);
+        if (NSPointInRect(point, windowRect)) {
+            return i;
+        }
+    }
+    return -1;
+}
+
 #pragma mark - Mouse Handling
 
 - (void)mouseDown:(NSEvent *)event {
+    // Become first responder to receive undo/redo and key commands
+    [self.window makeFirstResponder:self];
+
     NSPoint point = [self convertPoint:event.locationInWindow fromView:nil];
 
-    // Check for double-click on empty space to show time picker
-    if (event.clickCount == 2 && !self.isCommitted) {
-        NSInteger minutes = [self snapToGrid:[self minutesFromY:point.y]];
-        // Check if clicking in empty space (not on a window)
-        BOOL onWindow = NO;
-        for (SCTimeRange *window in self.allowedWindows) {
-            CGFloat startY = [self yFromMinutes:[window startMinutes]];
-            CGFloat endY = [self yFromMinutes:[window endMinutes]];
-            NSRect windowRect = NSMakeRect(35, startY, self.bounds.size.width - 40, endY - startY);
-            if (NSPointInRect(point, windowRect)) {
-                onWindow = YES;
-                break;
+    // Find which window is clicked (uses z-order aware hit testing)
+    NSInteger clickedIndex = [self windowIndexAtPoint:point];
+
+    // Update selection
+    if (clickedIndex != self.selectedBlockIndex) {
+        self.selectedBlockIndex = clickedIndex;
+        [self setNeedsDisplay:YES];
+    }
+
+    // Handle double-click
+    if (event.clickCount == 2) {
+        if (clickedIndex >= 0) {
+            // Double-click on a block - trigger edit
+            if (self.onRequestEditBlock) {
+                self.onRequestEditBlock(clickedIndex);
             }
-        }
-        if (!onWindow && self.onRequestTimeInput) {
-            self.onRequestTimeInput(minutes);
+            return;
+        } else if (!self.isCommitted) {
+            // Double-click on empty space - show time picker
+            NSInteger minutes = [self snapToGrid:[self minutesFromY:point.y]];
+            if (self.onRequestTimeInput) {
+                self.onRequestTimeInput(minutes);
+            }
             return;
         }
     }
 
     // Check if clicking on existing window
-    for (NSInteger i = self.allowedWindows.count - 1; i >= 0; i--) {
-        SCTimeRange *window = self.allowedWindows[i];
+    if (clickedIndex >= 0) {
+        SCTimeRange *window = self.allowedWindows[clickedIndex];
         CGFloat startY = [self yFromMinutes:[window startMinutes]];
         CGFloat endY = [self yFromMinutes:[window endMinutes]];
 
-        NSRect windowRect = NSMakeRect(35, startY, self.bounds.size.width - 40, endY - startY);
-        if (!NSPointInRect(point, windowRect)) continue;
-
         self.isDragging = YES;
-        self.draggingWindowIndex = i;
+        self.draggingWindowIndex = clickedIndex;
         self.originalDragRange = [window copy];
         self.dragStartY = point.y;
         self.dragStartMinutes = [self minutesFromY:point.y];
@@ -251,6 +459,7 @@ static const CGFloat kEdgeDetectionZone = 10.0; // Pixels near edge for resize d
                                                          end:[self timeStringFromMinutes:minutes + 60]];
         [self.allowedWindows addObject:newWindow];
         self.isDragging = YES;
+        self.isCreatingNewBlock = YES;  // Track that this is a new block
         self.draggingWindowIndex = self.allowedWindows.count - 1;
         self.draggingStartEdge = NO;
         self.draggingEndEdge = YES;
@@ -333,11 +542,16 @@ static const CGFloat kEdgeDetectionZone = 10.0; // Pixels near edge for resize d
 }
 
 - (void)mouseUp:(NSEvent *)event {
+    NSInteger draggedIndex = self.draggingWindowIndex;
+    BOOL wasCreatingNew = self.isCreatingNewBlock;
+    SCTimeRange *originalRange = self.originalDragRange;
+
     self.isDragging = NO;
     self.draggingWindowIndex = -1;
     self.draggingStartEdge = NO;
     self.draggingEndEdge = NO;
     self.draggingWholeBlock = NO;
+    self.isCreatingNewBlock = NO;
     self.originalDragRange = nil;
 
     // Clean up any zero-duration windows
@@ -348,6 +562,28 @@ static const CGFloat kEdgeDetectionZone = 10.0; // Pixels near edge for resize d
         }
     }
     [self.allowedWindows removeObjectsInArray:toRemove];
+
+    // Register undo for successful operations
+    if (wasCreatingNew && draggedIndex >= 0) {
+        // Find the block we just created (if it survived cleanup)
+        if (draggedIndex < (NSInteger)self.allowedWindows.count) {
+            SCTimeRange *newBlock = self.allowedWindows[draggedIndex];
+            if ([newBlock durationMinutes] >= 15) {
+                // Register undo for the new block
+                [[self.undoManager prepareWithInvocationTarget:self] removeBlockAtIndexWithUndo:draggedIndex];
+                [self.undoManager setActionName:@"Add Block"];
+            }
+        }
+    } else if (!wasCreatingNew && originalRange && draggedIndex >= 0 && draggedIndex < (NSInteger)self.allowedWindows.count) {
+        // We were editing an existing block - register undo for the change
+        SCTimeRange *currentBlock = self.allowedWindows[draggedIndex];
+        if (![currentBlock.startTime isEqualToString:originalRange.startTime] ||
+            ![currentBlock.endTime isEqualToString:originalRange.endTime]) {
+            [[self.undoManager prepareWithInvocationTarget:self]
+                updateBlockAtIndex:draggedIndex toStart:originalRange.startTime end:originalRange.endTime];
+            [self.undoManager setActionName:@"Move Block"];
+        }
+    }
 
     [self setNeedsDisplay:YES];
     if (self.onWindowsChanged) self.onWindowsChanged();
@@ -399,6 +635,49 @@ static const CGFloat kEdgeDetectionZone = 10.0; // Pixels near edge for resize d
     return [NSString stringWithFormat:@"%02ld:%02ld", (long)hours, (long)mins];
 }
 
+#pragma mark - Right-click Context Menu
+
+- (void)rightMouseDown:(NSEvent *)event {
+    NSPoint point = [self convertPoint:event.locationInWindow fromView:nil];
+    NSInteger clickedIndex = [self windowIndexAtPoint:point];
+
+    if (clickedIndex < 0) {
+        [super rightMouseDown:event];
+        return;
+    }
+
+    // Create context menu
+    NSMenu *menu = [[NSMenu alloc] initWithTitle:@"Block Actions"];
+
+    NSMenuItem *editItem = [[NSMenuItem alloc] initWithTitle:@"Edit..."
+                                                      action:@selector(contextMenuEdit:)
+                                               keyEquivalent:@""];
+    editItem.target = self;
+    editItem.tag = clickedIndex;
+    [menu addItem:editItem];
+
+    NSMenuItem *deleteItem = [[NSMenuItem alloc] initWithTitle:@"Delete"
+                                                        action:@selector(contextMenuDelete:)
+                                                 keyEquivalent:@""];
+    deleteItem.target = self;
+    deleteItem.tag = clickedIndex;
+    [menu addItem:deleteItem];
+
+    [NSMenu popUpContextMenu:menu withEvent:event forView:self];
+}
+
+- (void)contextMenuEdit:(NSMenuItem *)sender {
+    if (self.onRequestEditBlock) {
+        self.onRequestEditBlock(sender.tag);
+    }
+}
+
+- (void)contextMenuDelete:(NSMenuItem *)sender {
+    if (self.onRequestDeleteBlock) {
+        self.onRequestDeleteBlock(sender.tag);
+    }
+}
+
 @end
 
 #pragma mark - SCDayScheduleEditorController
@@ -421,8 +700,10 @@ static const CGFloat kEdgeDetectionZone = 10.0; // Pixels near edge for resize d
 @property (nonatomic, strong) NSButton *cancelButton;
 @property (nonatomic, strong) NSButton *addTimeBlockButton;
 @property (nonatomic, strong) NSPopover *timeInputPopover;
+@property (nonatomic, strong) NSPopover *editBlockPopover;
 @property (nonatomic, strong) NSDatePicker *startTimePicker;
 @property (nonatomic, strong) NSDatePicker *endTimePicker;
+@property (nonatomic, assign) NSInteger editingBlockIndex;
 
 @end
 
@@ -431,8 +712,8 @@ static const CGFloat kEdgeDetectionZone = 10.0; // Pixels near edge for resize d
 - (instancetype)initWithBundle:(SCBlockBundle *)bundle
                       schedule:(SCWeeklySchedule *)schedule
                            day:(SCDayOfWeek)day {
-    // Create window programmatically
-    NSRect frame = NSMakeRect(0, 0, 300, 500);
+    // Create window programmatically - 600 height for larger timeline
+    NSRect frame = NSMakeRect(0, 0, 300, 600);
     NSWindow *window = [[NSWindow alloc] initWithContentRect:frame
                                                    styleMask:NSWindowStyleMaskTitled
                                                      backing:NSBackingStoreBuffered
@@ -446,6 +727,7 @@ static const CGFloat kEdgeDetectionZone = 10.0; // Pixels near edge for resize d
         _schedule = schedule;
         _workingSchedule = [schedule copy];
         _isCommitted = NO;
+        _editingBlockIndex = -1;
 
         [self setupUI];
     }
@@ -502,19 +784,25 @@ static const CGFloat kEdgeDetectionZone = 10.0; // Pixels near edge for resize d
     self.presetsButton.action = @selector(presetSelected:);
     [contentView addSubview:self.presetsButton];
 
-    // Add time block button ("+")
-    self.addTimeBlockButton = [[NSButton alloc] initWithFrame:NSMakeRect(250, y - 2, 30, 24)];
-    self.addTimeBlockButton.title = @"+";
-    self.addTimeBlockButton.font = [NSFont systemFontOfSize:16 weight:NSFontWeightMedium];
+    // Add time block button ("+") - use SF Symbol for cleaner appearance
+    self.addTimeBlockButton = [[NSButton alloc] initWithFrame:NSMakeRect(250, y - 2, 34, 24)];
+    if (@available(macOS 11.0, *)) {
+        NSImage *plusImage = [NSImage imageWithSystemSymbolName:@"plus" accessibilityDescription:@"Add"];
+        NSImageSymbolConfiguration *config = [NSImageSymbolConfiguration configurationWithPointSize:14 weight:NSFontWeightMedium];
+        self.addTimeBlockButton.image = [plusImage imageWithSymbolConfiguration:config];
+    } else {
+        self.addTimeBlockButton.title = @"+";
+        self.addTimeBlockButton.font = [NSFont systemFontOfSize:18 weight:NSFontWeightLight];
+    }
     self.addTimeBlockButton.bezelStyle = NSBezelStyleRounded;
     self.addTimeBlockButton.target = self;
     self.addTimeBlockButton.action = @selector(addTimeBlockClicked:);
     self.addTimeBlockButton.toolTip = @"Add time block with specific times";
     [contentView addSubview:self.addTimeBlockButton];
 
-    // Timeline view
-    y -= 320;
-    self.timelineView = [[SCTimelineView alloc] initWithFrame:NSMakeRect(padding, y, 276, 300)];
+    // Timeline view - 400pt height for better visibility
+    y -= 420;
+    self.timelineView = [[SCTimelineView alloc] initWithFrame:NSMakeRect(padding, y, 276, 400)];
     self.timelineView.bundleColor = self.bundle.color;
     self.timelineView.allowedWindows = [[self.workingSchedule allowedWindowsForDay:self.day] mutableCopy];
     self.timelineView.isCommitted = self.isCommitted;
@@ -526,10 +814,18 @@ static const CGFloat kEdgeDetectionZone = 10.0; // Pixels near edge for resize d
     self.timelineView.onRequestTimeInput = ^(NSInteger suggestedMinutes) {
         [weakSelf showTimeInputPopoverAtMinutes:suggestedMinutes];
     };
+    self.timelineView.onRequestEditBlock = ^(NSInteger blockIndex) {
+        [weakSelf showEditPopoverForBlockAtIndex:blockIndex];
+    };
+    self.timelineView.onRequestDeleteBlock = ^(NSInteger blockIndex) {
+        [weakSelf deleteBlockAtIndex:blockIndex];
+    };
 
     self.timelineView.wantsLayer = YES;
     self.timelineView.layer.cornerRadius = 8;
     self.timelineView.layer.masksToBounds = YES;
+    self.timelineView.layer.borderWidth = 1.0;
+    self.timelineView.layer.borderColor = [[NSColor separatorColor] CGColor];
     [contentView addSubview:self.timelineView];
 
     // Copy schedule from another day
@@ -732,6 +1028,23 @@ static const CGFloat kEdgeDetectionZone = 10.0; // Pixels near edge for resize d
     // Save the current timeline state
     [self timelineWindowsChanged];
 
+    // Check for overlapping blocks
+    if ([self hasOverlappingBlocks]) {
+        NSAlert *alert = [[NSAlert alloc] init];
+        alert.messageText = @"Overlapping Time Blocks";
+        alert.informativeText = @"Some time blocks overlap. They will be merged when you save.";
+        [alert addButtonWithTitle:@"Merge & Save"];
+        [alert addButtonWithTitle:@"Cancel"];
+        alert.alertStyle = NSAlertStyleWarning;
+
+        if ([alert runModal] == NSAlertFirstButtonReturn) {
+            [self mergeOverlappingBlocks];
+            [self timelineWindowsChanged];
+        } else {
+            return;  // User cancelled
+        }
+    }
+
     [self.delegate dayScheduleEditor:self didSaveSchedule:self.workingSchedule forDay:self.day];
     [self.window.sheetParent endSheet:self.window returnCode:NSModalResponseOK];
 }
@@ -844,14 +1157,12 @@ static const CGFloat kEdgeDetectionZone = 10.0; // Pixels near edge for resize d
         return;
     }
 
-    // Create the time range
+    // Create the time range with undo support
     NSString *startStr = [NSString stringWithFormat:@"%02ld:%02ld", (long)(startMinutes / 60), (long)(startMinutes % 60)];
     NSString *endStr = [NSString stringWithFormat:@"%02ld:%02ld", (long)(endMinutes / 60), (long)(endMinutes % 60)];
     SCTimeRange *newWindow = [SCTimeRange rangeWithStart:startStr end:endStr];
 
-    [self.timelineView.allowedWindows addObject:newWindow];
-    [self.timelineView setNeedsDisplay:YES];
-    [self timelineWindowsChanged];
+    [self.timelineView addBlockWithUndo:newWindow];
 
     [self.timeInputPopover close];
 }
@@ -868,6 +1179,204 @@ static const CGFloat kEdgeDetectionZone = 10.0; // Pixels near edge for resize d
     NSCalendar *calendar = [NSCalendar currentCalendar];
     NSDateComponents *comps = [calendar components:(NSCalendarUnitHour | NSCalendarUnitMinute) fromDate:date];
     return comps.hour * 60 + comps.minute;
+}
+
+#pragma mark - Overlap Detection and Merging
+
+- (BOOL)hasOverlappingBlocks {
+    NSArray<SCTimeRange *> *windows = self.timelineView.allowedWindows;
+    for (NSUInteger i = 0; i < windows.count; i++) {
+        for (NSUInteger j = i + 1; j < windows.count; j++) {
+            if ([self range:windows[i] overlapsWithRange:windows[j]]) {
+                return YES;
+            }
+        }
+    }
+    return NO;
+}
+
+- (BOOL)range:(SCTimeRange *)a overlapsWithRange:(SCTimeRange *)b {
+    NSInteger aStart = [a startMinutes];
+    NSInteger aEnd = [a endMinutes];
+    NSInteger bStart = [b startMinutes];
+    NSInteger bEnd = [b endMinutes];
+    // Overlaps if not disjoint (a ends before b starts or b ends before a starts)
+    return !(aEnd <= bStart || bEnd <= aStart);
+}
+
+- (void)mergeOverlappingBlocks {
+    NSMutableArray<SCTimeRange *> *windows = self.timelineView.allowedWindows;
+    if (windows.count < 2) return;
+
+    // Sort by start time
+    [windows sortUsingComparator:^NSComparisonResult(SCTimeRange *a, SCTimeRange *b) {
+        return [@([a startMinutes]) compare:@([b startMinutes])];
+    }];
+
+    NSMutableArray<SCTimeRange *> *merged = [NSMutableArray array];
+    SCTimeRange *current = [windows[0] copy];
+
+    for (NSUInteger i = 1; i < windows.count; i++) {
+        SCTimeRange *next = windows[i];
+        if ([next startMinutes] <= [current endMinutes]) {
+            // Overlapping or adjacent - extend current
+            if ([next endMinutes] > [current endMinutes]) {
+                NSInteger endMins = [next endMinutes];
+                current.endTime = [NSString stringWithFormat:@"%02ld:%02ld",
+                                   (long)(endMins / 60), (long)(endMins % 60)];
+            }
+        } else {
+            // No overlap - save current and start new
+            [merged addObject:current];
+            current = [next copy];
+        }
+    }
+    [merged addObject:current];
+
+    [self.timelineView.allowedWindows removeAllObjects];
+    [self.timelineView.allowedWindows addObjectsFromArray:merged];
+    [self.timelineView setNeedsDisplay:YES];
+}
+
+#pragma mark - Edit Block Popover
+
+- (void)showEditPopoverForBlockAtIndex:(NSInteger)blockIndex {
+    if (blockIndex < 0 || blockIndex >= (NSInteger)self.timelineView.allowedWindows.count) return;
+
+    if (self.editBlockPopover && self.editBlockPopover.isShown) {
+        [self.editBlockPopover close];
+    }
+
+    self.editingBlockIndex = blockIndex;
+    SCTimeRange *block = self.timelineView.allowedWindows[blockIndex];
+
+    // Create popover content view
+    NSView *contentView = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 200, 140)];
+
+    // Title label
+    NSTextField *titleLabel = [NSTextField labelWithString:@"Edit Time Block"];
+    titleLabel.frame = NSMakeRect(10, 110, 180, 20);
+    titleLabel.font = [NSFont systemFontOfSize:13 weight:NSFontWeightSemibold];
+    [contentView addSubview:titleLabel];
+
+    // Start time label
+    NSTextField *startLabel = [NSTextField labelWithString:@"Start:"];
+    startLabel.frame = NSMakeRect(10, 80, 40, 20);
+    startLabel.font = [NSFont systemFontOfSize:12];
+    [contentView addSubview:startLabel];
+
+    // Start time picker
+    self.startTimePicker = [[NSDatePicker alloc] initWithFrame:NSMakeRect(55, 78, 130, 24)];
+    self.startTimePicker.datePickerStyle = NSDatePickerStyleTextFieldAndStepper;
+    self.startTimePicker.datePickerElements = NSDatePickerElementFlagHourMinute;
+    self.startTimePicker.dateValue = [self dateFromMinutes:[block startMinutes]];
+    [contentView addSubview:self.startTimePicker];
+
+    // End time label
+    NSTextField *endLabel = [NSTextField labelWithString:@"End:"];
+    endLabel.frame = NSMakeRect(10, 50, 40, 20);
+    endLabel.font = [NSFont systemFontOfSize:12];
+    [contentView addSubview:endLabel];
+
+    // End time picker
+    self.endTimePicker = [[NSDatePicker alloc] initWithFrame:NSMakeRect(55, 48, 130, 24)];
+    self.endTimePicker.datePickerStyle = NSDatePickerStyleTextFieldAndStepper;
+    self.endTimePicker.datePickerElements = NSDatePickerElementFlagHourMinute;
+    self.endTimePicker.dateValue = [self dateFromMinutes:[block endMinutes]];
+    [contentView addSubview:self.endTimePicker];
+
+    // OK button
+    NSButton *okButton = [[NSButton alloc] initWithFrame:NSMakeRect(55, 10, 90, 28)];
+    okButton.title = @"OK";
+    okButton.bezelStyle = NSBezelStyleRounded;
+    okButton.target = self;
+    okButton.action = @selector(updateBlockFromEditPopover:);
+    okButton.keyEquivalent = @"\r";
+    [contentView addSubview:okButton];
+
+    // Create and configure popover
+    self.editBlockPopover = [[NSPopover alloc] init];
+    self.editBlockPopover.contentSize = contentView.frame.size;
+    self.editBlockPopover.behavior = NSPopoverBehaviorTransient;
+    self.editBlockPopover.animates = YES;
+
+    NSViewController *viewController = [[NSViewController alloc] init];
+    viewController.view = contentView;
+    self.editBlockPopover.contentViewController = viewController;
+
+    // Show relative to the block in timeline
+    CGFloat startY = [self.timelineView yFromMinutes:[block startMinutes]];
+    CGFloat endY = [self.timelineView yFromMinutes:[block endMinutes]];
+    CGFloat midY = (startY + endY) / 2;
+    NSRect blockRect = NSMakeRect(35, midY - 10, self.timelineView.bounds.size.width - 40, 20);
+
+    [self.editBlockPopover showRelativeToRect:blockRect
+                                       ofView:self.timelineView
+                                preferredEdge:NSRectEdgeMaxX];
+}
+
+- (void)updateBlockFromEditPopover:(id)sender {
+    if (self.editingBlockIndex < 0 || self.editingBlockIndex >= (NSInteger)self.timelineView.allowedWindows.count) {
+        [self.editBlockPopover close];
+        return;
+    }
+
+    NSInteger startMinutes = [self minutesFromDate:self.startTimePicker.dateValue];
+    NSInteger endMinutes = [self minutesFromDate:self.endTimePicker.dateValue];
+
+    // Validate
+    if (endMinutes <= startMinutes) {
+        NSAlert *alert = [[NSAlert alloc] init];
+        alert.messageText = @"Invalid Time Range";
+        alert.informativeText = @"End time must be after start time.";
+        [alert runModal];
+        return;
+    }
+
+    if (endMinutes - startMinutes < 15) {
+        NSAlert *alert = [[NSAlert alloc] init];
+        alert.messageText = @"Time Range Too Short";
+        alert.informativeText = @"Time blocks must be at least 15 minutes.";
+        [alert runModal];
+        return;
+    }
+
+    // Check commitment constraint - can only make block stricter
+    if (self.isCommitted) {
+        SCTimeRange *original = self.timelineView.allowedWindows[self.editingBlockIndex];
+        if (startMinutes < [original startMinutes] || endMinutes > [original endMinutes]) {
+            NSAlert *alert = [[NSAlert alloc] init];
+            alert.messageText = @"Cannot Loosen Schedule";
+            alert.informativeText = @"You're committed to this week. You can only make the time block smaller.";
+            [alert runModal];
+            return;
+        }
+    }
+
+    // Update the block with undo support
+    NSString *newStart = [NSString stringWithFormat:@"%02ld:%02ld", (long)(startMinutes / 60), (long)(startMinutes % 60)];
+    NSString *newEnd = [NSString stringWithFormat:@"%02ld:%02ld", (long)(endMinutes / 60), (long)(endMinutes % 60)];
+    [self.timelineView updateBlockAtIndex:self.editingBlockIndex toStart:newStart end:newEnd];
+
+    [self.editBlockPopover close];
+    self.editingBlockIndex = -1;
+}
+
+#pragma mark - Delete Block
+
+- (void)deleteBlockAtIndex:(NSInteger)blockIndex {
+    if (blockIndex < 0 || blockIndex >= (NSInteger)self.timelineView.allowedWindows.count) return;
+
+    if (self.isCommitted) {
+        NSAlert *alert = [[NSAlert alloc] init];
+        alert.messageText = @"Cannot Delete Blocks";
+        alert.informativeText = @"You're committed to this week. You cannot delete allowed time blocks.";
+        [alert runModal];
+        return;
+    }
+
+    // Use undo-aware deletion
+    [self.timelineView removeBlockAtIndexWithUndo:blockIndex];
 }
 
 #pragma mark - Sheet Presentation

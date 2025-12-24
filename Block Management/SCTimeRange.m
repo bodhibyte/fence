@@ -111,9 +111,7 @@
     if (hours == 0) hours = 12;
     else if (hours > 12) hours -= 12;
 
-    if (mins == 0) {
-        return [NSString stringWithFormat:@"%ld%@", (long)hours, period];
-    }
+    // Always include minutes for consistent width (prevents jitter during drag)
     return [NSString stringWithFormat:@"%ld:%02ld%@", (long)hours, (long)mins, period];
 }
 

@@ -257,6 +257,7 @@
     CGFloat gridHeight = MAX(contentHeight, viewportHeight);
 
     NSRect gridFrame = self.weekGridView.frame;
+    gridFrame.size.width = self.gridScrollView.contentSize.width; // Update width too
     gridFrame.size.height = gridHeight;
     self.weekGridView.frame = gridFrame;
 }
