@@ -105,7 +105,7 @@
     [contentView addSubview:self.weekLabel];
 
     // Status view - use semi-transparent background to work with frosted glass
-    y -= 60;
+    y -= 55; // 50px height + 5px gap
     self.statusView = [[NSView alloc] initWithFrame:NSMakeRect(padding, y, contentView.bounds.size.width - padding * 2, 50)];
     self.statusView.wantsLayer = YES;
     self.statusView.layer.backgroundColor = [[NSColor.whiteColor colorWithAlphaComponent:0.1] CGColor];
@@ -119,16 +119,18 @@
     self.statusStackView.orientation = NSUserInterfaceLayoutOrientationHorizontal;
     self.statusStackView.spacing = 8;
     self.statusStackView.alignment = NSLayoutAttributeCenterY;
+    self.statusStackView.distribution = NSStackViewDistributionFill; // Pills size to content
     self.statusStackView.autoresizingMask = NSViewWidthSizable;
     [self.statusView addSubview:self.statusStackView];
 
-    // Week grid
-    y -= 430;
-    self.gridScrollView = [[NSScrollView alloc] initWithFrame:NSMakeRect(padding, y, contentView.bounds.size.width - padding * 2, 420)];
+    // Week grid - position with minimal gap from status bar
+    CGFloat bottomControlsHeight = 85; // Space for buttons at bottom
+    CGFloat gridHeight = y - bottomControlsHeight;
+    self.gridScrollView = [[NSScrollView alloc] initWithFrame:NSMakeRect(padding, bottomControlsHeight, contentView.bounds.size.width - padding * 2, gridHeight)];
     self.gridScrollView.hasVerticalScroller = YES;
     self.gridScrollView.hasHorizontalScroller = NO;
     self.gridScrollView.autohidesScrollers = YES;
-    self.gridScrollView.borderType = NSBezelBorder;
+    self.gridScrollView.borderType = NSNoBorder; // Remove border for cleaner look
     self.gridScrollView.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
 
     self.weekGridView = [[SCWeekGridView alloc] initWithFrame:NSMakeRect(0, 0, self.gridScrollView.bounds.size.width, 300)];
@@ -139,24 +141,24 @@
     self.gridScrollView.documentView = self.weekGridView;
     [contentView addSubview:self.gridScrollView];
 
-    // Bottom buttons
-    y -= 50;
+    // Bottom buttons - positioned at fixed location above window bottom
+    CGFloat buttonY = 45;
 
-    self.addBundleButton = [[NSButton alloc] initWithFrame:NSMakeRect(padding, y, 120, 30)];
+    self.addBundleButton = [[NSButton alloc] initWithFrame:NSMakeRect(padding, buttonY, 120, 30)];
     self.addBundleButton.title = @"+ Add Bundle";
     self.addBundleButton.bezelStyle = NSBezelStyleRounded;
     self.addBundleButton.target = self;
     self.addBundleButton.action = @selector(addBundleClicked:);
     [contentView addSubview:self.addBundleButton];
 
-    self.saveTemplateButton = [[NSButton alloc] initWithFrame:NSMakeRect(padding + 130, y, 140, 30)];
+    self.saveTemplateButton = [[NSButton alloc] initWithFrame:NSMakeRect(padding + 130, buttonY, 140, 30)];
     self.saveTemplateButton.title = @"Save as Default";
     self.saveTemplateButton.bezelStyle = NSBezelStyleRounded;
     self.saveTemplateButton.target = self;
     self.saveTemplateButton.action = @selector(saveTemplateClicked:);
     [contentView addSubview:self.saveTemplateButton];
 
-    self.commitButton = [[NSButton alloc] initWithFrame:NSMakeRect(contentView.bounds.size.width - padding - 150, y, 150, 30)];
+    self.commitButton = [[NSButton alloc] initWithFrame:NSMakeRect(contentView.bounds.size.width - padding - 150, buttonY, 150, 30)];
     self.commitButton.title = @"Commit to Week";
     self.commitButton.bezelStyle = NSBezelStyleRounded;
     self.commitButton.target = self;
@@ -165,7 +167,7 @@
     [contentView addSubview:self.commitButton];
 
     // Week starts on toggle
-    NSTextField *weekStartLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(padding + 280, y + 5, 90, 20)];
+    NSTextField *weekStartLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(padding + 280, buttonY + 5, 90, 20)];
     weekStartLabel.stringValue = @"Week starts:";
     weekStartLabel.font = [NSFont systemFontOfSize:11];
     weekStartLabel.textColor = [NSColor secondaryLabelColor];
@@ -174,7 +176,7 @@
     weekStartLabel.drawsBackground = NO;
     [contentView addSubview:weekStartLabel];
 
-    self.weekStartControl = [[NSSegmentedControl alloc] initWithFrame:NSMakeRect(padding + 370, y + 2, 100, 24)];
+    self.weekStartControl = [[NSSegmentedControl alloc] initWithFrame:NSMakeRect(padding + 370, buttonY + 2, 100, 24)];
     [self.weekStartControl setSegmentCount:2];
     [self.weekStartControl setLabel:@"Sun" forSegment:0];
     [self.weekStartControl setLabel:@"Mon" forSegment:1];
@@ -185,9 +187,8 @@
     self.weekStartControl.selectedSegment = [SCScheduleManager sharedManager].weekStartsOnMonday ? 1 : 0;
     [contentView addSubview:self.weekStartControl];
 
-    // Commitment label
-    y -= 25;
-    self.commitmentLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(contentView.bounds.size.width - padding - 200, y, 200, 20)];
+    // Commitment label - below the commit button
+    self.commitmentLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(contentView.bounds.size.width - padding - 200, buttonY - 20, 200, 20)];
     self.commitmentLabel.alignment = NSTextAlignmentRight;
     self.commitmentLabel.font = [NSFont systemFontOfSize:11];
     self.commitmentLabel.textColor = [NSColor secondaryLabelColor];
@@ -232,8 +233,13 @@
     // Update week label
     [self updateWeekLabel];
 
-    // Resize grid to fit content
-    CGFloat gridHeight = MAX(300, 30 + manager.bundles.count * 60);
+    // Resize grid to fit content - MUST be at least as tall as scroll view
+    // In non-flipped coordinates, a smaller document view pins to BOTTOM (y=0)
+    // Making it at least viewport height ensures content appears at top
+    CGFloat contentHeight = 30 + manager.bundles.count * 60;
+    CGFloat viewportHeight = self.gridScrollView.contentSize.height;
+    CGFloat gridHeight = MAX(contentHeight, viewportHeight);
+
     NSRect gridFrame = self.weekGridView.frame;
     gridFrame.size.height = gridHeight;
     self.weekGridView.frame = gridFrame;
@@ -316,8 +322,17 @@
             [pillStack.bottomAnchor constraintEqualToAnchor:pill.bottomAnchor]
         ]];
 
+        // Prevent pill from stretching - it should only be as wide as its content
+        [pill setContentHuggingPriority:NSLayoutPriorityRequired forOrientation:NSLayoutConstraintOrientationHorizontal];
+        [pill setContentCompressionResistancePriority:NSLayoutPriorityRequired forOrientation:NSLayoutConstraintOrientationHorizontal];
+
         [self.statusStackView addArrangedSubview:pill];
     }
+
+    // Add a flexible spacer at the end to push pills to the left
+    NSView *spacer = [[NSView alloc] init];
+    [spacer setContentHuggingPriority:NSLayoutPriorityDefaultLow forOrientation:NSLayoutConstraintOrientationHorizontal];
+    [self.statusStackView addArrangedSubview:spacer];
 }
 
 - (void)updateCommitmentUI {

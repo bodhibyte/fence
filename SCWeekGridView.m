@@ -20,6 +20,11 @@ static const CGFloat kTimelineHeight = 48.0;
 @property (nonatomic, strong) NSTrackingArea *trackingArea;
 @property (nonatomic, assign) NSPoint lastMousePoint;
 
+// Hover tracking
+@property (nonatomic, assign) NSInteger hoveredBundleIndex;
+@property (nonatomic, assign) NSInteger hoveredDayIndex;
+@property (nonatomic, assign) BOOL isHoveringBundleLabel;
+
 @end
 
 @implementation SCWeekGridView
@@ -45,6 +50,9 @@ static const CGFloat kTimelineHeight = 48.0;
     _weekStartsOnMonday = YES;
     _isCommitted = NO;
     _highlightedDay = -1;
+    _hoveredBundleIndex = -1;
+    _hoveredDayIndex = -1;
+    _isHoveringBundleLabel = NO;
 }
 
 - (void)updateTrackingAreas {
@@ -55,7 +63,9 @@ static const CGFloat kTimelineHeight = 48.0;
     }
 
     self.trackingArea = [[NSTrackingArea alloc] initWithRect:self.bounds
-                                                     options:(NSTrackingMouseMoved | NSTrackingActiveInKeyWindow)
+                                                     options:(NSTrackingMouseMoved |
+                                                              NSTrackingMouseEnteredAndExited |
+                                                              NSTrackingActiveInKeyWindow)
                                                        owner:self
                                                     userInfo:nil];
     [self addTrackingArea:self.trackingArea];
@@ -148,6 +158,9 @@ static const CGFloat kTimelineHeight = 48.0;
 
     // Draw grid lines
     [self drawGridLines:days];
+
+    // Draw continuous NOW line across all bundles for today
+    [self drawNowLine:days];
 }
 
 - (void)drawDayHeaders:(NSArray<NSNumber *> *)days {
@@ -194,6 +207,17 @@ static const CGFloat kTimelineHeight = 48.0;
 - (void)drawBundleLabel:(SCBlockBundle *)bundle atIndex:(NSUInteger)index {
     NSRect labelRect = [self rectForBundleLabel:index];
 
+    // Check if this label is hovered
+    BOOL isHovered = (self.hoveredBundleIndex == (NSInteger)index && self.isHoveringBundleLabel);
+
+    // Draw hover background
+    if (isHovered) {
+        NSRect hoverRect = NSInsetRect(labelRect, 4, 4);
+        [[[NSColor controlBackgroundColor] blendedColorWithFraction:0.15 ofColor:[NSColor blackColor]] setFill];
+        NSBezierPath *hoverPath = [NSBezierPath bezierPathWithRoundedRect:hoverRect xRadius:4 yRadius:4];
+        [hoverPath fill];
+    }
+
     // Color indicator
     NSRect colorRect = NSMakeRect(labelRect.origin.x + 8,
                                    labelRect.origin.y + (labelRect.size.height - 12) / 2,
@@ -235,13 +259,21 @@ static const CGFloat kTimelineHeight = 48.0;
     NSRect cellRect = [self rectForCell:bundleIndex dayIndex:dayIndex dayCount:dayCount];
     NSRect innerRect = NSInsetRect(cellRect, kCellPadding, kCellPadding);
 
-    // Check if this cell is highlighted
+    // Check if this cell is highlighted (for copy/paste)
     BOOL isHighlighted = [self.highlightedBundleID isEqualToString:bundle.bundleID] &&
                          self.highlightedDay == day;
+
+    // Check if this cell is hovered
+    BOOL isHovered = (self.hoveredBundleIndex == (NSInteger)bundleIndex &&
+                      self.hoveredDayIndex == (NSInteger)dayIndex &&
+                      !self.isHoveringBundleLabel);
 
     // Cell background
     if (isHighlighted) {
         [[NSColor selectedContentBackgroundColor] setFill];
+    } else if (isHovered) {
+        // Darker background on hover
+        [[[NSColor controlBackgroundColor] blendedColorWithFraction:0.15 ofColor:[NSColor blackColor]] setFill];
     } else {
         [[NSColor controlBackgroundColor] setFill];
     }
@@ -300,21 +332,49 @@ static const CGFloat kTimelineHeight = 48.0;
     [markerPath setLineWidth:0.5];
     [markerPath stroke];
 
-    // Draw "now" line for today only
-    SCDayOfWeek today = [SCWeeklySchedule today];
-    if (day == today) {
-        NSCalendar *calendar = [NSCalendar currentCalendar];
-        NSDateComponents *comps = [calendar components:(NSCalendarUnitHour | NSCalendarUnitMinute) fromDate:[NSDate date]];
-        CGFloat nowPercent = (comps.hour * 60 + comps.minute) / (24.0 * 60.0);
-        CGFloat nowX = timelineRect.origin.x + nowPercent * timelineRect.size.width;
+    // NOW line is drawn separately at grid level for continuity across rows
+}
 
-        [[NSColor systemRedColor] setStroke];
-        NSBezierPath *nowPath = [NSBezierPath bezierPath];
-        [nowPath setLineWidth:2.0];
-        [nowPath moveToPoint:NSMakePoint(nowX, timelineRect.origin.y)];
-        [nowPath lineToPoint:NSMakePoint(nowX, timelineRect.origin.y + timelineRect.size.height)];
-        [nowPath stroke];
+- (void)drawNowLine:(NSArray<NSNumber *> *)days {
+    // Find if today is visible
+    SCDayOfWeek today = [SCWeeklySchedule today];
+    NSInteger todayIndex = -1;
+
+    for (NSUInteger i = 0; i < days.count; i++) {
+        if ([days[i] integerValue] == today) {
+            todayIndex = i;
+            break;
+        }
     }
+
+    if (todayIndex < 0 || self.bundles.count == 0) return;
+
+    // Calculate current time as percentage of day
+    NSCalendar *calendar = [NSCalendar currentCalendar];
+    NSDateComponents *comps = [calendar components:(NSCalendarUnitHour | NSCalendarUnitMinute) fromDate:[NSDate date]];
+    CGFloat nowPercent = (comps.hour * 60 + comps.minute) / (24.0 * 60.0);
+
+    // Get the X position within today's column
+    NSUInteger dayCount = days.count;
+    CGFloat cellWidth = [self cellWidthForDayCount:dayCount];
+    CGFloat cellX = kBundleLabelWidth + todayIndex * cellWidth;
+
+    // The timeline inside each cell has padding
+    CGFloat timelineLeft = cellX + kCellPadding + 4;
+    CGFloat timelineWidth = cellWidth - kCellPadding * 2 - 8;
+    CGFloat nowX = timelineLeft + nowPercent * timelineWidth;
+
+    // Calculate Y range: from first bundle row to last
+    CGFloat topY = self.bounds.size.height - kHeaderHeight;
+    CGFloat bottomY = self.bounds.size.height - kHeaderHeight - self.bundles.count * kRowHeight;
+
+    // Draw the continuous red line
+    [[NSColor systemRedColor] setStroke];
+    NSBezierPath *nowPath = [NSBezierPath bezierPath];
+    [nowPath setLineWidth:2.0];
+    [nowPath moveToPoint:NSMakePoint(nowX, bottomY)];
+    [nowPath lineToPoint:NSMakePoint(nowX, topY)];
+    [nowPath stroke];
 }
 
 - (void)drawGridLines:(NSArray<NSNumber *> *)days {
@@ -337,6 +397,69 @@ static const CGFloat kTimelineHeight = 48.0;
 }
 
 #pragma mark - Mouse Handling
+
+- (void)mouseMoved:(NSEvent *)event {
+    NSPoint point = [self convertPoint:event.locationInWindow fromView:nil];
+    [self updateHoverStateForPoint:point];
+}
+
+- (void)mouseExited:(NSEvent *)event {
+    self.hoveredBundleIndex = -1;
+    self.hoveredDayIndex = -1;
+    self.isHoveringBundleLabel = NO;
+    [[NSCursor arrowCursor] set];
+    [self setNeedsDisplay:YES];
+}
+
+- (void)updateHoverStateForPoint:(NSPoint)point {
+    NSArray<NSNumber *> *days = [self daysToShow];
+    NSUInteger dayCount = days.count;
+
+    NSInteger newBundleIndex = -1;
+    NSInteger newDayIndex = -1;
+    BOOL newIsHoveringLabel = NO;
+
+    // Check which element is under the mouse
+    for (NSUInteger i = 0; i < self.bundles.count; i++) {
+        // Check bundle label
+        NSRect labelRect = [self rectForBundleLabel:i];
+        if (NSPointInRect(point, labelRect)) {
+            newBundleIndex = i;
+            newIsHoveringLabel = YES;
+            break;
+        }
+
+        // Check day cells
+        for (NSUInteger j = 0; j < dayCount; j++) {
+            NSRect cellRect = [self rectForCell:i dayIndex:j dayCount:dayCount];
+            if (NSPointInRect(point, cellRect)) {
+                newBundleIndex = i;
+                newDayIndex = j;
+                break;
+            }
+        }
+        if (newBundleIndex >= 0) break;
+    }
+
+    // Update state if changed
+    if (newBundleIndex != self.hoveredBundleIndex ||
+        newDayIndex != self.hoveredDayIndex ||
+        newIsHoveringLabel != self.isHoveringBundleLabel) {
+
+        self.hoveredBundleIndex = newBundleIndex;
+        self.hoveredDayIndex = newDayIndex;
+        self.isHoveringBundleLabel = newIsHoveringLabel;
+
+        // Update cursor
+        if (newBundleIndex >= 0) {
+            [[NSCursor pointingHandCursor] set];
+        } else {
+            [[NSCursor arrowCursor] set];
+        }
+
+        [self setNeedsDisplay:YES];
+    }
+}
 
 - (void)mouseDown:(NSEvent *)event {
     NSPoint point = [self convertPoint:event.locationInWindow fromView:nil];

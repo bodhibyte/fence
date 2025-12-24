@@ -23,7 +23,7 @@
 @property (nonatomic, strong) NSButton *doneButton;
 @property (nonatomic, strong) NSButton *cancelButton;
 
-@property (nonatomic, strong) NSArray<NSButton *> *colorButtons;
+@property (nonatomic, strong) NSArray<NSView *> *colorViews;
 
 @end
 
@@ -98,34 +98,42 @@
     colorLabel.drawsBackground = NO;
     [contentView addSubview:colorLabel];
 
-    self.colorPicker = [[NSStackView alloc] initWithFrame:NSMakeRect(80, y - 5, 250, 30)];
+    self.colorPicker = [[NSStackView alloc] initWithFrame:NSMakeRect(80, y - 5, 280, 30)];
     self.colorPicker.orientation = NSUserInterfaceLayoutOrientationHorizontal;
     self.colorPicker.spacing = 8;
     [contentView addSubview:self.colorPicker];
 
     NSArray<NSColor *> *colors = [SCBlockBundle allPresetColors];
-    NSMutableArray *buttons = [NSMutableArray array];
+    NSMutableArray *views = [NSMutableArray array];
     for (NSUInteger i = 0; i < colors.count; i++) {
-        NSButton *colorBtn = [[NSButton alloc] initWithFrame:NSMakeRect(0, 0, 28, 28)];
-        colorBtn.wantsLayer = YES;
-        colorBtn.layer.cornerRadius = 14;
-        colorBtn.layer.backgroundColor = colors[i].CGColor;
-        colorBtn.layer.borderWidth = 2;
-        colorBtn.layer.borderColor = [NSColor clearColor].CGColor;
-        colorBtn.bordered = NO;
-        colorBtn.title = @"";
-        colorBtn.tag = i;
-        colorBtn.target = self;
-        colorBtn.action = @selector(colorSelected:);
-        [self.colorPicker addArrangedSubview:colorBtn];
-        [buttons addObject:colorBtn];
+        // Create a clickable color circle view
+        NSView *colorView = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 28, 28)];
+        colorView.wantsLayer = YES;
+        colorView.layer.cornerRadius = 14;
+        colorView.layer.backgroundColor = colors[i].CGColor;
+        colorView.layer.borderWidth = 2;
+        colorView.layer.borderColor = [NSColor clearColor].CGColor;
+
+        // Add click gesture recognizer
+        NSClickGestureRecognizer *click = [[NSClickGestureRecognizer alloc] initWithTarget:self action:@selector(colorCircleClicked:)];
+        [colorView addGestureRecognizer:click];
+
+        // Store the color index in the view's tag (need to use identifier since NSView doesn't have tag)
+        colorView.identifier = [NSString stringWithFormat:@"%lu", (unsigned long)i];
+
+        // Set explicit size constraints
+        [colorView.widthAnchor constraintEqualToConstant:28].active = YES;
+        [colorView.heightAnchor constraintEqualToConstant:28].active = YES;
+
+        [self.colorPicker addArrangedSubview:colorView];
+        [views addObject:colorView];
 
         // Highlight current color
         if ([self colorsEqual:colors[i] and:self.workingBundle.color]) {
-            colorBtn.layer.borderColor = [NSColor labelColor].CGColor;
+            colorView.layer.borderColor = [NSColor labelColor].CGColor;
         }
     }
-    self.colorButtons = buttons;
+    self.colorViews = views;
 
     // Entries label
     y -= 40;
@@ -220,18 +228,19 @@
 
 #pragma mark - Actions
 
-- (void)colorSelected:(NSButton *)sender {
+- (void)colorCircleClicked:(NSClickGestureRecognizer *)gesture {
+    NSView *clickedView = gesture.view;
     NSArray<NSColor *> *colors = [SCBlockBundle allPresetColors];
-    NSInteger index = sender.tag;
+    NSInteger index = [clickedView.identifier integerValue];
 
     if (index >= 0 && index < (NSInteger)colors.count) {
         self.workingBundle.color = colors[index];
 
-        // Update button highlights
-        for (NSButton *btn in self.colorButtons) {
-            btn.layer.borderColor = [NSColor clearColor].CGColor;
+        // Update view highlights
+        for (NSView *view in self.colorViews) {
+            view.layer.borderColor = [NSColor clearColor].CGColor;
         }
-        sender.layer.borderColor = [NSColor labelColor].CGColor;
+        clickedView.layer.borderColor = [NSColor labelColor].CGColor;
     }
 }
 
