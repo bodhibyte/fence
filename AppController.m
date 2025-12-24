@@ -33,6 +33,7 @@
 #import "SCUIUtilities.h"
 #import <TransformerKit/NSValueTransformer+TransformerKit.h>
 #import "SCDebugUtilities.h"
+#import "SCWeekScheduleWindowController.h"
 #ifdef DEBUG
 #import "SCStartupSafetyCheck.h"
 #import "SCSafetyCheckWindowController.h"
@@ -41,6 +42,7 @@
 @interface AppController () {}
 
 @property (atomic, strong, readwrite) SCXPCClient* xpc;
+@property (nonatomic, strong) SCWeekScheduleWindowController* weekScheduleWindowController;
 
 @end
 
@@ -849,6 +851,20 @@
     [[NSWorkspace sharedWorkspace] openURL: url];
 }
 
+#pragma mark - Week Schedule (New UX)
+
+- (IBAction)showWeekSchedule:(id)sender {
+    [SCSentry addBreadcrumb: @"Opening Week Schedule window" category:@"app"];
+
+    if (self.weekScheduleWindowController == nil) {
+        self.weekScheduleWindowController = [[SCWeekScheduleWindowController alloc] init];
+    }
+
+    [self.weekScheduleWindowController showWindow:self];
+    [self.weekScheduleWindowController.window makeKeyAndOrderFront:self];
+    [self.weekScheduleWindowController.window center];
+}
+
 #pragma mark - Debug Menu (DEBUG builds only)
 
 #ifdef DEBUG
@@ -877,6 +893,18 @@
         keyEquivalent:@""];
     safetyCheckItem.target = self;
     [debugMenu addItem:safetyCheckItem];
+
+    // Add separator
+    [debugMenu addItem:[NSMenuItem separatorItem]];
+
+    // Add "Week Schedule (New UX)" item
+    NSMenuItem* weekScheduleItem = [[NSMenuItem alloc]
+        initWithTitle:@"Week Schedule (New UX)..."
+               action:@selector(showWeekSchedule:)
+        keyEquivalent:@"w"];
+    weekScheduleItem.keyEquivalentModifierMask = NSEventModifierFlagCommand | NSEventModifierFlagOption;
+    weekScheduleItem.target = self;
+    [debugMenu addItem:weekScheduleItem];
 
     // Add separator
     [debugMenu addItem:[NSMenuItem separatorItem]];

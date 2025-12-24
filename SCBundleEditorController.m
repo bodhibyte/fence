@@ -1,0 +1,376 @@
+//
+//  SCBundleEditorController.m
+//  SelfControl
+//
+
+#import "SCBundleEditorController.h"
+#import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
+
+@interface SCBundleEditorController () <NSTableViewDataSource, NSTableViewDelegate>
+
+@property (nonatomic, strong, nullable) SCBlockBundle *bundle;
+@property (nonatomic, strong) SCBlockBundle *workingBundle;
+@property (nonatomic, assign) BOOL isNewBundle;
+
+// UI Elements
+@property (nonatomic, strong) NSTextField *nameField;
+@property (nonatomic, strong) NSStackView *colorPicker;
+@property (nonatomic, strong) NSTableView *entriesTableView;
+@property (nonatomic, strong) NSButton *addAppButton;
+@property (nonatomic, strong) NSButton *addWebsiteButton;
+@property (nonatomic, strong) NSButton *removeEntryButton;
+@property (nonatomic, strong) NSButton *deleteButton;
+@property (nonatomic, strong) NSButton *doneButton;
+@property (nonatomic, strong) NSButton *cancelButton;
+
+@property (nonatomic, strong) NSArray<NSButton *> *colorButtons;
+
+@end
+
+@implementation SCBundleEditorController
+
+- (instancetype)initForNewBundle {
+    NSRect frame = NSMakeRect(0, 0, 400, 450);
+    NSWindow *window = [[NSWindow alloc] initWithContentRect:frame
+                                                   styleMask:NSWindowStyleMaskTitled
+                                                     backing:NSBackingStoreBuffered
+                                                       defer:NO];
+    window.title = @"New Bundle";
+
+    self = [super initWithWindow:window];
+    if (self) {
+        _bundle = nil;
+        _workingBundle = [SCBlockBundle bundleWithName:@"New Bundle" color:[SCBlockBundle colorBlue]];
+        _isNewBundle = YES;
+
+        [self setupUI];
+    }
+    return self;
+}
+
+- (instancetype)initWithBundle:(SCBlockBundle *)bundle {
+    NSRect frame = NSMakeRect(0, 0, 400, 450);
+    NSWindow *window = [[NSWindow alloc] initWithContentRect:frame
+                                                   styleMask:NSWindowStyleMaskTitled
+                                                     backing:NSBackingStoreBuffered
+                                                       defer:NO];
+    window.title = @"Edit Bundle";
+
+    self = [super initWithWindow:window];
+    if (self) {
+        _bundle = bundle;
+        _workingBundle = [bundle copy];
+        _isNewBundle = NO;
+
+        [self setupUI];
+    }
+    return self;
+}
+
+- (void)setupUI {
+    NSView *contentView = self.window.contentView;
+    CGFloat padding = 16;
+    CGFloat y = contentView.bounds.size.height - padding;
+
+    // Name field
+    y -= 30;
+    NSTextField *nameLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(padding, y, 60, 20)];
+    nameLabel.stringValue = @"Name:";
+    nameLabel.font = [NSFont systemFontOfSize:13];
+    nameLabel.bezeled = NO;
+    nameLabel.editable = NO;
+    nameLabel.drawsBackground = NO;
+    [contentView addSubview:nameLabel];
+
+    self.nameField = [[NSTextField alloc] initWithFrame:NSMakeRect(80, y - 2, 300, 24)];
+    self.nameField.stringValue = self.workingBundle.name;
+    self.nameField.font = [NSFont systemFontOfSize:13];
+    self.nameField.placeholderString = @"Bundle name";
+    [contentView addSubview:self.nameField];
+
+    // Color picker
+    y -= 45;
+    NSTextField *colorLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(padding, y, 60, 20)];
+    colorLabel.stringValue = @"Color:";
+    colorLabel.font = [NSFont systemFontOfSize:13];
+    colorLabel.bezeled = NO;
+    colorLabel.editable = NO;
+    colorLabel.drawsBackground = NO;
+    [contentView addSubview:colorLabel];
+
+    self.colorPicker = [[NSStackView alloc] initWithFrame:NSMakeRect(80, y - 5, 250, 30)];
+    self.colorPicker.orientation = NSUserInterfaceLayoutOrientationHorizontal;
+    self.colorPicker.spacing = 8;
+    [contentView addSubview:self.colorPicker];
+
+    NSArray<NSColor *> *colors = [SCBlockBundle allPresetColors];
+    NSMutableArray *buttons = [NSMutableArray array];
+    for (NSUInteger i = 0; i < colors.count; i++) {
+        NSButton *colorBtn = [[NSButton alloc] initWithFrame:NSMakeRect(0, 0, 28, 28)];
+        colorBtn.wantsLayer = YES;
+        colorBtn.layer.cornerRadius = 14;
+        colorBtn.layer.backgroundColor = colors[i].CGColor;
+        colorBtn.layer.borderWidth = 2;
+        colorBtn.layer.borderColor = [NSColor clearColor].CGColor;
+        colorBtn.bordered = NO;
+        colorBtn.title = @"";
+        colorBtn.tag = i;
+        colorBtn.target = self;
+        colorBtn.action = @selector(colorSelected:);
+        [self.colorPicker addArrangedSubview:colorBtn];
+        [buttons addObject:colorBtn];
+
+        // Highlight current color
+        if ([self colorsEqual:colors[i] and:self.workingBundle.color]) {
+            colorBtn.layer.borderColor = [NSColor labelColor].CGColor;
+        }
+    }
+    self.colorButtons = buttons;
+
+    // Entries label
+    y -= 40;
+    NSTextField *entriesLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(padding, y, 200, 20)];
+    entriesLabel.stringValue = @"Apps & Websites:";
+    entriesLabel.font = [NSFont systemFontOfSize:13 weight:NSFontWeightMedium];
+    entriesLabel.bezeled = NO;
+    entriesLabel.editable = NO;
+    entriesLabel.drawsBackground = NO;
+    [contentView addSubview:entriesLabel];
+
+    // Entries table
+    y -= 200;
+    NSScrollView *scrollView = [[NSScrollView alloc] initWithFrame:NSMakeRect(padding, y, 368, 190)];
+    scrollView.hasVerticalScroller = YES;
+    scrollView.borderType = NSBezelBorder;
+
+    self.entriesTableView = [[NSTableView alloc] initWithFrame:scrollView.bounds];
+    self.entriesTableView.dataSource = self;
+    self.entriesTableView.delegate = self;
+    self.entriesTableView.rowHeight = 24;
+
+    NSTableColumn *column = [[NSTableColumn alloc] initWithIdentifier:@"entry"];
+    column.title = @"Entry";
+    column.width = 350;
+    [self.entriesTableView addTableColumn:column];
+    self.entriesTableView.headerView = nil;
+
+    scrollView.documentView = self.entriesTableView;
+    [contentView addSubview:scrollView];
+
+    // Add/Remove buttons
+    y -= 35;
+    self.addAppButton = [[NSButton alloc] initWithFrame:NSMakeRect(padding, y, 90, 28)];
+    self.addAppButton.title = @"+ Add App";
+    self.addAppButton.bezelStyle = NSBezelStyleRounded;
+    self.addAppButton.target = self;
+    self.addAppButton.action = @selector(addAppClicked:);
+    [contentView addSubview:self.addAppButton];
+
+    self.addWebsiteButton = [[NSButton alloc] initWithFrame:NSMakeRect(padding + 100, y, 110, 28)];
+    self.addWebsiteButton.title = @"+ Add Website";
+    self.addWebsiteButton.bezelStyle = NSBezelStyleRounded;
+    self.addWebsiteButton.target = self;
+    self.addWebsiteButton.action = @selector(addWebsiteClicked:);
+    [contentView addSubview:self.addWebsiteButton];
+
+    self.removeEntryButton = [[NSButton alloc] initWithFrame:NSMakeRect(padding + 280, y, 90, 28)];
+    self.removeEntryButton.title = @"Remove";
+    self.removeEntryButton.bezelStyle = NSBezelStyleRounded;
+    self.removeEntryButton.target = self;
+    self.removeEntryButton.action = @selector(removeEntryClicked:);
+    [contentView addSubview:self.removeEntryButton];
+
+    // Bottom buttons
+    y -= 50;
+
+    // Delete button (only for existing bundles)
+    if (!self.isNewBundle) {
+        self.deleteButton = [[NSButton alloc] initWithFrame:NSMakeRect(padding, y, 80, 30)];
+        self.deleteButton.title = @"Delete";
+        self.deleteButton.bezelStyle = NSBezelStyleRounded;
+        self.deleteButton.contentTintColor = [NSColor systemRedColor];
+        self.deleteButton.target = self;
+        self.deleteButton.action = @selector(deleteClicked:);
+        [contentView addSubview:self.deleteButton];
+    }
+
+    self.cancelButton = [[NSButton alloc] initWithFrame:NSMakeRect(220, y, 80, 30)];
+    self.cancelButton.title = @"Cancel";
+    self.cancelButton.bezelStyle = NSBezelStyleRounded;
+    self.cancelButton.target = self;
+    self.cancelButton.action = @selector(cancelClicked:);
+    [contentView addSubview:self.cancelButton];
+
+    self.doneButton = [[NSButton alloc] initWithFrame:NSMakeRect(310, y, 80, 30)];
+    self.doneButton.title = @"Done";
+    self.doneButton.bezelStyle = NSBezelStyleRounded;
+    self.doneButton.keyEquivalent = @"\r";
+    self.doneButton.target = self;
+    self.doneButton.action = @selector(doneClicked:);
+    [contentView addSubview:self.doneButton];
+}
+
+- (BOOL)colorsEqual:(NSColor *)c1 and:(NSColor *)c2 {
+    if (!c1 || !c2) return NO;
+    CGFloat r1, g1, b1, a1, r2, g2, b2, a2;
+    [[c1 colorUsingColorSpace:[NSColorSpace sRGBColorSpace]] getRed:&r1 green:&g1 blue:&b1 alpha:&a1];
+    [[c2 colorUsingColorSpace:[NSColorSpace sRGBColorSpace]] getRed:&r2 green:&g2 blue:&b2 alpha:&a2];
+    return fabs(r1 - r2) < 0.01 && fabs(g1 - g2) < 0.01 && fabs(b1 - b2) < 0.01;
+}
+
+#pragma mark - Actions
+
+- (void)colorSelected:(NSButton *)sender {
+    NSArray<NSColor *> *colors = [SCBlockBundle allPresetColors];
+    NSInteger index = sender.tag;
+
+    if (index >= 0 && index < (NSInteger)colors.count) {
+        self.workingBundle.color = colors[index];
+
+        // Update button highlights
+        for (NSButton *btn in self.colorButtons) {
+            btn.layer.borderColor = [NSColor clearColor].CGColor;
+        }
+        sender.layer.borderColor = [NSColor labelColor].CGColor;
+    }
+}
+
+- (void)addAppClicked:(id)sender {
+    NSOpenPanel *panel = [NSOpenPanel openPanel];
+    panel.canChooseFiles = YES;
+    panel.canChooseDirectories = NO;
+    panel.allowsMultipleSelection = YES;
+    panel.directoryURL = [NSURL fileURLWithPath:@"/Applications"];
+    panel.allowedContentTypes = @[[UTType typeWithIdentifier:@"com.apple.application-bundle"]];
+    panel.message = @"Select apps to block:";
+
+    [panel beginSheetModalForWindow:self.window completionHandler:^(NSModalResponse result) {
+        if (result == NSModalResponseOK) {
+            for (NSURL *url in panel.URLs) {
+                NSBundle *appBundle = [NSBundle bundleWithURL:url];
+                NSString *bundleID = appBundle.bundleIdentifier;
+                if (bundleID) {
+                    NSString *entry = [NSString stringWithFormat:@"app:%@", bundleID];
+                    [self.workingBundle addEntry:entry];
+                }
+            }
+            [self.entriesTableView reloadData];
+        }
+    }];
+}
+
+- (void)addWebsiteClicked:(id)sender {
+    NSAlert *alert = [[NSAlert alloc] init];
+    alert.messageText = @"Add Website";
+    alert.informativeText = @"Enter the domain to block (e.g., facebook.com):";
+
+    NSTextField *input = [[NSTextField alloc] initWithFrame:NSMakeRect(0, 0, 250, 24)];
+    input.placeholderString = @"example.com";
+    alert.accessoryView = input;
+
+    [alert addButtonWithTitle:@"Add"];
+    [alert addButtonWithTitle:@"Cancel"];
+
+    [alert beginSheetModalForWindow:self.window completionHandler:^(NSModalResponse returnCode) {
+        if (returnCode == NSAlertFirstButtonReturn) {
+            NSString *domain = [input.stringValue stringByTrimmingCharactersInSet:
+                               [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+            if (domain.length > 0) {
+                // Remove http:// or https:// if present
+                if ([domain hasPrefix:@"http://"] || [domain hasPrefix:@"https://"]) {
+                    domain = [[NSURL URLWithString:domain] host] ?: domain;
+                }
+                [self.workingBundle addEntry:domain];
+                [self.entriesTableView reloadData];
+            }
+        }
+    }];
+}
+
+- (void)removeEntryClicked:(id)sender {
+    NSInteger row = self.entriesTableView.selectedRow;
+    if (row >= 0 && row < (NSInteger)self.workingBundle.entries.count) {
+        [self.workingBundle.entries removeObjectAtIndex:row];
+        [self.entriesTableView reloadData];
+    }
+}
+
+- (void)deleteClicked:(id)sender {
+    NSAlert *alert = [[NSAlert alloc] init];
+    alert.messageText = @"Delete Bundle?";
+    alert.informativeText = [NSString stringWithFormat:@"Are you sure you want to delete \"%@\"? This cannot be undone.", self.workingBundle.name];
+    [alert addButtonWithTitle:@"Delete"];
+    [alert addButtonWithTitle:@"Cancel"];
+    alert.alertStyle = NSAlertStyleWarning;
+
+    [alert beginSheetModalForWindow:self.window completionHandler:^(NSModalResponse returnCode) {
+        if (returnCode == NSAlertFirstButtonReturn) {
+            [self.delegate bundleEditor:self didDeleteBundle:self.bundle];
+            [self.window.sheetParent endSheet:self.window returnCode:NSModalResponseOK];
+        }
+    }];
+}
+
+- (void)doneClicked:(id)sender {
+    // Validate
+    NSString *name = [self.nameField.stringValue stringByTrimmingCharactersInSet:
+                     [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+
+    if (name.length == 0) {
+        NSAlert *alert = [[NSAlert alloc] init];
+        alert.messageText = @"Name Required";
+        alert.informativeText = @"Please enter a name for this bundle.";
+        [alert runModal];
+        return;
+    }
+
+    self.workingBundle.name = name;
+
+    [self.delegate bundleEditor:self didSaveBundle:self.workingBundle];
+    [self.window.sheetParent endSheet:self.window returnCode:NSModalResponseOK];
+}
+
+- (void)cancelClicked:(id)sender {
+    [self.delegate bundleEditorDidCancel:self];
+    [self.window.sheetParent endSheet:self.window returnCode:NSModalResponseCancel];
+}
+
+#pragma mark - NSTableViewDataSource
+
+- (NSInteger)numberOfRowsInTableView:(NSTableView *)tableView {
+    return self.workingBundle.entries.count;
+}
+
+- (id)tableView:(NSTableView *)tableView objectValueForTableColumn:(NSTableColumn *)tableColumn row:(NSInteger)row {
+    if (row < 0 || row >= (NSInteger)self.workingBundle.entries.count) return nil;
+
+    NSString *entry = self.workingBundle.entries[row];
+
+    // Format for display
+    if ([entry hasPrefix:@"app:"]) {
+        NSString *bundleID = [entry substringFromIndex:4];
+        NSString *appPath = [[NSWorkspace sharedWorkspace] absolutePathForAppBundleWithIdentifier:bundleID];
+        if (appPath) {
+            NSString *appName = [[NSFileManager defaultManager] displayNameAtPath:appPath];
+            return [NSString stringWithFormat:@"🖥 %@ (%@)", appName, bundleID];
+        }
+        return [NSString stringWithFormat:@"🖥 %@", bundleID];
+    }
+
+    return [NSString stringWithFormat:@"🌐 %@", entry];
+}
+
+#pragma mark - NSTableViewDelegate
+
+- (void)tableViewSelectionDidChange:(NSNotification *)notification {
+    self.removeEntryButton.enabled = (self.entriesTableView.selectedRow >= 0);
+}
+
+#pragma mark - Sheet Presentation
+
+- (void)beginSheetModalForWindow:(NSWindow *)parentWindow
+               completionHandler:(void (^)(NSModalResponse))handler {
+    [parentWindow beginSheet:self.window completionHandler:handler];
+}
+
+@end

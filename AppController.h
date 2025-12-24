@@ -23,6 +23,7 @@
 // Forward declaration to avoid compiler weirdness
 @class TimerWindowController;
 @class SCSafetyCheckWindowController;
+@class SCWeekScheduleWindowController;
 
 #import <Cocoa/Cocoa.h>
 #import "DomainListWindowController.h"
@@ -135,5 +136,8 @@
 
 // opens the SelfControl Support Hub in the default browser
 - (IBAction)openSupportHub:(id)sender;
+
+// opens the Week Schedule window (new UX)
+- (IBAction)showWeekSchedule:(id)sender;
 
 @end
