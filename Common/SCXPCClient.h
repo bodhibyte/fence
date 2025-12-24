@@ -12,8 +12,10 @@ NS_ASSUME_NONNULL_BEGIN
 @interface SCXPCClient : NSObject
 
 @property (readonly, getter=isConnected) BOOL connected;
+@property (atomic, assign, readonly) BOOL connectionIsValid;
 
 - (void)connectToHelperTool;
+- (void)forceDisconnect;
 - (void)installDaemon:(void(^)(NSError*))callback;
 - (void)refreshConnectionAndRun:(void(^)(void))callback;
 - (void)connectAndExecuteCommandBlock:(void(^)(NSError *))commandBlock;

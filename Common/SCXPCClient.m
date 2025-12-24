@@ -17,6 +17,7 @@
 
 @property (atomic, strong, readwrite) NSXPCConnection* daemonConnection;
 @property (atomic, copy, readwrite) NSData* authorization;
+@property (atomic, assign, readwrite) BOOL connectionIsValid;
 
 @end
 
@@ -75,12 +76,19 @@
 - (void)connectToHelperTool {
     assert([NSThread isMainThread]);
     NSLog(@"SCXPCClient: === connectToHelperTool CALLED ===");
-    NSLog(@"SCXPCClient: Current daemonConnection = %@", self.daemonConnection);
+    NSLog(@"SCXPCClient: Current daemonConnection = %@, connectionIsValid = %d", self.daemonConnection, self.connectionIsValid);
 
     [self setupAuthorization];
     NSLog(@"SCXPCClient: Authorization setup complete");
 
-    if (self.daemonConnection == nil) {
+    // Check both nil AND validity - a non-nil connection can be invalidated
+    if (self.daemonConnection == nil || !self.connectionIsValid) {
+        // Force cleanup if we have an invalid connection
+        if (self.daemonConnection != nil && !self.connectionIsValid) {
+            NSLog(@"SCXPCClient: Connection exists but is invalid, forcing cleanup");
+            self.daemonConnection = nil;
+        }
+
         NSLog(@"SCXPCClient: Creating new NSXPCConnection to org.eyebeam.selfcontrold...");
         self.daemonConnection = [[NSXPCConnection alloc] initWithMachServiceName: @"org.eyebeam.selfcontrold" options: NSXPCConnectionPrivileged];
         NSLog(@"SCXPCClient: NSXPCConnection created: %@", self.daemonConnection);
@@ -99,7 +107,11 @@
             // If the connection gets invalidated then, on the main thread, nil out our
             // reference to it.  This ensures that we attempt to rebuild it the next time around.
             connection.invalidationHandler = connection.interruptionHandler = nil;
-                        
+
+            // Mark invalid FIRST - this ensures connectToHelperTool won't reuse this connection
+            // even if daemonConnection hasn't been nil'd yet
+            self.connectionIsValid = NO;
+
             if (connection == self.daemonConnection) {
                 // dispatch_sync on main thread would deadlock, so be careful
                 if ([NSThread isMainThread]) {
@@ -133,15 +145,26 @@
         #pragma clang diagnostic pop
         NSLog(@"SCXPCClient: Handlers configured, calling resume...");
         [self.daemonConnection resume];
-        NSLog(@"SCXPCClient: Connection resumed! daemonConnection = %@", self.daemonConnection);
+        self.connectionIsValid = YES;
+        NSLog(@"SCXPCClient: Connection resumed! daemonConnection = %@, connectionIsValid = YES", self.daemonConnection);
     } else {
-        NSLog(@"SCXPCClient: Connection already exists, skipping creation");
+        NSLog(@"SCXPCClient: Connection already exists and valid, skipping creation");
     }
     NSLog(@"SCXPCClient: === connectToHelperTool COMPLETE ===");
 }
 
 - (BOOL)isConnected {
     return (self.daemonConnection != nil);
+}
+
+- (void)forceDisconnect {
+    NSLog(@"SCXPCClient: forceDisconnect called");
+    self.connectionIsValid = NO;
+    if (self.daemonConnection) {
+        [self.daemonConnection invalidate];
+        self.daemonConnection = nil;
+    }
+    NSLog(@"SCXPCClient: forceDisconnect complete - connection cleared");
 }
 
 - (void)installDaemon:(void(^)(NSError*))callback {
@@ -233,29 +256,13 @@
 }
 
 - (void)refreshConnectionAndRun:(void(^)(void))callback {
-    // when we're refreshing the connection, we can end up in a slightly awkward situation:
-    // if we call invalidate, but immediately start to reconnect before daemonConnection can be nil'd out
-    // then we risk trying to use the invalidated connection
-    // the fix? nil out daemonConnection before invalidating it in the refresh case
-    
-    if (self.daemonConnection == nil) {
-        callback();
-        return;
-    }
-    void (^standardInvalidationHandler)(void) = self.daemonConnection.invalidationHandler;
-    
-    // wait until the invalidation handler runs, then run our callback
-    __weak typeof(self) weakSelf = self;
-    self.daemonConnection.invalidationHandler = ^{
-        __strong typeof(self) strongSelf = weakSelf;
-        if (standardInvalidationHandler != nil) {
-            standardInvalidationHandler();
-        }
-        strongSelf.daemonConnection = nil;
-        callback();
-    };
-    
-    [self.daemonConnection performSelectorOnMainThread: @selector(invalidate) withObject: nil waitUntilDone: YES];
+    // Simplified: just force disconnect and call back immediately.
+    // The next connectToHelperTool call will create a fresh connection.
+    // This fixes the bug where calling invalidate on an already-invalidated
+    // connection would do nothing, causing the callback to never fire.
+    NSLog(@"SCXPCClient: refreshConnectionAndRun - forcing disconnect before callback");
+    [self forceDisconnect];
+    callback();
 }
 
 // Also copied from Apple's EvenBetterAuthorizationSample
