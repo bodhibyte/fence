@@ -8,6 +8,7 @@
 #import "SCDayScheduleEditorController.h"
 #import "SCBundleEditorController.h"
 #import "SCMenuBarController.h"
+#import "SCUIUtilities.h"
 #import "Block Management/SCScheduleManager.h"
 #import "Block Management/SCBlockBundle.h"
 #import "Block Management/SCWeeklySchedule.h"
@@ -67,6 +68,14 @@
     NSView *contentView = self.window.contentView;
     contentView.wantsLayer = YES;
 
+    // Apply frosted glass styling
+    [SCUIUtilities applyFrostedGlassStyleToWindow:self.window];
+
+    // Create frosted glass background view
+    NSVisualEffectView *frostedBackground = [SCUIUtilities createFrostedGlassViewWithFrame:contentView.bounds cornerRadius:16.0];
+    frostedBackground.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+    [contentView addSubview:frostedBackground positioned:NSWindowBelow relativeTo:nil];
+
     CGFloat padding = 16;
     CGFloat y = contentView.bounds.size.height - padding;
 
@@ -92,12 +101,14 @@
     [self updateWeekLabel];
     [contentView addSubview:self.weekLabel];
 
-    // Status view
+    // Status view - use semi-transparent background to work with frosted glass
     y -= 60;
     self.statusView = [[NSView alloc] initWithFrame:NSMakeRect(padding, y, contentView.bounds.size.width - padding * 2, 50)];
     self.statusView.wantsLayer = YES;
-    self.statusView.layer.backgroundColor = [[NSColor controlBackgroundColor] CGColor];
+    self.statusView.layer.backgroundColor = [[NSColor.whiteColor colorWithAlphaComponent:0.1] CGColor];
     self.statusView.layer.cornerRadius = 8;
+    self.statusView.layer.borderWidth = 1.0;
+    self.statusView.layer.borderColor = [NSColor.whiteColor colorWithAlphaComponent:0.15].CGColor;
     self.statusView.autoresizingMask = NSViewWidthSizable;
     [contentView addSubview:self.statusView];
 

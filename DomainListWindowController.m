@@ -23,6 +23,7 @@
 
 #import "DomainListWindowController.h"
 #import "AppController.h"
+#import "SCUIUtilities.h"
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 
 @implementation DomainListWindowController
@@ -47,6 +48,9 @@
     NSInteger indexToSelect = [defaults_ boolForKey: @"BlockAsWhitelist"] ? 1 : 0;
     [allowlistRadioMatrix_ selectCellAtRow: indexToSelect column: 0];
     [self updateWindowTitle];
+
+    // Apply frosted glass styling
+    [self setupFrostedGlassAppearance];
 }
 
 - (void)refreshDomainList {
@@ -396,6 +400,33 @@
             }
         }
     }];
+}
+
+#pragma mark - Frosted Glass Appearance
+
+- (void)setupFrostedGlassAppearance {
+    NSWindow* window = [self window];
+    NSView* contentView = window.contentView;
+
+    // Apply window styling for transparency
+    [SCUIUtilities applyFrostedGlassStyleToWindow:window];
+
+    // Create frosted glass background view
+    NSVisualEffectView* frostedBackground = [SCUIUtilities createFrostedGlassViewWithFrame:contentView.bounds cornerRadius:12.0];
+    frostedBackground.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+
+    // Insert at the back so all other content appears on top
+    [contentView addSubview:frostedBackground positioned:NSWindowBelow relativeTo:nil];
+
+    // Make content view layer-backed for proper compositing
+    contentView.wantsLayer = YES;
+
+    // Make table view background transparent so frosted glass shows through
+    domainListTableView_.backgroundColor = NSColor.clearColor;
+    domainListTableView_.enclosingScrollView.drawsBackground = NO;
+
+    // Force shadow recalculation
+    [window invalidateShadow];
 }
 
 @end

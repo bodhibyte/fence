@@ -330,6 +330,9 @@
 		NSString* title = NSLocalizedString(@"Preferences", @"Common title for Preferences window");
 
 		preferencesWindowController_ = [[MASPreferencesWindowController alloc] initWithViewControllers: @[generalViewController, advancedViewController] title: title];
+
+        // Apply frosted glass styling to preferences window
+        [self applyFrostedGlassToPreferencesWindow];
 	}
 	[preferencesWindowController_ showWindow: nil];
 }
@@ -338,6 +341,9 @@
     [SCSentry addBreadcrumb: @"Showing \"Get Started\" window" category: @"app"];
 	if (!getStartedWindowController) {
 		getStartedWindowController = [[NSWindowController alloc] initWithWindowNibName: @"FirstTime"];
+
+        // Apply frosted glass styling to Get Started window
+        [self applyFrostedGlassToWindow:getStartedWindowController.window];
 	}
 	[getStartedWindowController.window center];
 	[getStartedWindowController.window makeKeyAndOrderFront: nil];
@@ -412,6 +418,9 @@
 											   object: nil];
 
 	[initialWindow_ center];
+
+    // Apply frosted glass styling to main window
+    [self setupFrostedGlassAppearance];
 
 	// We'll set blockIsOn to whatever is NOT right, so that in refreshUserInterface
 	// it'll fix it and properly refresh the user interface.
@@ -863,6 +872,57 @@
     [self.weekScheduleWindowController showWindow:self];
     [self.weekScheduleWindowController.window makeKeyAndOrderFront:self];
     [self.weekScheduleWindowController.window center];
+}
+
+#pragma mark - Frosted Glass Appearance
+
+- (void)setupFrostedGlassAppearance {
+    [self applyFrostedGlassToWindow:initialWindow_];
+}
+
+- (void)applyFrostedGlassToWindow:(NSWindow*)window {
+    NSView* contentView = window.contentView;
+
+    // Apply window styling for transparency
+    [SCUIUtilities applyFrostedGlassStyleToWindow:window];
+
+    // Create frosted glass background view
+    NSVisualEffectView* frostedBackground = [SCUIUtilities createFrostedGlassViewWithFrame:contentView.bounds cornerRadius:16.0];
+    frostedBackground.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+
+    // Insert at the back so all other content appears on top
+    [contentView addSubview:frostedBackground positioned:NSWindowBelow relativeTo:nil];
+
+    // Make content view layer-backed for proper compositing
+    contentView.wantsLayer = YES;
+
+    // Force shadow recalculation
+    [window invalidateShadow];
+}
+
+- (void)applyFrostedGlassToPreferencesWindow {
+    // MASPreferences windows need special handling because the content view changes
+    // when switching between preference panes. We apply to the window itself.
+    NSWindow* prefsWindow = preferencesWindowController_.window;
+    if (!prefsWindow) return;
+
+    NSView* contentView = prefsWindow.contentView;
+
+    // Apply window styling for transparency
+    [SCUIUtilities applyFrostedGlassStyleToWindow:prefsWindow];
+
+    // Create frosted glass background view
+    NSVisualEffectView* frostedBackground = [SCUIUtilities createFrostedGlassViewWithFrame:contentView.bounds cornerRadius:12.0];
+    frostedBackground.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+
+    // Insert at the back so all other content appears on top
+    [contentView addSubview:frostedBackground positioned:NSWindowBelow relativeTo:nil];
+
+    // Make content view layer-backed for proper compositing
+    contentView.wantsLayer = YES;
+
+    // Force shadow recalculation
+    [prefsWindow invalidateShadow];
 }
 
 #pragma mark - Debug Menu (DEBUG builds only)

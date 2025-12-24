@@ -7,8 +7,59 @@
 
 #import "SCUIUtilities.h"
 #import <SystemConfiguration/SystemConfiguration.h>
+#import <QuartzCore/QuartzCore.h>
 
 @implementation SCUIUtilities
+
+#pragma mark - Frosted Glass Styling
+
++ (void)applyFrostedGlassStyleToWindow:(NSWindow*)window {
+    // Make window transparent so the visual effect view shows through
+    window.backgroundColor = NSColor.clearColor;
+    window.opaque = NO;
+
+    // Hide the title bar but keep window controls
+    window.titlebarAppearsTransparent = YES;
+    window.titleVisibility = NSWindowTitleHidden;
+
+    // Allow content to extend into title bar area
+    window.styleMask |= NSWindowStyleMaskFullSizeContentView;
+
+    // Enable shadow for depth
+    window.hasShadow = YES;
+}
+
++ (NSVisualEffectView*)createFrostedGlassViewWithFrame:(NSRect)frame cornerRadius:(CGFloat)cornerRadius {
+    NSVisualEffectView* visualEffectView = [[NSVisualEffectView alloc] initWithFrame:frame];
+
+    // Configure the frosted glass material (same as HoldApp)
+    visualEffectView.material = NSVisualEffectMaterialPopover;
+    visualEffectView.blendingMode = NSVisualEffectBlendingModeBehindWindow;
+    visualEffectView.state = NSVisualEffectStateActive;
+
+    // Configure layer for rounded corners and border
+    visualEffectView.wantsLayer = YES;
+    visualEffectView.layer.cornerRadius = cornerRadius;
+    visualEffectView.layer.cornerCurve = kCACornerCurveContinuous; // Organic Apple-style curves
+    visualEffectView.layer.masksToBounds = YES;
+
+    // Add subtle white border (same as HoldApp - 1pt at 0.2 alpha)
+    visualEffectView.layer.borderWidth = 1.0;
+    visualEffectView.layer.borderColor = [NSColor.whiteColor colorWithAlphaComponent:0.2].CGColor;
+
+    return visualEffectView;
+}
+
++ (void)applyFrostedGlassLayerStyleToView:(NSView*)view cornerRadius:(CGFloat)cornerRadius {
+    view.wantsLayer = YES;
+    view.layer.cornerRadius = cornerRadius;
+    view.layer.cornerCurve = kCACornerCurveContinuous;
+    view.layer.masksToBounds = YES;
+    view.layer.borderWidth = 1.0;
+    view.layer.borderColor = [NSColor.whiteColor colorWithAlphaComponent:0.2].CGColor;
+}
+
+#pragma mark - Block Teaser
 
 + (NSString*)blockTeaserStringWithMaxLength:(NSInteger)maxStringLen {
     NSArray<NSString*>* blocklist;

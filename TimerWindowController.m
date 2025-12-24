@@ -66,6 +66,9 @@
 
 	[window makeKeyAndOrderFront: self];
 
+    // Apply frosted glass styling
+    [self setupFrostedGlassAppearance];
+
     // make the kill-block button red so it's extra noticeable
     NSMutableAttributedString* killBlockMutableAttributedTitle = [killBlockButton_.attributedTitle mutableCopy];
     [killBlockMutableAttributedTitle addAttribute: NSForegroundColorAttributeName value: [NSColor systemRedColor] range: NSMakeRange(0, killBlockButton_.title.length)];
@@ -444,6 +447,29 @@
 	}
 
 	return path;
+}
+
+#pragma mark - Frosted Glass Appearance
+
+- (void)setupFrostedGlassAppearance {
+    NSWindow* window = [self window];
+    NSView* contentView = window.contentView;
+
+    // Apply window styling for transparency
+    [SCUIUtilities applyFrostedGlassStyleToWindow:window];
+
+    // Create frosted glass background view
+    NSVisualEffectView* frostedBackground = [SCUIUtilities createFrostedGlassViewWithFrame:contentView.bounds cornerRadius:16.0];
+    frostedBackground.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+
+    // Insert at the back so all other content appears on top
+    [contentView addSubview:frostedBackground positioned:NSWindowBelow relativeTo:nil];
+
+    // Make content view layer-backed for proper compositing
+    contentView.wantsLayer = YES;
+
+    // Force shadow recalculation
+    [window invalidateShadow];
 }
 
 - (void)dealloc {

@@ -6,10 +6,26 @@
 //
 
 #import <Foundation/Foundation.h>
+#import <Cocoa/Cocoa.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
 @interface SCUIUtilities : NSObject
+
+#pragma mark - Frosted Glass Styling
+
+/// Applies frosted glass styling to a window (transparent background, no title bar)
++ (void)applyFrostedGlassStyleToWindow:(NSWindow*)window;
+
+/// Creates and configures an NSVisualEffectView with frosted glass appearance
+/// @param frame The frame for the visual effect view
+/// @param cornerRadius The corner radius (default 12pt for subtle, 30pt for pill-shaped)
++ (NSVisualEffectView*)createFrostedGlassViewWithFrame:(NSRect)frame cornerRadius:(CGFloat)cornerRadius;
+
+/// Applies frosted glass styling to an existing view's layer
++ (void)applyFrostedGlassLayerStyleToView:(NSView*)view cornerRadius:(CGFloat)cornerRadius;
+
+#pragma mark - Block Status
 
 // Returns YES if, according to settings or the hostfile, the
 // SelfControl block is running  Returns NO if it is not.
