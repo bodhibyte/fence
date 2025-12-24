@@ -27,6 +27,8 @@
 #include <netdb.h>
 #import "HostFileBlockerSet.h"
 #import "AppBlocker.h"
+#import "SCSettings.h"
+#import "SCBlockUtilities.h"
 
 @interface BlockManager ()
 @property (nonatomic, strong, readwrite) AppBlocker* appBlocker;
@@ -283,6 +285,13 @@ BOOL appendMode = NO;
 	}
 
 	[hostBlockerSet deleteBackupHostsFile];
+
+    // Clear all block settings to prevent stale data showing "Finishing" on next block
+    if (clearedSuccessfully) {
+        [SCBlockUtilities removeBlockFromSettings];  // Clears BlockIsRunning, BlockEndDate, etc.
+        [[SCSettings sharedSettings] synchronizeSettings];
+        NSLog(@"INFO: Block settings cleared via removeBlockFromSettings");
+    }
 
 	return clearedSuccessfully;
 }
