@@ -22,13 +22,14 @@
 @property (nonatomic, strong) NSTextField *titleLabel;
 @property (nonatomic, strong) NSTextField *weekLabel;
 @property (nonatomic, strong) NSView *statusView;
-@property (nonatomic, strong) NSTextField *statusLabel;
+@property (nonatomic, strong) NSStackView *statusStackView;
 @property (nonatomic, strong) SCWeekGridView *weekGridView;
 @property (nonatomic, strong) NSScrollView *gridScrollView;
 @property (nonatomic, strong) NSButton *addBundleButton;
 @property (nonatomic, strong) NSButton *saveTemplateButton;
 @property (nonatomic, strong) NSButton *commitButton;
 @property (nonatomic, strong) NSTextField *commitmentLabel;
+@property (nonatomic, strong) NSSegmentedControl *weekStartControl;
 
 // Child controllers
 @property (nonatomic, strong, nullable) SCDayScheduleEditorController *dayEditorController;
@@ -39,16 +40,18 @@
 @implementation SCWeekScheduleWindowController
 
 - (instancetype)init {
-    NSRect frame = NSMakeRect(0, 0, 700, 550);
+    NSRect frame = NSMakeRect(0, 0, 900, 700);
     NSWindow *window = [[NSWindow alloc] initWithContentRect:frame
                                                    styleMask:(NSWindowStyleMaskTitled |
                                                              NSWindowStyleMaskClosable |
                                                              NSWindowStyleMaskMiniaturizable |
-                                                             NSWindowStyleMaskResizable)
+                                                             NSWindowStyleMaskResizable |
+                                                             NSWindowStyleMaskFullSizeContentView)
                                                      backing:NSBackingStoreBuffered
                                                        defer:NO];
     window.title = @"SelfControl - Week Schedule";
-    window.minSize = NSMakeSize(500, 400);
+    window.minSize = NSMakeSize(600, 500);
+    window.collectionBehavior = NSWindowCollectionBehaviorFullScreenPrimary;
 
     self = [super initWithWindow:window];
     if (self) {
@@ -112,17 +115,16 @@
     self.statusView.autoresizingMask = NSViewWidthSizable;
     [contentView addSubview:self.statusView];
 
-    self.statusLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(12, 10, self.statusView.bounds.size.width - 24, 30)];
-    self.statusLabel.font = [NSFont systemFontOfSize:13];
-    self.statusLabel.bezeled = NO;
-    self.statusLabel.editable = NO;
-    self.statusLabel.drawsBackground = NO;
-    self.statusLabel.autoresizingMask = NSViewWidthSizable;
-    [self.statusView addSubview:self.statusLabel];
+    self.statusStackView = [[NSStackView alloc] initWithFrame:NSMakeRect(12, 8, self.statusView.bounds.size.width - 24, 34)];
+    self.statusStackView.orientation = NSUserInterfaceLayoutOrientationHorizontal;
+    self.statusStackView.spacing = 8;
+    self.statusStackView.alignment = NSLayoutAttributeCenterY;
+    self.statusStackView.autoresizingMask = NSViewWidthSizable;
+    [self.statusView addSubview:self.statusStackView];
 
     // Week grid
-    y -= 280;
-    self.gridScrollView = [[NSScrollView alloc] initWithFrame:NSMakeRect(padding, y, contentView.bounds.size.width - padding * 2, 270)];
+    y -= 430;
+    self.gridScrollView = [[NSScrollView alloc] initWithFrame:NSMakeRect(padding, y, contentView.bounds.size.width - padding * 2, 420)];
     self.gridScrollView.hasVerticalScroller = YES;
     self.gridScrollView.hasHorizontalScroller = NO;
     self.gridScrollView.autohidesScrollers = YES;
@@ -161,6 +163,27 @@
     self.commitButton.action = @selector(commitClicked:);
     self.commitButton.autoresizingMask = NSViewMinXMargin;
     [contentView addSubview:self.commitButton];
+
+    // Week starts on toggle
+    NSTextField *weekStartLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(padding + 280, y + 5, 90, 20)];
+    weekStartLabel.stringValue = @"Week starts:";
+    weekStartLabel.font = [NSFont systemFontOfSize:11];
+    weekStartLabel.textColor = [NSColor secondaryLabelColor];
+    weekStartLabel.bezeled = NO;
+    weekStartLabel.editable = NO;
+    weekStartLabel.drawsBackground = NO;
+    [contentView addSubview:weekStartLabel];
+
+    self.weekStartControl = [[NSSegmentedControl alloc] initWithFrame:NSMakeRect(padding + 370, y + 2, 100, 24)];
+    [self.weekStartControl setSegmentCount:2];
+    [self.weekStartControl setLabel:@"Sun" forSegment:0];
+    [self.weekStartControl setLabel:@"Mon" forSegment:1];
+    [self.weekStartControl setWidth:45 forSegment:0];
+    [self.weekStartControl setWidth:45 forSegment:1];
+    self.weekStartControl.target = self;
+    self.weekStartControl.action = @selector(weekStartChanged:);
+    self.weekStartControl.selectedSegment = [SCScheduleManager sharedManager].weekStartsOnMonday ? 1 : 0;
+    [contentView addSubview:self.weekStartControl];
 
     // Commitment label
     y -= 25;
@@ -210,39 +233,91 @@
     [self updateWeekLabel];
 
     // Resize grid to fit content
-    CGFloat gridHeight = MAX(300, 30 + (manager.bundles.count + 1) * 60);
+    CGFloat gridHeight = MAX(300, 30 + manager.bundles.count * 60);
     NSRect gridFrame = self.weekGridView.frame;
     gridFrame.size.height = gridHeight;
     self.weekGridView.frame = gridFrame;
 }
 
 - (void)updateStatusLabel {
-    SCScheduleManager *manager = [SCScheduleManager sharedManager];
-    NSMutableString *status = [NSMutableString string];
-
-    if (manager.bundles.count == 0) {
-        [status appendString:@"No bundles configured. Add a bundle to get started."];
-    } else {
-        [status appendString:@"NOW: "];
-
-        for (SCBlockBundle *bundle in manager.bundles) {
-            BOOL allowed = [manager wouldBundleBeAllowed:bundle.bundleID];
-            NSString *statusStr = [manager statusStringForBundleID:bundle.bundleID];
-
-            if (allowed) {
-                [status appendFormat:@"%@ %@ • ", bundle.name, statusStr];
-            } else {
-                [status appendFormat:@"%@ blocked • ", bundle.name];
-            }
-        }
-
-        // Remove trailing " • "
-        if ([status hasSuffix:@" • "]) {
-            [status deleteCharactersInRange:NSMakeRange(status.length - 3, 3)];
-        }
+    // Clear existing pills
+    for (NSView *subview in [self.statusStackView.arrangedSubviews copy]) {
+        [self.statusStackView removeArrangedSubview:subview];
+        [subview removeFromSuperview];
     }
 
-    self.statusLabel.stringValue = status;
+    SCScheduleManager *manager = [SCScheduleManager sharedManager];
+
+    if (manager.bundles.count == 0) {
+        NSTextField *emptyLabel = [NSTextField labelWithString:@"No bundles configured. Add a bundle to get started."];
+        emptyLabel.font = [NSFont systemFontOfSize:12];
+        emptyLabel.textColor = [NSColor secondaryLabelColor];
+        [self.statusStackView addArrangedSubview:emptyLabel];
+        return;
+    }
+
+    for (SCBlockBundle *bundle in manager.bundles) {
+        BOOL allowed = [manager wouldBundleBeAllowed:bundle.bundleID];
+        NSString *statusStr = [manager statusStringForBundleID:bundle.bundleID];
+
+        // Create pill container
+        NSView *pill = [[NSView alloc] init];
+        pill.wantsLayer = YES;
+        pill.layer.cornerRadius = 6;
+
+        // Set background color based on allowed/blocked state
+        if (allowed) {
+            pill.layer.backgroundColor = [[NSColor systemGreenColor] colorWithAlphaComponent:0.25].CGColor;
+            pill.layer.borderColor = [[NSColor systemGreenColor] colorWithAlphaComponent:0.5].CGColor;
+        } else {
+            pill.layer.backgroundColor = [[NSColor systemRedColor] colorWithAlphaComponent:0.25].CGColor;
+            pill.layer.borderColor = [[NSColor systemRedColor] colorWithAlphaComponent:0.5].CGColor;
+        }
+        pill.layer.borderWidth = 1.0;
+
+        // Create horizontal stack inside pill
+        NSStackView *pillStack = [[NSStackView alloc] init];
+        pillStack.orientation = NSUserInterfaceLayoutOrientationHorizontal;
+        pillStack.spacing = 4;
+        pillStack.edgeInsets = NSEdgeInsetsMake(4, 8, 4, 8);
+
+        // Bundle color indicator (small circle)
+        NSView *colorDot = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 8, 8)];
+        colorDot.wantsLayer = YES;
+        colorDot.layer.cornerRadius = 4;
+        colorDot.layer.backgroundColor = bundle.color.CGColor;
+        [colorDot setFrameSize:NSMakeSize(8, 8)];
+
+        // Bundle name
+        NSTextField *nameLabel = [NSTextField labelWithString:bundle.name];
+        nameLabel.font = [NSFont systemFontOfSize:11 weight:NSFontWeightMedium];
+        nameLabel.textColor = [NSColor labelColor];
+
+        // Status text
+        NSString *statusText = allowed ? statusStr : @"blocked";
+        NSTextField *statusLabel = [NSTextField labelWithString:statusText];
+        statusLabel.font = [NSFont systemFontOfSize:11];
+        statusLabel.textColor = allowed ? [NSColor systemGreenColor] : [NSColor systemRedColor];
+
+        [pillStack addArrangedSubview:colorDot];
+        [pillStack addArrangedSubview:nameLabel];
+        [pillStack addArrangedSubview:statusLabel];
+
+        // Add constraints for the color dot
+        [colorDot.widthAnchor constraintEqualToConstant:8].active = YES;
+        [colorDot.heightAnchor constraintEqualToConstant:8].active = YES;
+
+        pillStack.translatesAutoresizingMaskIntoConstraints = NO;
+        [pill addSubview:pillStack];
+        [NSLayoutConstraint activateConstraints:@[
+            [pillStack.leadingAnchor constraintEqualToAnchor:pill.leadingAnchor],
+            [pillStack.trailingAnchor constraintEqualToAnchor:pill.trailingAnchor],
+            [pillStack.topAnchor constraintEqualToAnchor:pill.topAnchor],
+            [pillStack.bottomAnchor constraintEqualToAnchor:pill.bottomAnchor]
+        ]];
+
+        [self.statusStackView addArrangedSubview:pill];
+    }
 }
 
 - (void)updateCommitmentUI {
@@ -296,6 +371,14 @@
     self.bundleEditorController = [[SCBundleEditorController alloc] initForNewBundle];
     self.bundleEditorController.delegate = self;
     [self.bundleEditorController beginSheetModalForWindow:self.window completionHandler:nil];
+}
+
+- (void)weekStartChanged:(id)sender {
+    SCScheduleManager *manager = [SCScheduleManager sharedManager];
+    BOOL startsOnMonday = (self.weekStartControl.selectedSegment == 1);
+    manager.weekStartsOnMonday = startsOnMonday;
+    [self reloadData];
+    [self updateWeekLabel];
 }
 
 - (void)saveTemplateClicked:(id)sender {

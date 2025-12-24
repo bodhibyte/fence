@@ -146,11 +146,6 @@ static const CGFloat kTimelineHeight = 48.0;
         }
     }
 
-    // Draw "Add Bundle" row if not too many bundles
-    if (self.bundles.count < 8) {
-        [self drawAddBundleRow];
-    }
-
     // Draw grid lines
     [self drawGridLines:days];
 }
@@ -304,39 +299,22 @@ static const CGFloat kTimelineHeight = 48.0;
     }
     [markerPath setLineWidth:0.5];
     [markerPath stroke];
-}
 
-- (void)drawAddBundleRow {
-    NSUInteger bundleCount = self.bundles.count;
-    CGFloat y = self.bounds.size.height - kHeaderHeight - (bundleCount + 1) * kRowHeight;
-    NSRect rowRect = NSMakeRect(0, y, self.bounds.size.width, kRowHeight);
+    // Draw "now" line for today only
+    SCDayOfWeek today = [SCWeeklySchedule today];
+    if (day == today) {
+        NSCalendar *calendar = [NSCalendar currentCalendar];
+        NSDateComponents *comps = [calendar components:(NSCalendarUnitHour | NSCalendarUnitMinute) fromDate:[NSDate date]];
+        CGFloat nowPercent = (comps.hour * 60 + comps.minute) / (24.0 * 60.0);
+        CGFloat nowX = timelineRect.origin.x + nowPercent * timelineRect.size.width;
 
-    // Draw "+" button area
-    NSDictionary *attrs = @{
-        NSFontAttributeName: [NSFont systemFontOfSize:24 weight:NSFontWeightLight],
-        NSForegroundColorAttributeName: [NSColor tertiaryLabelColor]
-    };
-
-    NSString *plusSign = @"+";
-    NSSize textSize = [plusSign sizeWithAttributes:attrs];
-    NSPoint textPoint = NSMakePoint(
-        (kBundleLabelWidth - textSize.width) / 2,
-        rowRect.origin.y + (rowRect.size.height - textSize.height) / 2
-    );
-    [plusSign drawAtPoint:textPoint withAttributes:attrs];
-
-    // Label
-    NSDictionary *labelAttrs = @{
-        NSFontAttributeName: [NSFont systemFontOfSize:11],
-        NSForegroundColorAttributeName: [NSColor tertiaryLabelColor]
-    };
-    NSString *label = @"Add Bundle";
-    NSSize labelSize = [label sizeWithAttributes:labelAttrs];
-    NSPoint labelPoint = NSMakePoint(
-        textPoint.x + textSize.width + 4,
-        rowRect.origin.y + (rowRect.size.height - labelSize.height) / 2
-    );
-    [label drawAtPoint:labelPoint withAttributes:labelAttrs];
+        [[NSColor systemRedColor] setStroke];
+        NSBezierPath *nowPath = [NSBezierPath bezierPath];
+        [nowPath setLineWidth:2.0];
+        [nowPath moveToPoint:NSMakePoint(nowX, timelineRect.origin.y)];
+        [nowPath lineToPoint:NSMakePoint(nowX, timelineRect.origin.y + timelineRect.size.height)];
+        [nowPath stroke];
+    }
 }
 
 - (void)drawGridLines:(NSArray<NSNumber *> *)days {
@@ -344,7 +322,7 @@ static const CGFloat kTimelineHeight = 48.0;
     NSBezierPath *gridPath = [NSBezierPath bezierPath];
 
     // Horizontal lines
-    for (NSUInteger i = 0; i <= self.bundles.count + 1; i++) {
+    for (NSUInteger i = 0; i <= self.bundles.count; i++) {
         CGFloat y = self.bounds.size.height - kHeaderHeight - i * kRowHeight;
         [gridPath moveToPoint:NSMakePoint(0, y)];
         [gridPath lineToPoint:NSMakePoint(self.bounds.size.width, y)];
@@ -365,16 +343,6 @@ static const CGFloat kTimelineHeight = 48.0;
 
     NSArray<NSNumber *> *days = [self daysToShow];
     NSUInteger dayCount = days.count;
-
-    // Check if clicked on "Add Bundle" row
-    if (self.bundles.count < 8) {
-        CGFloat addRowY = self.bounds.size.height - kHeaderHeight - (self.bundles.count + 1) * kRowHeight;
-        NSRect addRowRect = NSMakeRect(0, addRowY, kBundleLabelWidth, kRowHeight);
-        if (NSPointInRect(point, addRowRect)) {
-            [self.delegate weekGridViewDidRequestAddBundle:self];
-            return;
-        }
-    }
 
     // Check which cell was clicked
     for (NSUInteger i = 0; i < self.bundles.count; i++) {
@@ -439,7 +407,7 @@ static const CGFloat kTimelineHeight = 48.0;
 #pragma mark - Intrinsic Size
 
 - (NSSize)intrinsicContentSize {
-    CGFloat height = kHeaderHeight + (self.bundles.count + 1) * kRowHeight;
+    CGFloat height = kHeaderHeight + self.bundles.count * kRowHeight;
     return NSMakeSize(NSViewNoIntrinsicMetric, height);
 }
 

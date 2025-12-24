@@ -9,7 +9,7 @@
 static const CGFloat kTimelineHeight = 300.0;
 static const CGFloat kTimelineWidth = 60.0;
 static const CGFloat kSnapMinutes = 15.0;
-static const CGFloat kHandleHeight = 8.0;
+static const CGFloat kEdgeDetectionZone = 10.0; // Pixels near edge for resize detection
 
 #pragma mark - SCTimelineView (Private)
 
@@ -19,13 +19,16 @@ static const CGFloat kHandleHeight = 8.0;
 @property (nonatomic, strong) NSColor *bundleColor;
 @property (nonatomic, assign) BOOL isCommitted;
 @property (nonatomic, copy, nullable) void (^onWindowsChanged)(void);
+@property (nonatomic, copy, nullable) void (^onRequestTimeInput)(NSInteger suggestedMinutes);
 
 // Drag state
 @property (nonatomic, assign) BOOL isDragging;
 @property (nonatomic, assign) NSInteger draggingWindowIndex;
-@property (nonatomic, assign) BOOL draggingStartHandle;
-@property (nonatomic, assign) BOOL draggingEndHandle;
+@property (nonatomic, assign) BOOL draggingStartEdge;
+@property (nonatomic, assign) BOOL draggingEndEdge;
+@property (nonatomic, assign) BOOL draggingWholeBlock;
 @property (nonatomic, assign) CGFloat dragStartY;
+@property (nonatomic, assign) NSInteger dragStartMinutes;
 @property (nonatomic, strong, nullable) SCTimeRange *originalDragRange;
 
 - (NSInteger)minutesFromY:(CGFloat)y;
@@ -67,6 +70,34 @@ static const CGFloat kHandleHeight = 8.0;
         SCTimeRange *window = self.allowedWindows[i];
         [self drawWindow:window atIndex:i];
     }
+
+    // Draw "now" line
+    [self drawNowLine];
+}
+
+- (void)drawNowLine {
+    NSCalendar *calendar = [NSCalendar currentCalendar];
+    NSDateComponents *comps = [calendar components:(NSCalendarUnitHour | NSCalendarUnitMinute) fromDate:[NSDate date]];
+    NSInteger nowMinutes = comps.hour * 60 + comps.minute;
+
+    CGFloat nowY = [self yFromMinutes:nowMinutes];
+
+    // Draw dotted red line
+    [[NSColor systemRedColor] setStroke];
+    NSBezierPath *nowPath = [NSBezierPath bezierPath];
+    CGFloat dashPattern[] = {4, 4};
+    [nowPath setLineDash:dashPattern count:2 phase:0];
+    [nowPath setLineWidth:2.0];
+    [nowPath moveToPoint:NSMakePoint(30, nowY)];
+    [nowPath lineToPoint:NSMakePoint(self.bounds.size.width, nowY)];
+    [nowPath stroke];
+
+    // Draw small "NOW" label
+    NSDictionary *attrs = @{
+        NSFontAttributeName: [NSFont systemFontOfSize:8 weight:NSFontWeightBold],
+        NSForegroundColorAttributeName: [NSColor systemRedColor]
+    };
+    [@"NOW" drawAtPoint:NSMakePoint(2, nowY - 4) withAttributes:attrs];
 }
 
 - (void)drawHourMarkers {
@@ -121,19 +152,6 @@ static const CGFloat kHandleHeight = 8.0;
     [bgPath setLineWidth:1.5];
     [bgPath stroke];
 
-    // Resize handles
-    [[NSColor whiteColor] setFill];
-
-    // Top handle
-    NSRect topHandle = NSMakeRect(windowRect.origin.x + windowRect.size.width/2 - 15,
-                                   startY + 2, 30, kHandleHeight);
-    [[NSBezierPath bezierPathWithRoundedRect:topHandle xRadius:2 yRadius:2] fill];
-
-    // Bottom handle
-    NSRect bottomHandle = NSMakeRect(windowRect.origin.x + windowRect.size.width/2 - 15,
-                                      endY - kHandleHeight - 2, 30, kHandleHeight);
-    [[NSBezierPath bezierPathWithRoundedRect:bottomHandle xRadius:2 yRadius:2] fill];
-
     // Time labels
     NSDictionary *attrs = @{
         NSFontAttributeName: [NSFont systemFontOfSize:11 weight:NSFontWeightMedium],
@@ -168,43 +186,65 @@ static const CGFloat kHandleHeight = 8.0;
 - (void)mouseDown:(NSEvent *)event {
     NSPoint point = [self convertPoint:event.locationInWindow fromView:nil];
 
-    // Check if clicking on existing window handle
+    // Check for double-click on empty space to show time picker
+    if (event.clickCount == 2 && !self.isCommitted) {
+        NSInteger minutes = [self snapToGrid:[self minutesFromY:point.y]];
+        // Check if clicking in empty space (not on a window)
+        BOOL onWindow = NO;
+        for (SCTimeRange *window in self.allowedWindows) {
+            CGFloat startY = [self yFromMinutes:[window startMinutes]];
+            CGFloat endY = [self yFromMinutes:[window endMinutes]];
+            NSRect windowRect = NSMakeRect(35, startY, self.bounds.size.width - 40, endY - startY);
+            if (NSPointInRect(point, windowRect)) {
+                onWindow = YES;
+                break;
+            }
+        }
+        if (!onWindow && self.onRequestTimeInput) {
+            self.onRequestTimeInput(minutes);
+            return;
+        }
+    }
+
+    // Check if clicking on existing window
     for (NSInteger i = self.allowedWindows.count - 1; i >= 0; i--) {
         SCTimeRange *window = self.allowedWindows[i];
         CGFloat startY = [self yFromMinutes:[window startMinutes]];
         CGFloat endY = [self yFromMinutes:[window endMinutes]];
 
-        // Check top handle
-        NSRect topHandle = NSMakeRect(35, startY, self.bounds.size.width - 40, kHandleHeight + 4);
-        if (NSPointInRect(point, topHandle)) {
-            self.isDragging = YES;
-            self.draggingWindowIndex = i;
-            self.draggingStartHandle = YES;
-            self.draggingEndHandle = NO;
-            self.originalDragRange = [window copy];
-            return;
-        }
-
-        // Check bottom handle
-        NSRect bottomHandle = NSMakeRect(35, endY - kHandleHeight - 4, self.bounds.size.width - 40, kHandleHeight + 4);
-        if (NSPointInRect(point, bottomHandle)) {
-            self.isDragging = YES;
-            self.draggingWindowIndex = i;
-            self.draggingStartHandle = NO;
-            self.draggingEndHandle = YES;
-            self.originalDragRange = [window copy];
-            return;
-        }
-
-        // Check if clicking inside window (to move)
         NSRect windowRect = NSMakeRect(35, startY, self.bounds.size.width - 40, endY - startY);
-        if (NSPointInRect(point, windowRect)) {
-            // For now, just select - could add move functionality
+        if (!NSPointInRect(point, windowRect)) continue;
+
+        self.isDragging = YES;
+        self.draggingWindowIndex = i;
+        self.originalDragRange = [window copy];
+        self.dragStartY = point.y;
+        self.dragStartMinutes = [self minutesFromY:point.y];
+
+        // Check if near top edge (resize start)
+        if (point.y - startY < kEdgeDetectionZone) {
+            self.draggingStartEdge = YES;
+            self.draggingEndEdge = NO;
+            self.draggingWholeBlock = NO;
             return;
         }
+
+        // Check if near bottom edge (resize end)
+        if (endY - point.y < kEdgeDetectionZone) {
+            self.draggingStartEdge = NO;
+            self.draggingEndEdge = YES;
+            self.draggingWholeBlock = NO;
+            return;
+        }
+
+        // Middle of block - drag the whole block
+        self.draggingStartEdge = NO;
+        self.draggingEndEdge = NO;
+        self.draggingWholeBlock = YES;
+        return;
     }
 
-    // Clicking on empty space - create new window
+    // Single click on empty space - create new window with drag
     if (!self.isCommitted) {
         NSInteger minutes = [self snapToGrid:[self minutesFromY:point.y]];
         SCTimeRange *newWindow = [SCTimeRange rangeWithStart:[self timeStringFromMinutes:minutes]
@@ -212,8 +252,9 @@ static const CGFloat kHandleHeight = 8.0;
         [self.allowedWindows addObject:newWindow];
         self.isDragging = YES;
         self.draggingWindowIndex = self.allowedWindows.count - 1;
-        self.draggingStartHandle = NO;
-        self.draggingEndHandle = YES;
+        self.draggingStartEdge = NO;
+        self.draggingEndEdge = YES;
+        self.draggingWholeBlock = NO;
         self.dragStartY = point.y;
 
         [self setNeedsDisplay:YES];
@@ -226,12 +267,12 @@ static const CGFloat kHandleHeight = 8.0;
 
     NSPoint point = [self convertPoint:event.locationInWindow fromView:nil];
     NSInteger minutes = [self snapToGrid:[self minutesFromY:point.y]];
-    minutes = MAX(0, MIN(24 * 60 - 1, minutes));
+    minutes = MAX(0, MIN(24 * 60, minutes));
 
     SCTimeRange *window = self.allowedWindows[self.draggingWindowIndex];
 
-    if (self.draggingStartHandle) {
-        // Moving start time
+    if (self.draggingStartEdge) {
+        // Moving start time (resize from top)
         NSInteger endMinutes = [window endMinutes];
         if (minutes < endMinutes - 15) {
             // Check commitment constraint
@@ -243,8 +284,8 @@ static const CGFloat kHandleHeight = 8.0;
             }
             window.startTime = [self timeStringFromMinutes:minutes];
         }
-    } else if (self.draggingEndHandle) {
-        // Moving end time
+    } else if (self.draggingEndEdge) {
+        // Moving end time (resize from bottom)
         NSInteger startMinutes = [window startMinutes];
         if (minutes > startMinutes + 15) {
             // Check commitment constraint
@@ -256,6 +297,35 @@ static const CGFloat kHandleHeight = 8.0;
             }
             window.endTime = [self timeStringFromMinutes:minutes];
         }
+    } else if (self.draggingWholeBlock) {
+        // Moving the whole block
+        NSInteger deltaMinutes = minutes - [self snapToGrid:self.dragStartMinutes];
+        NSInteger originalStart = [self.originalDragRange startMinutes];
+        NSInteger originalEnd = [self.originalDragRange endMinutes];
+        NSInteger duration = originalEnd - originalStart;
+
+        NSInteger newStart = originalStart + deltaMinutes;
+        NSInteger newEnd = originalEnd + deltaMinutes;
+
+        // Clamp to day bounds
+        if (newStart < 0) {
+            newStart = 0;
+            newEnd = duration;
+        }
+        if (newEnd > 24 * 60) {
+            newEnd = 24 * 60;
+            newStart = newEnd - duration;
+        }
+
+        // Check commitment constraint - can only move within original bounds
+        if (self.isCommitted && self.originalDragRange) {
+            // When committed, block can't be moved to allow more time
+            // For simplicity, prevent all movement when committed
+            return;
+        }
+
+        window.startTime = [self timeStringFromMinutes:newStart];
+        window.endTime = [self timeStringFromMinutes:newEnd];
     }
 
     [self setNeedsDisplay:YES];
@@ -265,6 +335,9 @@ static const CGFloat kHandleHeight = 8.0;
 - (void)mouseUp:(NSEvent *)event {
     self.isDragging = NO;
     self.draggingWindowIndex = -1;
+    self.draggingStartEdge = NO;
+    self.draggingEndEdge = NO;
+    self.draggingWholeBlock = NO;
     self.originalDragRange = nil;
 
     // Clean up any zero-duration windows
@@ -278,6 +351,46 @@ static const CGFloat kHandleHeight = 8.0;
 
     [self setNeedsDisplay:YES];
     if (self.onWindowsChanged) self.onWindowsChanged();
+}
+
+- (void)updateTrackingAreas {
+    [super updateTrackingAreas];
+
+    for (NSTrackingArea *area in self.trackingAreas) {
+        [self removeTrackingArea:area];
+    }
+
+    NSTrackingArea *trackingArea = [[NSTrackingArea alloc] initWithRect:self.bounds
+                                                                options:(NSTrackingMouseMoved | NSTrackingActiveInKeyWindow)
+                                                                  owner:self
+                                                               userInfo:nil];
+    [self addTrackingArea:trackingArea];
+}
+
+- (void)mouseMoved:(NSEvent *)event {
+    NSPoint point = [self convertPoint:event.locationInWindow fromView:nil];
+
+    // Check if near any window edges
+    for (SCTimeRange *window in self.allowedWindows) {
+        CGFloat startY = [self yFromMinutes:[window startMinutes]];
+        CGFloat endY = [self yFromMinutes:[window endMinutes]];
+
+        NSRect windowRect = NSMakeRect(35, startY, self.bounds.size.width - 40, endY - startY);
+        if (!NSPointInRect(point, windowRect)) continue;
+
+        // Near top or bottom edge - resize cursor
+        if (point.y - startY < kEdgeDetectionZone || endY - point.y < kEdgeDetectionZone) {
+            [[NSCursor resizeUpDownCursor] set];
+            return;
+        }
+
+        // Middle of block - open hand (move) cursor
+        [[NSCursor openHandCursor] set];
+        return;
+    }
+
+    // Not over any window - arrow cursor
+    [[NSCursor arrowCursor] set];
 }
 
 - (NSString *)timeStringFromMinutes:(NSInteger)minutes {
@@ -306,6 +419,10 @@ static const CGFloat kHandleHeight = 8.0;
 @property (nonatomic, strong) NSButton *deleteWindowButton;
 @property (nonatomic, strong) NSButton *doneButton;
 @property (nonatomic, strong) NSButton *cancelButton;
+@property (nonatomic, strong) NSButton *addTimeBlockButton;
+@property (nonatomic, strong) NSPopover *timeInputPopover;
+@property (nonatomic, strong) NSDatePicker *startTimePicker;
+@property (nonatomic, strong) NSDatePicker *endTimePicker;
 
 @end
 
@@ -344,7 +461,7 @@ static const CGFloat kHandleHeight = 8.0;
 
     // Title
     y -= 30;
-    self.titleLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(padding, y, 280, 24)];
+    self.titleLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(padding, y, 200, 24)];
     self.titleLabel.stringValue = [NSString stringWithFormat:@"%@ - %@",
                                     self.bundle.name,
                                     [SCWeeklySchedule displayNameForDay:self.day]];
@@ -353,6 +470,16 @@ static const CGFloat kHandleHeight = 8.0;
     self.titleLabel.editable = NO;
     self.titleLabel.drawsBackground = NO;
     [contentView addSubview:self.titleLabel];
+
+    // Legend - colored blocks = allowed time
+    NSTextField *legendLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(padding + 200, y + 4, 80, 16)];
+    legendLabel.stringValue = @"■ = Allowed";
+    legendLabel.font = [NSFont systemFontOfSize:10];
+    legendLabel.textColor = self.bundle.color;
+    legendLabel.bezeled = NO;
+    legendLabel.editable = NO;
+    legendLabel.drawsBackground = NO;
+    [contentView addSubview:legendLabel];
 
     // Presets dropdown
     y -= 35;
@@ -364,7 +491,7 @@ static const CGFloat kHandleHeight = 8.0;
     presetsLabel.drawsBackground = NO;
     [contentView addSubview:presetsLabel];
 
-    self.presetsButton = [[NSPopUpButton alloc] initWithFrame:NSMakeRect(75, y - 2, 200, 24) pullsDown:YES];
+    self.presetsButton = [[NSPopUpButton alloc] initWithFrame:NSMakeRect(75, y - 2, 170, 24) pullsDown:YES];
     [self.presetsButton addItemWithTitle:@"Apply Preset..."];
     [self.presetsButton addItemWithTitle:@"Work Hours (9am-5pm)"];
     [self.presetsButton addItemWithTitle:@"Extended Work (8am-8pm)"];
@@ -374,6 +501,16 @@ static const CGFloat kHandleHeight = 8.0;
     self.presetsButton.target = self;
     self.presetsButton.action = @selector(presetSelected:);
     [contentView addSubview:self.presetsButton];
+
+    // Add time block button ("+")
+    self.addTimeBlockButton = [[NSButton alloc] initWithFrame:NSMakeRect(250, y - 2, 30, 24)];
+    self.addTimeBlockButton.title = @"+";
+    self.addTimeBlockButton.font = [NSFont systemFontOfSize:16 weight:NSFontWeightMedium];
+    self.addTimeBlockButton.bezelStyle = NSBezelStyleRounded;
+    self.addTimeBlockButton.target = self;
+    self.addTimeBlockButton.action = @selector(addTimeBlockClicked:);
+    self.addTimeBlockButton.toolTip = @"Add time block with specific times";
+    [contentView addSubview:self.addTimeBlockButton];
 
     // Timeline view
     y -= 320;
@@ -386,24 +523,27 @@ static const CGFloat kHandleHeight = 8.0;
     self.timelineView.onWindowsChanged = ^{
         [weakSelf timelineWindowsChanged];
     };
+    self.timelineView.onRequestTimeInput = ^(NSInteger suggestedMinutes) {
+        [weakSelf showTimeInputPopoverAtMinutes:suggestedMinutes];
+    };
 
     self.timelineView.wantsLayer = YES;
     self.timelineView.layer.cornerRadius = 8;
     self.timelineView.layer.masksToBounds = YES;
     [contentView addSubview:self.timelineView];
 
-    // Copy from dropdown
+    // Copy schedule from another day
     y -= 35;
-    NSTextField *copyLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(padding, y, 70, 20)];
-    copyLabel.stringValue = @"Copy from:";
+    NSTextField *copyLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(padding, y, 50, 20)];
+    copyLabel.stringValue = @"Copy:";
     copyLabel.font = [NSFont systemFontOfSize:11];
     copyLabel.bezeled = NO;
     copyLabel.editable = NO;
     copyLabel.drawsBackground = NO;
     [contentView addSubview:copyLabel];
 
-    self.duplicateFromDayButton = [[NSPopUpButton alloc] initWithFrame:NSMakeRect(85, y - 2, 100, 22) pullsDown:YES];
-    [self.duplicateFromDayButton addItemWithTitle:@"Select..."];
+    self.duplicateFromDayButton = [[NSPopUpButton alloc] initWithFrame:NSMakeRect(50, y - 2, 80, 22) pullsDown:YES];
+    [self.duplicateFromDayButton addItemWithTitle:@"Day..."];
     for (SCDayOfWeek d = SCDayOfWeekSunday; d <= SCDayOfWeekSaturday; d++) {
         if (d != self.day) {
             [self.duplicateFromDayButton addItemWithTitle:[SCWeeklySchedule shortNameForDay:d]];
@@ -412,10 +552,11 @@ static const CGFloat kHandleHeight = 8.0;
     self.duplicateFromDayButton.target = self;
     self.duplicateFromDayButton.action = @selector(copyFromSelected:);
     self.duplicateFromDayButton.font = [NSFont systemFontOfSize:11];
+    self.duplicateFromDayButton.toolTip = @"Copy schedule from another day";
     [contentView addSubview:self.duplicateFromDayButton];
 
-    // Apply to dropdown
-    NSTextField *applyLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(190, y, 50, 20)];
+    // Apply this schedule to other days
+    NSTextField *applyLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(140, y, 70, 20)];
     applyLabel.stringValue = @"Apply to:";
     applyLabel.font = [NSFont systemFontOfSize:11];
     applyLabel.bezeled = NO;
@@ -423,14 +564,15 @@ static const CGFloat kHandleHeight = 8.0;
     applyLabel.drawsBackground = NO;
     [contentView addSubview:applyLabel];
 
-    self.applyToButton = [[NSPopUpButton alloc] initWithFrame:NSMakeRect(240, y - 2, 50, 22) pullsDown:YES];
-    [self.applyToButton addItemWithTitle:@"..."];
-    [self.applyToButton addItemWithTitle:@"All"];
+    self.applyToButton = [[NSPopUpButton alloc] initWithFrame:NSMakeRect(200, y - 2, 85, 22) pullsDown:YES];
+    [self.applyToButton addItemWithTitle:@"Days..."];
+    [self.applyToButton addItemWithTitle:@"All Days"];
     [self.applyToButton addItemWithTitle:@"Weekdays"];
     [self.applyToButton addItemWithTitle:@"Weekend"];
     self.applyToButton.target = self;
     self.applyToButton.action = @selector(applyToSelected:);
     self.applyToButton.font = [NSFont systemFontOfSize:11];
+    self.applyToButton.toolTip = @"Copy this schedule to other days";
     [contentView addSubview:self.applyToButton];
 
     // Buttons
@@ -597,6 +739,135 @@ static const CGFloat kHandleHeight = 8.0;
 - (void)cancelClicked:(id)sender {
     [self.delegate dayScheduleEditorDidCancel:self];
     [self.window.sheetParent endSheet:self.window returnCode:NSModalResponseCancel];
+}
+
+#pragma mark - Time Input Popover
+
+- (void)addTimeBlockClicked:(id)sender {
+    if (self.isCommitted) {
+        NSAlert *alert = [[NSAlert alloc] init];
+        alert.messageText = @"Cannot Add Blocks";
+        alert.informativeText = @"You're committed to this week. You cannot add new allowed time blocks.";
+        [alert runModal];
+        return;
+    }
+    // Show time picker with default times (next hour to +2 hours)
+    NSCalendar *calendar = [NSCalendar currentCalendar];
+    NSDateComponents *comps = [calendar components:NSCalendarUnitHour fromDate:[NSDate date]];
+    NSInteger nextHour = (comps.hour + 1) % 24;
+    [self showTimeInputPopoverAtMinutes:nextHour * 60];
+}
+
+- (void)showTimeInputPopoverAtMinutes:(NSInteger)suggestedMinutes {
+    if (self.timeInputPopover && self.timeInputPopover.isShown) {
+        [self.timeInputPopover close];
+        return;
+    }
+
+    // Create popover content view
+    NSView *contentView = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 200, 140)];
+
+    // Title label
+    NSTextField *titleLabel = [NSTextField labelWithString:@"Add Time Block"];
+    titleLabel.frame = NSMakeRect(10, 110, 180, 20);
+    titleLabel.font = [NSFont systemFontOfSize:13 weight:NSFontWeightSemibold];
+    [contentView addSubview:titleLabel];
+
+    // Start time label
+    NSTextField *startLabel = [NSTextField labelWithString:@"Start:"];
+    startLabel.frame = NSMakeRect(10, 80, 40, 20);
+    startLabel.font = [NSFont systemFontOfSize:12];
+    [contentView addSubview:startLabel];
+
+    // Start time picker
+    self.startTimePicker = [[NSDatePicker alloc] initWithFrame:NSMakeRect(55, 78, 130, 24)];
+    self.startTimePicker.datePickerStyle = NSDatePickerStyleTextFieldAndStepper;
+    self.startTimePicker.datePickerElements = NSDatePickerElementFlagHourMinute;
+    self.startTimePicker.dateValue = [self dateFromMinutes:suggestedMinutes];
+    [contentView addSubview:self.startTimePicker];
+
+    // End time label
+    NSTextField *endLabel = [NSTextField labelWithString:@"End:"];
+    endLabel.frame = NSMakeRect(10, 50, 40, 20);
+    endLabel.font = [NSFont systemFontOfSize:12];
+    [contentView addSubview:endLabel];
+
+    // End time picker
+    self.endTimePicker = [[NSDatePicker alloc] initWithFrame:NSMakeRect(55, 48, 130, 24)];
+    self.endTimePicker.datePickerStyle = NSDatePickerStyleTextFieldAndStepper;
+    self.endTimePicker.datePickerElements = NSDatePickerElementFlagHourMinute;
+    self.endTimePicker.dateValue = [self dateFromMinutes:MIN(suggestedMinutes + 120, 24 * 60)];
+    [contentView addSubview:self.endTimePicker];
+
+    // Create button
+    NSButton *createButton = [[NSButton alloc] initWithFrame:NSMakeRect(55, 10, 90, 28)];
+    createButton.title = @"Create";
+    createButton.bezelStyle = NSBezelStyleRounded;
+    createButton.target = self;
+    createButton.action = @selector(createTimeBlockFromPopover:);
+    [contentView addSubview:createButton];
+
+    // Create and configure popover
+    self.timeInputPopover = [[NSPopover alloc] init];
+    self.timeInputPopover.contentSize = contentView.frame.size;
+    self.timeInputPopover.behavior = NSPopoverBehaviorTransient;
+    self.timeInputPopover.animates = YES;
+
+    NSViewController *viewController = [[NSViewController alloc] init];
+    viewController.view = contentView;
+    self.timeInputPopover.contentViewController = viewController;
+
+    // Show relative to add button
+    [self.timeInputPopover showRelativeToRect:self.addTimeBlockButton.bounds
+                                       ofView:self.addTimeBlockButton
+                                preferredEdge:NSRectEdgeMaxY];
+}
+
+- (void)createTimeBlockFromPopover:(id)sender {
+    NSInteger startMinutes = [self minutesFromDate:self.startTimePicker.dateValue];
+    NSInteger endMinutes = [self minutesFromDate:self.endTimePicker.dateValue];
+
+    // Validate
+    if (endMinutes <= startMinutes) {
+        NSAlert *alert = [[NSAlert alloc] init];
+        alert.messageText = @"Invalid Time Range";
+        alert.informativeText = @"End time must be after start time.";
+        [alert runModal];
+        return;
+    }
+
+    if (endMinutes - startMinutes < 15) {
+        NSAlert *alert = [[NSAlert alloc] init];
+        alert.messageText = @"Time Range Too Short";
+        alert.informativeText = @"Time blocks must be at least 15 minutes.";
+        [alert runModal];
+        return;
+    }
+
+    // Create the time range
+    NSString *startStr = [NSString stringWithFormat:@"%02ld:%02ld", (long)(startMinutes / 60), (long)(startMinutes % 60)];
+    NSString *endStr = [NSString stringWithFormat:@"%02ld:%02ld", (long)(endMinutes / 60), (long)(endMinutes % 60)];
+    SCTimeRange *newWindow = [SCTimeRange rangeWithStart:startStr end:endStr];
+
+    [self.timelineView.allowedWindows addObject:newWindow];
+    [self.timelineView setNeedsDisplay:YES];
+    [self timelineWindowsChanged];
+
+    [self.timeInputPopover close];
+}
+
+- (NSDate *)dateFromMinutes:(NSInteger)minutes {
+    NSCalendar *calendar = [NSCalendar currentCalendar];
+    NSDateComponents *comps = [[NSDateComponents alloc] init];
+    comps.hour = minutes / 60;
+    comps.minute = minutes % 60;
+    return [calendar dateFromComponents:comps];
+}
+
+- (NSInteger)minutesFromDate:(NSDate *)date {
+    NSCalendar *calendar = [NSCalendar currentCalendar];
+    NSDateComponents *comps = [calendar components:(NSCalendarUnitHour | NSCalendarUnitMinute) fromDate:date];
+    return comps.hour * 60 + comps.minute;
 }
 
 #pragma mark - Sheet Presentation
