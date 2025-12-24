@@ -68,8 +68,19 @@ static const CGFloat kTimelinePaddingBottom = 12.0; // Padding so bottom 12am la
 }
 
 - (void)keyDown:(NSEvent *)event {
-    // Handle Delete and Backspace keys
     unichar key = [[event charactersIgnoringModifiers] characterAtIndex:0];
+
+    // Handle Escape key - close the editor
+    if (key == 27) { // ESC key
+        // Find the window controller and trigger cancel
+        NSWindowController *controller = self.window.windowController;
+        if ([controller respondsToSelector:@selector(cancelClicked:)]) {
+            [controller performSelector:@selector(cancelClicked:) withObject:nil];
+        }
+        return;
+    }
+
+    // Handle Delete and Backspace keys
     if (key == NSDeleteCharacter || key == NSBackspaceCharacter || key == NSDeleteFunctionKey) {
         if (self.selectedBlockIndex >= 0 && self.selectedBlockIndex < (NSInteger)self.allowedWindows.count) {
             if (self.onRequestDeleteBlock) {
@@ -84,21 +95,25 @@ static const CGFloat kTimelinePaddingBottom = 12.0; // Padding so bottom 12am la
 }
 
 - (BOOL)performKeyEquivalent:(NSEvent *)event {
-    NSEventModifierFlags flags = [event modifierFlags] & NSEventModifierFlagDeviceIndependentFlagsMask;
-    NSString *chars = [event charactersIgnoringModifiers];
+    NSEventModifierFlags flags = [event modifierFlags];
+    NSString *chars = [[event charactersIgnoringModifiers] lowercaseString];
 
-    // Cmd+Z = Undo
-    if (flags == NSEventModifierFlagCommand && [chars isEqualToString:@"z"]) {
-        if ([self.undoManager canUndo]) {
-            [self.undoManager undo];
+    BOOL cmdPressed = (flags & NSEventModifierFlagCommand) != 0;
+    BOOL shiftPressed = (flags & NSEventModifierFlagShift) != 0;
+    BOOL isZ = [chars isEqualToString:@"z"];
+
+    // Cmd+Shift+Z = Redo (check first since it also has Cmd)
+    if (cmdPressed && shiftPressed && isZ) {
+        if ([self.undoManager canRedo]) {
+            [self.undoManager redo];
             return YES;
         }
     }
 
-    // Cmd+Shift+Z = Redo
-    if (flags == (NSEventModifierFlagCommand | NSEventModifierFlagShift) && [chars isEqualToString:@"z"]) {
-        if ([self.undoManager canRedo]) {
-            [self.undoManager redo];
+    // Cmd+Z = Undo (without shift)
+    if (cmdPressed && !shiftPressed && isZ) {
+        if ([self.undoManager canUndo]) {
+            [self.undoManager undo];
             return YES;
         }
     }
