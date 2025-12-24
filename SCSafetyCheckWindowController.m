@@ -68,6 +68,7 @@
     // Progress indicator
     self.progressIndicator = [[NSProgressIndicator alloc] initWithFrame:NSMakeRect(20, y, width - 40, 20)];
     self.progressIndicator.style = NSProgressIndicatorStyleBar;
+    self.progressIndicator.indeterminate = NO;  // Must be NO for determinate progress bar
     self.progressIndicator.minValue = 0;
     self.progressIndicator.maxValue = 100;
     self.progressIndicator.doubleValue = 0;
