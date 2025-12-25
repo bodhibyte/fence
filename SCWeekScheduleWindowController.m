@@ -26,10 +26,14 @@
 @property (nonatomic, strong) SCWeekGridView *weekGridView;
 @property (nonatomic, strong) NSScrollView *gridScrollView;
 @property (nonatomic, strong) NSButton *addBundleButton;
-@property (nonatomic, strong) NSButton *saveTemplateButton;
 @property (nonatomic, strong) NSButton *commitButton;
 @property (nonatomic, strong) NSTextField *commitmentLabel;
-@property (nonatomic, strong) NSSegmentedControl *weekStartControl;
+
+// Week navigation
+@property (nonatomic, strong) NSButton *prevWeekButton;
+@property (nonatomic, strong) NSButton *nextWeekButton;
+@property (nonatomic, assign) NSInteger currentWeekOffset; // 0 = this week, 1 = next week
+@property (nonatomic, assign) NSInteger editingWeekOffset; // Week offset when day editor was opened
 
 // Child controllers
 @property (nonatomic, strong, nullable) SCDayScheduleEditorController *dayEditorController;
@@ -93,17 +97,41 @@
     self.titleLabel.autoresizingMask = NSViewMinYMargin; // Stay pinned to top
     [contentView addSubview:self.titleLabel];
 
-    // Week label (right side)
-    self.weekLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(contentView.bounds.size.width - 200 - padding, y, 200, 24)];
-    self.weekLabel.alignment = NSTextAlignmentRight;
-    self.weekLabel.font = [NSFont systemFontOfSize:14];
-    self.weekLabel.textColor = [NSColor secondaryLabelColor];
+    // Week navigation (right side): [< This Week] [Week Label] [Next Week >]
+    CGFloat navX = contentView.bounds.size.width - 350 - padding;
+
+    // Previous week button (This Week)
+    self.prevWeekButton = [[NSButton alloc] initWithFrame:NSMakeRect(navX, y, 90, 24)];
+    self.prevWeekButton.title = @"This Week";
+    self.prevWeekButton.bezelStyle = NSBezelStyleRounded;
+    self.prevWeekButton.font = [NSFont systemFontOfSize:11];
+    self.prevWeekButton.target = self;
+    self.prevWeekButton.action = @selector(navigateToPrevWeek:);
+    self.prevWeekButton.autoresizingMask = NSViewMinXMargin | NSViewMinYMargin;
+    self.prevWeekButton.enabled = NO; // Disabled when on current week
+    [contentView addSubview:self.prevWeekButton];
+
+    // Week label (center of navigation)
+    self.weekLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(navX + 95, y, 160, 24)];
+    self.weekLabel.alignment = NSTextAlignmentCenter;
+    self.weekLabel.font = [NSFont systemFontOfSize:13 weight:NSFontWeightMedium];
+    self.weekLabel.textColor = [NSColor labelColor];
     self.weekLabel.bezeled = NO;
     self.weekLabel.editable = NO;
     self.weekLabel.drawsBackground = NO;
-    self.weekLabel.autoresizingMask = NSViewMinXMargin | NSViewMinYMargin; // Stay at top-right
+    self.weekLabel.autoresizingMask = NSViewMinXMargin | NSViewMinYMargin;
     [self updateWeekLabel];
     [contentView addSubview:self.weekLabel];
+
+    // Next week button
+    self.nextWeekButton = [[NSButton alloc] initWithFrame:NSMakeRect(navX + 260, y, 90, 24)];
+    self.nextWeekButton.title = @"Next Week →";
+    self.nextWeekButton.bezelStyle = NSBezelStyleRounded;
+    self.nextWeekButton.font = [NSFont systemFontOfSize:11];
+    self.nextWeekButton.target = self;
+    self.nextWeekButton.action = @selector(navigateToNextWeek:);
+    self.nextWeekButton.autoresizingMask = NSViewMinXMargin | NSViewMinYMargin;
+    [contentView addSubview:self.nextWeekButton];
 
     // Status view - use semi-transparent background to work with frosted glass
     y -= 55; // 50px height + 5px gap
@@ -136,7 +164,6 @@
 
     self.weekGridView = [[SCWeekGridView alloc] initWithFrame:NSMakeRect(0, 0, self.gridScrollView.bounds.size.width, 300)];
     self.weekGridView.delegate = self;
-    self.weekGridView.weekStartsOnMonday = [SCScheduleManager sharedManager].weekStartsOnMonday;
     self.weekGridView.showOnlyRemainingDays = YES;
 
     self.gridScrollView.documentView = self.weekGridView;
@@ -153,14 +180,6 @@
     self.addBundleButton.autoresizingMask = NSViewMaxYMargin; // Stay at bottom
     [contentView addSubview:self.addBundleButton];
 
-    self.saveTemplateButton = [[NSButton alloc] initWithFrame:NSMakeRect(padding + 130, buttonY, 140, 30)];
-    self.saveTemplateButton.title = @"Save as Default";
-    self.saveTemplateButton.bezelStyle = NSBezelStyleRounded;
-    self.saveTemplateButton.target = self;
-    self.saveTemplateButton.action = @selector(saveTemplateClicked:);
-    self.saveTemplateButton.autoresizingMask = NSViewMaxYMargin; // Stay at bottom
-    [contentView addSubview:self.saveTemplateButton];
-
     self.commitButton = [[NSButton alloc] initWithFrame:NSMakeRect(contentView.bounds.size.width - padding - 150, buttonY, 150, 30)];
     self.commitButton.title = @"Commit to Week";
     self.commitButton.bezelStyle = NSBezelStyleRounded;
@@ -168,29 +187,6 @@
     self.commitButton.action = @selector(commitClicked:);
     self.commitButton.autoresizingMask = NSViewMinXMargin | NSViewMaxYMargin; // Stay at bottom-right
     [contentView addSubview:self.commitButton];
-
-    // Week starts on toggle
-    NSTextField *weekStartLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(padding + 280, buttonY + 5, 90, 20)];
-    weekStartLabel.stringValue = @"Week starts:";
-    weekStartLabel.font = [NSFont systemFontOfSize:11];
-    weekStartLabel.textColor = [NSColor secondaryLabelColor];
-    weekStartLabel.bezeled = NO;
-    weekStartLabel.editable = NO;
-    weekStartLabel.drawsBackground = NO;
-    weekStartLabel.autoresizingMask = NSViewMaxYMargin; // Stay at bottom
-    [contentView addSubview:weekStartLabel];
-
-    self.weekStartControl = [[NSSegmentedControl alloc] initWithFrame:NSMakeRect(padding + 370, buttonY + 2, 100, 24)];
-    [self.weekStartControl setSegmentCount:2];
-    [self.weekStartControl setLabel:@"Sun" forSegment:0];
-    [self.weekStartControl setLabel:@"Mon" forSegment:1];
-    [self.weekStartControl setWidth:45 forSegment:0];
-    [self.weekStartControl setWidth:45 forSegment:1];
-    self.weekStartControl.target = self;
-    self.weekStartControl.action = @selector(weekStartChanged:);
-    self.weekStartControl.selectedSegment = [SCScheduleManager sharedManager].weekStartsOnMonday ? 1 : 0;
-    self.weekStartControl.autoresizingMask = NSViewMaxYMargin; // Stay at bottom
-    [contentView addSubview:self.weekStartControl];
 
     // Commitment label - below the commit button
     self.commitmentLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(contentView.bounds.size.width - padding - 200, buttonY - 20, 200, 20)];
@@ -233,14 +229,16 @@
 - (void)reloadData {
     SCScheduleManager *manager = [SCScheduleManager sharedManager];
 
-    // Update grid
+    // Update grid with week-specific data
     self.weekGridView.bundles = manager.bundles;
-    self.weekGridView.schedules = manager.schedules;
-    self.weekGridView.isCommitted = manager.isCommitted;
-    self.weekGridView.weekStartsOnMonday = manager.weekStartsOnMonday;
+    self.weekGridView.schedules = [manager schedulesForWeekOffset:self.currentWeekOffset];
+    self.weekGridView.isCommitted = [manager isCommittedForWeekOffset:self.currentWeekOffset];
+
+    // Show only remaining days for current week, all days for future weeks
+    self.weekGridView.showOnlyRemainingDays = (self.currentWeekOffset == 0);
     [self.weekGridView reloadData];
 
-    // Update status
+    // Update status (only for current week)
     [self updateStatusLabel];
 
     // Update commitment UI
@@ -248,6 +246,9 @@
 
     // Update week label
     [self updateWeekLabel];
+
+    // Update navigation buttons
+    [self updateNavigationButtons];
 
     // Resize grid to fit content - MUST be at least as tall as scroll view
     // In non-flipped coordinates, a smaller document view pins to BOTTOM (y=0)
@@ -354,17 +355,36 @@
 
 - (void)updateCommitmentUI {
     SCScheduleManager *manager = [SCScheduleManager sharedManager];
+    BOOL isCommitted = [manager isCommittedForWeekOffset:self.currentWeekOffset];
 
-    if (manager.isCommitted) {
+    if (isCommitted) {
         self.commitButton.title = @"Committed ✓";
         self.commitButton.enabled = NO;
 
         NSDateFormatter *formatter = [[NSDateFormatter alloc] init];
         formatter.dateFormat = @"EEEE";
-        NSString *endDay = [formatter stringFromDate:manager.commitmentEndDate];
+        NSDate *endDate = [manager commitmentEndDateForWeekOffset:self.currentWeekOffset];
+        NSString *endDay = [formatter stringFromDate:endDate];
         self.commitmentLabel.stringValue = [NSString stringWithFormat:@"Until %@", endDay];
+        self.commitmentLabel.textColor = [NSColor secondaryLabelColor];
     } else {
-        self.commitButton.title = @"Commit to Week";
+        NSString *weekName = (self.currentWeekOffset == 0) ? @"This Week" : @"Next Week";
+        self.commitButton.title = [NSString stringWithFormat:@"Commit to %@", weekName];
+
+        // For next week, only allow commit on Sunday
+        if (self.currentWeekOffset > 0) {
+            NSCalendar *calendar = [NSCalendar currentCalendar];
+            NSInteger weekday = [calendar component:NSCalendarUnitWeekday fromDate:[NSDate date]];
+            BOOL isSunday = (weekday == 1); // 1 = Sunday
+
+            if (!isSunday) {
+                self.commitButton.enabled = NO;
+                self.commitmentLabel.stringValue = @"Commit available on Sunday";
+                self.commitmentLabel.textColor = [NSColor tertiaryLabelColor];
+                return;
+            }
+        }
+
         self.commitButton.enabled = (manager.bundles.count > 0);
         self.commitmentLabel.stringValue = @"";
     }
@@ -372,27 +392,23 @@
 
 - (void)updateWeekLabel {
     NSCalendar *calendar = [NSCalendar currentCalendar];
-    NSDate *now = [NSDate date];
 
-    // Get start and end of week
-    NSDateComponents *weekdayComponents = [calendar components:NSCalendarUnitWeekday fromDate:now];
-    NSInteger weekday = weekdayComponents.weekday; // 1 = Sunday
-
-    SCScheduleManager *manager = [SCScheduleManager sharedManager];
-    NSInteger daysToStart;
-    if (manager.weekStartsOnMonday) {
-        daysToStart = (weekday == 1) ? -6 : -(weekday - 2); // Monday start
-    } else {
-        daysToStart = -(weekday - 1); // Sunday start
+    // Get the Monday of the target week
+    NSDate *weekStart = [SCWeeklySchedule startOfCurrentWeek];
+    if (self.currentWeekOffset > 0) {
+        weekStart = [calendar dateByAddingUnit:NSCalendarUnitDay
+                                         value:self.currentWeekOffset * 7
+                                        toDate:weekStart
+                                       options:0];
     }
-
-    NSDate *weekStart = [calendar dateByAddingUnit:NSCalendarUnitDay value:daysToStart toDate:now options:0];
     NSDate *weekEnd = [calendar dateByAddingUnit:NSCalendarUnitDay value:6 toDate:weekStart options:0];
 
     NSDateFormatter *formatter = [[NSDateFormatter alloc] init];
     formatter.dateFormat = @"MMM d";
 
-    self.weekLabel.stringValue = [NSString stringWithFormat:@"Week of %@ - %@",
+    NSString *weekType = (self.currentWeekOffset == 0) ? @"This Week" : @"Next Week";
+    self.weekLabel.stringValue = [NSString stringWithFormat:@"%@: %@ - %@",
+                                   weekType,
                                    [formatter stringFromDate:weekStart],
                                    [formatter stringFromDate:weekEnd]];
 }
@@ -405,22 +421,26 @@
     [self.bundleEditorController beginSheetModalForWindow:self.window completionHandler:nil];
 }
 
-- (void)weekStartChanged:(id)sender {
-    SCScheduleManager *manager = [SCScheduleManager sharedManager];
-    BOOL startsOnMonday = (self.weekStartControl.selectedSegment == 1);
-    manager.weekStartsOnMonday = startsOnMonday;
+- (void)navigateToPrevWeek:(id)sender {
+    if (self.currentWeekOffset > 0) {
+        self.currentWeekOffset--;
+        [self updateNavigationButtons];
+        [self reloadData];
+        [self updateWeekLabel];
+    }
+}
+
+- (void)navigateToNextWeek:(id)sender {
+    self.currentWeekOffset++;
+    [self updateNavigationButtons];
     [self reloadData];
     [self updateWeekLabel];
 }
 
-- (void)saveTemplateClicked:(id)sender {
-    SCScheduleManager *manager = [SCScheduleManager sharedManager];
-    [manager saveCurrentAsDefaultTemplate];
-
-    NSAlert *alert = [[NSAlert alloc] init];
-    alert.messageText = @"Template Saved";
-    alert.informativeText = @"Your current schedule has been saved as the default. It will be automatically loaded at the start of each new week.";
-    [alert runModal];
+- (void)updateNavigationButtons {
+    self.prevWeekButton.enabled = (self.currentWeekOffset > 0);
+    // For now, only allow navigating to next week (offset 1)
+    self.nextWeekButton.enabled = (self.currentWeekOffset < 1);
 }
 
 - (void)commitClicked:(id)sender {
@@ -436,12 +456,15 @@
 
     // Confirmation
     NSAlert *alert = [[NSAlert alloc] init];
-    alert.messageText = @"Commit to This Week?";
+    NSString *weekName = (self.currentWeekOffset == 0) ? @"This Week" : @"Next Week";
+    alert.messageText = [NSString stringWithFormat:@"Commit to %@?", weekName];
 
-    NSDateFormatter *formatter = [[NSDateFormatter alloc] init];
-    formatter.dateFormat = @"EEEE";
-    NSArray *days = [manager daysToDisplay];
-    NSString *lastDay = [SCWeeklySchedule displayNameForDay:[[days lastObject] integerValue]];
+    // Get the last day of the target week
+    NSArray *days = [manager daysToDisplayForWeekOffset:self.currentWeekOffset];
+    NSString *lastDay = @"Sunday"; // Always Sunday for Mon-Sun weeks
+    if (days.count > 0) {
+        lastDay = [SCWeeklySchedule displayNameForDay:[[days lastObject] integerValue]];
+    }
 
     alert.informativeText = [NSString stringWithFormat:
                              @"Once committed, you can only make the schedule stricter (reduce allowed time). "
@@ -450,9 +473,10 @@
     [alert addButtonWithTitle:@"Commit"];
     [alert addButtonWithTitle:@"Cancel"];
 
+    NSInteger weekOffset = self.currentWeekOffset;
     [alert beginSheetModalForWindow:self.window completionHandler:^(NSModalResponse returnCode) {
         if (returnCode == NSAlertFirstButtonReturn) {
-            [manager commitToWeek];
+            [manager commitToWeekWithOffset:weekOffset];
             [self reloadData];
         }
     }];
@@ -470,17 +494,21 @@
 
 - (void)weekGridView:(SCWeekGridView *)gridView didSelectBundle:(SCBlockBundle *)bundle forDay:(SCDayOfWeek)day {
     SCScheduleManager *manager = [SCScheduleManager sharedManager];
-    SCWeeklySchedule *schedule = [manager scheduleForBundleID:bundle.bundleID];
+
+    // Remember which week we're editing
+    self.editingWeekOffset = self.currentWeekOffset;
+
+    SCWeeklySchedule *schedule = [manager scheduleForBundleID:bundle.bundleID weekOffset:self.editingWeekOffset];
 
     if (!schedule) {
-        schedule = [manager createScheduleForBundle:bundle];
+        schedule = [manager createScheduleForBundle:bundle weekOffset:self.editingWeekOffset];
     }
 
     self.dayEditorController = [[SCDayScheduleEditorController alloc] initWithBundle:bundle
                                                                             schedule:schedule
                                                                                  day:day];
     self.dayEditorController.delegate = self;
-    self.dayEditorController.isCommitted = manager.isCommitted;
+    self.dayEditorController.isCommitted = [manager isCommittedForWeekOffset:self.editingWeekOffset];
 
     [self.dayEditorController beginSheetModalForWindow:self.window completionHandler:nil];
 }
@@ -501,7 +529,7 @@
          didSaveSchedule:(SCWeeklySchedule *)schedule
                   forDay:(SCDayOfWeek)day {
     SCScheduleManager *manager = [SCScheduleManager sharedManager];
-    [manager updateSchedule:schedule];
+    [manager updateSchedule:schedule forWeekOffset:self.editingWeekOffset];
     self.dayEditorController = nil;
 }
 

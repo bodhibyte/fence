@@ -57,41 +57,49 @@ extern NSNotificationName const SCScheduleManagerDidChangeNotification;
 /// Creates an empty schedule for a new bundle
 - (SCWeeklySchedule *)createScheduleForBundle:(SCBlockBundle *)bundle;
 
-#pragma mark - Templates
-
-/// Saves current week setup as the default template
-- (void)saveCurrentAsDefaultTemplate;
-
-/// Loads the default template (called at week rollover)
-- (void)loadDefaultTemplate;
-
-/// Checks if a default template exists
-- (BOOL)hasDefaultTemplate;
-
-/// Clears the default template
-- (void)clearDefaultTemplate;
-
 #pragma mark - Week Settings
 
-/// Whether week starts on Monday (YES) or Sunday (NO)
-@property (nonatomic, assign) BOOL weekStartsOnMonday;
-
-/// Returns days to display based on current day and week start preference
+/// Returns remaining days in current week (always Mon-Sun)
 - (NSArray<NSNumber *> *)daysToDisplay;
 
-/// Returns all days in order based on week start preference
+/// Returns remaining days for a specific week offset (0 = this week, 1 = next week)
+- (NSArray<NSNumber *> *)daysToDisplayForWeekOffset:(NSInteger)weekOffset;
+
+/// Returns all days in order (always Mon-Sun)
 - (NSArray<NSNumber *> *)allDaysInOrder;
+
+#pragma mark - Multi-Week Schedules
+
+/// Gets all schedules for a specific week offset (0 = current, 1 = next)
+- (NSArray<SCWeeklySchedule *> *)schedulesForWeekOffset:(NSInteger)weekOffset;
+
+/// Gets schedule for a specific bundle and week offset
+- (nullable SCWeeklySchedule *)scheduleForBundleID:(NSString *)bundleID weekOffset:(NSInteger)weekOffset;
+
+/// Updates schedule for a specific week offset
+- (void)updateSchedule:(SCWeeklySchedule *)schedule forWeekOffset:(NSInteger)weekOffset;
+
+/// Creates an empty schedule for a bundle at a specific week offset
+- (SCWeeklySchedule *)createScheduleForBundle:(SCBlockBundle *)bundle weekOffset:(NSInteger)weekOffset;
 
 #pragma mark - Commitment
 
-/// Whether there's an active commitment
+/// Whether the current week has an active commitment
 @property (nonatomic, readonly) BOOL isCommitted;
 
-/// End date of current commitment (nil if not committed)
+/// End date of current week's commitment (nil if not committed)
 @property (nonatomic, readonly, nullable) NSDate *commitmentEndDate;
 
-/// Commits to the current week schedule (locks it)
-/// In UX-only mode, this just sets the flag without affecting blocking
+/// Checks if a specific week offset is committed
+- (BOOL)isCommittedForWeekOffset:(NSInteger)weekOffset;
+
+/// Gets commitment end date for a specific week offset
+- (nullable NSDate *)commitmentEndDateForWeekOffset:(NSInteger)weekOffset;
+
+/// Commits to a specific week (0 = current, 1 = next)
+- (void)commitToWeekWithOffset:(NSInteger)weekOffset;
+
+/// Legacy method - commits to current week
 - (void)commitToWeek;
 
 /// Checks if a change would make the schedule looser (not allowed when committed)

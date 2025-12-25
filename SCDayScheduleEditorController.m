@@ -707,7 +707,6 @@ static const CGFloat kTimelinePaddingBottom = 12.0; // Padding so bottom 12am la
 // UI Elements
 @property (nonatomic, strong) SCTimelineView *timelineView;
 @property (nonatomic, strong) NSTextField *titleLabel;
-@property (nonatomic, strong) NSPopUpButton *presetsButton;
 @property (nonatomic, strong) NSPopUpButton *duplicateFromDayButton;
 @property (nonatomic, strong) NSPopUpButton *applyToButton;
 @property (nonatomic, strong) NSButton *deleteWindowButton;
@@ -719,6 +718,7 @@ static const CGFloat kTimelinePaddingBottom = 12.0; // Padding so bottom 12am la
 @property (nonatomic, strong) NSDatePicker *startTimePicker;
 @property (nonatomic, strong) NSDatePicker *endTimePicker;
 @property (nonatomic, assign) NSInteger editingBlockIndex;
+@property (nonatomic, assign) BOOL deletedBlocksWhileCommitted; // Track if blocks deleted during committed session
 
 @end
 
@@ -778,29 +778,9 @@ static const CGFloat kTimelinePaddingBottom = 12.0; // Padding so bottom 12am la
     legendLabel.drawsBackground = NO;
     [contentView addSubview:legendLabel];
 
-    // Presets dropdown
-    y -= 35;
-    NSTextField *presetsLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(padding, y, 60, 20)];
-    presetsLabel.stringValue = @"Presets:";
-    presetsLabel.font = [NSFont systemFontOfSize:12];
-    presetsLabel.bezeled = NO;
-    presetsLabel.editable = NO;
-    presetsLabel.drawsBackground = NO;
-    [contentView addSubview:presetsLabel];
-
-    self.presetsButton = [[NSPopUpButton alloc] initWithFrame:NSMakeRect(75, y - 2, 170, 24) pullsDown:YES];
-    [self.presetsButton addItemWithTitle:@"Apply Preset..."];
-    [self.presetsButton addItemWithTitle:@"Work Hours (9am-5pm)"];
-    [self.presetsButton addItemWithTitle:@"Extended Work (8am-8pm)"];
-    [self.presetsButton addItemWithTitle:@"Waking Hours (7am-11pm)"];
-    [self.presetsButton addItemWithTitle:@"All Day (always allowed)"];
-    [self.presetsButton addItemWithTitle:@"Clear All (always blocked)"];
-    self.presetsButton.target = self;
-    self.presetsButton.action = @selector(presetSelected:);
-    [contentView addSubview:self.presetsButton];
-
     // Add time block button ("+") - use SF Symbol for cleaner appearance
-    self.addTimeBlockButton = [[NSButton alloc] initWithFrame:NSMakeRect(250, y - 2, 34, 24)];
+    y -= 35;
+    self.addTimeBlockButton = [[NSButton alloc] initWithFrame:NSMakeRect(padding, y - 2, 34, 24)];
     if (@available(macOS 11.0, *)) {
         NSImage *plusImage = [NSImage imageWithSystemSymbolName:@"plus" accessibilityDescription:@"Add"];
         NSImageSymbolConfiguration *config = [NSImageSymbolConfiguration configurationWithPointSize:14 weight:NSFontWeightMedium];
@@ -911,53 +891,6 @@ static const CGFloat kTimelinePaddingBottom = 12.0; // Padding so bottom 12am la
 
 #pragma mark - Actions
 
-- (void)presetSelected:(id)sender {
-    NSInteger index = self.presetsButton.indexOfSelectedItem;
-    if (index <= 0) return;
-
-    NSArray<SCTimeRange *> *windows = @[];
-
-    switch (index) {
-        case 1: // Work Hours
-            windows = @[[SCTimeRange workHours]];
-            break;
-        case 2: // Extended Work
-            windows = @[[SCTimeRange extendedWork]];
-            break;
-        case 3: // Waking Hours
-            windows = @[[SCTimeRange wakingHours]];
-            break;
-        case 4: // All Day
-            windows = @[[SCTimeRange allDay]];
-            break;
-        case 5: // Clear All
-            windows = @[];
-            break;
-    }
-
-    // Check commitment - can only make stricter
-    if (self.isCommitted) {
-        NSInteger currentTotal = [self.workingSchedule totalAllowedMinutesForDay:self.day];
-        NSInteger newTotal = 0;
-        for (SCTimeRange *r in windows) {
-            newTotal += [r durationMinutes];
-        }
-        if (newTotal > currentTotal) {
-            NSAlert *alert = [[NSAlert alloc] init];
-            alert.messageText = @"Cannot Loosen Schedule";
-            alert.informativeText = @"You're committed to this week. You can only make the schedule stricter.";
-            [alert runModal];
-            return;
-        }
-    }
-
-    self.timelineView.allowedWindows = [windows mutableCopy];
-    [self.timelineView setNeedsDisplay:YES];
-    [self timelineWindowsChanged];
-
-    [self.presetsButton selectItemAtIndex:0];
-}
-
 - (void)copyFromSelected:(id)sender {
     NSInteger index = self.duplicateFromDayButton.indexOfSelectedItem;
     if (index <= 0) return;
@@ -1056,6 +989,20 @@ static const CGFloat kTimelinePaddingBottom = 12.0; // Padding so bottom 12am la
             [self mergeOverlappingBlocks];
             [self timelineWindowsChanged];
         } else {
+            return;  // User cancelled
+        }
+    }
+
+    // Warn if blocks were deleted while committed (can't be re-added)
+    if (self.deletedBlocksWhileCommitted) {
+        NSAlert *alert = [[NSAlert alloc] init];
+        alert.messageText = @"Confirm Schedule Change";
+        alert.informativeText = @"You deleted time blocks while committed. These changes make your schedule stricter and cannot be undone until the commitment expires. Are you sure?";
+        [alert addButtonWithTitle:@"Save Changes"];
+        [alert addButtonWithTitle:@"Cancel"];
+        alert.alertStyle = NSAlertStyleWarning;
+
+        if ([alert runModal] != NSAlertFirstButtonReturn) {
             return;  // User cancelled
         }
     }
@@ -1382,12 +1329,9 @@ static const CGFloat kTimelinePaddingBottom = 12.0; // Padding so bottom 12am la
 - (void)deleteBlockAtIndex:(NSInteger)blockIndex {
     if (blockIndex < 0 || blockIndex >= (NSInteger)self.timelineView.allowedWindows.count) return;
 
+    // Track if we're deleting while committed (for confirmation on save)
     if (self.isCommitted) {
-        NSAlert *alert = [[NSAlert alloc] init];
-        alert.messageText = @"Cannot Delete Blocks";
-        alert.informativeText = @"You're committed to this week. You cannot delete allowed time blocks.";
-        [alert runModal];
-        return;
+        self.deletedBlocksWhileCommitted = YES;
     }
 
     // Use undo-aware deletion

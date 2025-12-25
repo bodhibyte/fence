@@ -117,6 +117,18 @@ typedef NS_ENUM(NSInteger, SCDayOfWeek) {
 /// Returns all days in order based on week start preference
 + (NSArray<NSNumber *> *)allDaysStartingMonday:(BOOL)startsOnMonday;
 
+/// Returns the Monday of the current week
++ (NSDate *)startOfCurrentWeek;
+
+/// Returns the Monday of next week
++ (NSDate *)startOfNextWeek;
+
+/// Returns the Monday of the week containing the given date
++ (NSDate *)startOfWeekContaining:(NSDate *)date;
+
+/// Returns a string key for storing week data (e.g., "2024-12-23")
++ (NSString *)weekKeyForDate:(NSDate *)date;
+
 @end
 
 NS_ASSUME_NONNULL_END

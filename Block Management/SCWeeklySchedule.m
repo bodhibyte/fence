@@ -373,6 +373,38 @@
     }
 }
 
++ (NSDate *)startOfCurrentWeek {
+    return [self startOfWeekContaining:[NSDate date]];
+}
+
++ (NSDate *)startOfNextWeek {
+    NSCalendar *calendar = [NSCalendar currentCalendar];
+    NSDate *currentWeekStart = [self startOfCurrentWeek];
+    return [calendar dateByAddingUnit:NSCalendarUnitDay value:7 toDate:currentWeekStart options:0];
+}
+
++ (NSDate *)startOfWeekContaining:(NSDate *)date {
+    NSCalendar *calendar = [NSCalendar currentCalendar];
+    NSDateComponents *components = [calendar components:NSCalendarUnitWeekday fromDate:date];
+    NSInteger weekday = components.weekday; // 1 = Sunday, 2 = Monday, ...
+
+    // Calculate days to subtract to get to Monday
+    // If Sunday (1), go back 6 days; if Monday (2), go back 0; if Tuesday (3), go back 1, etc.
+    NSInteger daysToMonday = (weekday == 1) ? -6 : -(weekday - 2);
+
+    NSDate *monday = [calendar dateByAddingUnit:NSCalendarUnitDay value:daysToMonday toDate:date options:0];
+
+    // Normalize to start of day
+    return [calendar startOfDayForDate:monday];
+}
+
++ (NSString *)weekKeyForDate:(NSDate *)date {
+    NSDate *weekStart = [self startOfWeekContaining:date];
+    NSDateFormatter *formatter = [[NSDateFormatter alloc] init];
+    formatter.dateFormat = @"yyyy-MM-dd";
+    return [formatter stringFromDate:weekStart];
+}
+
 #pragma mark - NSCopying
 
 - (id)copyWithZone:(NSZone *)zone {

@@ -47,7 +47,6 @@ static const CGFloat kTimelineHeight = 48.0;
 
 - (void)commonInit {
     _showOnlyRemainingDays = YES;
-    _weekStartsOnMonday = YES;
     _isCommitted = NO;
     _highlightedDay = -1;
     _hoveredBundleIndex = -1;
@@ -88,9 +87,9 @@ static const CGFloat kTimelineHeight = 48.0;
 
 - (NSArray<NSNumber *> *)daysToShow {
     if (self.showOnlyRemainingDays) {
-        return [SCWeeklySchedule remainingDaysInWeekStartingMonday:self.weekStartsOnMonday];
+        return [SCWeeklySchedule remainingDaysInWeekStartingMonday:YES];
     }
-    return [SCWeeklySchedule allDaysStartingMonday:self.weekStartsOnMonday];
+    return [SCWeeklySchedule allDaysStartingMonday:YES];
 }
 
 #pragma mark - Layout Calculations

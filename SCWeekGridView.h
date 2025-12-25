@@ -45,9 +45,6 @@ NS_ASSUME_NONNULL_BEGIN
 /// Whether the view should only show remaining days (today forward)
 @property (nonatomic, assign) BOOL showOnlyRemainingDays;
 
-/// Whether week starts on Monday (YES) or Sunday (NO)
-@property (nonatomic, assign) BOOL weekStartsOnMonday;
-
 /// Whether the schedule is committed (affects editability display)
 @property (nonatomic, assign) BOOL isCommitted;
 

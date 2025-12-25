@@ -10,8 +10,8 @@ NSNotificationName const SCScheduleManagerDidChangeNotification = @"SCScheduleMa
 // NSUserDefaults keys (app-layer only, not in SCSettings)
 static NSString * const kBundlesKey = @"SCScheduleBundles";
 static NSString * const kSchedulesKey = @"SCWeeklySchedules";
-static NSString * const kDefaultTemplateKey = @"SCDefaultWeekTemplate";
-static NSString * const kWeekStartsMondayKey = @"SCWeekStartsOnMonday";
+static NSString * const kWeekSchedulesPrefix = @"SCWeekSchedules_"; // + week key (e.g., "2024-12-23")
+static NSString * const kWeekCommitmentPrefix = @"SCWeekCommitment_"; // + week key
 static NSString * const kCommitmentEndDateKey = @"SCCommitmentEndDate";
 static NSString * const kIsCommittedKey = @"SCIsCommitted";
 
@@ -19,6 +19,8 @@ static NSString * const kIsCommittedKey = @"SCIsCommitted";
 
 @property (nonatomic, strong) NSMutableArray<SCBlockBundle *> *mutableBundles;
 @property (nonatomic, strong) NSMutableArray<SCWeeklySchedule *> *mutableSchedules;
+// Cache for week-specific schedules: weekKey -> array of schedules
+@property (nonatomic, strong) NSMutableDictionary<NSString *, NSMutableArray<SCWeeklySchedule *> *> *weekSchedulesCache;
 
 @end
 
@@ -40,6 +42,7 @@ static NSString * const kIsCommittedKey = @"SCIsCommitted";
     if (self) {
         _mutableBundles = [NSMutableArray array];
         _mutableSchedules = [NSMutableArray array];
+        _weekSchedulesCache = [NSMutableDictionary dictionary];
         [self reload];
     }
     return self;
@@ -179,128 +182,206 @@ static NSString * const kIsCommittedKey = @"SCIsCommitted";
     return NSNotFound;
 }
 
-#pragma mark - Templates
-
-- (void)saveCurrentAsDefaultTemplate {
-    NSMutableArray *bundleDicts = [NSMutableArray array];
-    for (SCBlockBundle *bundle in self.mutableBundles) {
-        [bundleDicts addObject:[bundle toDictionary]];
-    }
-
-    NSMutableArray *scheduleDicts = [NSMutableArray array];
-    for (SCWeeklySchedule *schedule in self.mutableSchedules) {
-        [scheduleDicts addObject:[schedule toDictionary]];
-    }
-
-    NSDictionary *template = @{
-        @"bundles": bundleDicts,
-        @"schedules": scheduleDicts
-    };
-
-    [[NSUserDefaults standardUserDefaults] setObject:template forKey:kDefaultTemplateKey];
-    [[NSUserDefaults standardUserDefaults] synchronize];
-}
-
-- (void)loadDefaultTemplate {
-    NSDictionary *template = [[NSUserDefaults standardUserDefaults] objectForKey:kDefaultTemplateKey];
-    if (!template) return;
-
-    // Clear current data
-    [self.mutableBundles removeAllObjects];
-    [self.mutableSchedules removeAllObjects];
-
-    // Load bundles
-    NSArray *bundleDicts = template[@"bundles"];
-    for (NSDictionary *dict in bundleDicts) {
-        SCBlockBundle *bundle = [SCBlockBundle bundleFromDictionary:dict];
-        if (bundle) {
-            [self.mutableBundles addObject:bundle];
-        }
-    }
-
-    // Load schedules
-    NSArray *scheduleDicts = template[@"schedules"];
-    for (NSDictionary *dict in scheduleDicts) {
-        SCWeeklySchedule *schedule = [SCWeeklySchedule scheduleFromDictionary:dict];
-        if (schedule) {
-            [self.mutableSchedules addObject:schedule];
-        }
-    }
-
-    [self save];
-    [self postChangeNotification];
-}
-
-- (BOOL)hasDefaultTemplate {
-    return [[NSUserDefaults standardUserDefaults] objectForKey:kDefaultTemplateKey] != nil;
-}
-
-- (void)clearDefaultTemplate {
-    [[NSUserDefaults standardUserDefaults] removeObjectForKey:kDefaultTemplateKey];
-    [[NSUserDefaults standardUserDefaults] synchronize];
-}
-
 #pragma mark - Week Settings
 
-- (BOOL)weekStartsOnMonday {
-    return [[NSUserDefaults standardUserDefaults] boolForKey:kWeekStartsMondayKey];
-}
-
-- (void)setWeekStartsOnMonday:(BOOL)weekStartsOnMonday {
-    [[NSUserDefaults standardUserDefaults] setBool:weekStartsOnMonday forKey:kWeekStartsMondayKey];
-    [[NSUserDefaults standardUserDefaults] synchronize];
-    [self postChangeNotification];
-}
-
 - (NSArray<NSNumber *> *)daysToDisplay {
-    return [SCWeeklySchedule remainingDaysInWeekStartingMonday:self.weekStartsOnMonday];
+    return [self daysToDisplayForWeekOffset:0];
+}
+
+- (NSArray<NSNumber *> *)daysToDisplayForWeekOffset:(NSInteger)weekOffset {
+    if (weekOffset == 0) {
+        // Current week - show remaining days from today
+        return [SCWeeklySchedule remainingDaysInWeekStartingMonday:YES];
+    } else {
+        // Future weeks - show all days
+        return [SCWeeklySchedule allDaysStartingMonday:YES];
+    }
 }
 
 - (NSArray<NSNumber *> *)allDaysInOrder {
-    return [SCWeeklySchedule allDaysStartingMonday:self.weekStartsOnMonday];
+    return [SCWeeklySchedule allDaysStartingMonday:YES];
+}
+
+#pragma mark - Multi-Week Schedules
+
+- (NSString *)weekKeyForOffset:(NSInteger)weekOffset {
+    NSDate *weekStart;
+    if (weekOffset == 0) {
+        weekStart = [SCWeeklySchedule startOfCurrentWeek];
+    } else {
+        NSCalendar *calendar = [NSCalendar currentCalendar];
+        weekStart = [calendar dateByAddingUnit:NSCalendarUnitDay
+                                         value:weekOffset * 7
+                                        toDate:[SCWeeklySchedule startOfCurrentWeek]
+                                       options:0];
+    }
+    return [SCWeeklySchedule weekKeyForDate:weekStart];
+}
+
+- (NSArray<SCWeeklySchedule *> *)schedulesForWeekOffset:(NSInteger)weekOffset {
+    NSString *weekKey = [self weekKeyForOffset:weekOffset];
+
+    // Check cache first
+    if (self.weekSchedulesCache[weekKey]) {
+        return [self.weekSchedulesCache[weekKey] copy];
+    }
+
+    // Load from NSUserDefaults
+    NSString *storageKey = [kWeekSchedulesPrefix stringByAppendingString:weekKey];
+    NSArray *scheduleDicts = [[NSUserDefaults standardUserDefaults] objectForKey:storageKey];
+
+    NSMutableArray<SCWeeklySchedule *> *schedules = [NSMutableArray array];
+    for (NSDictionary *dict in scheduleDicts) {
+        SCWeeklySchedule *schedule = [SCWeeklySchedule scheduleFromDictionary:dict];
+        if (schedule) {
+            [schedules addObject:schedule];
+        }
+    }
+
+    // Cache the result
+    self.weekSchedulesCache[weekKey] = schedules;
+
+    return [schedules copy];
+}
+
+- (nullable SCWeeklySchedule *)scheduleForBundleID:(NSString *)bundleID weekOffset:(NSInteger)weekOffset {
+    NSArray<SCWeeklySchedule *> *schedules = [self schedulesForWeekOffset:weekOffset];
+    for (SCWeeklySchedule *schedule in schedules) {
+        if ([schedule.bundleID isEqualToString:bundleID]) {
+            return schedule;
+        }
+    }
+    return nil;
+}
+
+- (void)updateSchedule:(SCWeeklySchedule *)schedule forWeekOffset:(NSInteger)weekOffset {
+    // Check commitment constraint
+    if ([self isCommittedForWeekOffset:weekOffset]) {
+        SCWeeklySchedule *oldSchedule = [self scheduleForBundleID:schedule.bundleID weekOffset:weekOffset];
+        if (oldSchedule) {
+            for (SCDayOfWeek day = SCDayOfWeekSunday; day <= SCDayOfWeekSaturday; day++) {
+                if ([self changeWouldLoosenSchedule:oldSchedule toSchedule:schedule forDay:day]) {
+                    NSLog(@"Rejecting schedule change that would loosen restrictions while committed");
+                    return;
+                }
+            }
+        }
+    }
+
+    NSString *weekKey = [self weekKeyForOffset:weekOffset];
+
+    // Ensure cache is loaded
+    [self schedulesForWeekOffset:weekOffset];
+
+    NSMutableArray<SCWeeklySchedule *> *schedules = self.weekSchedulesCache[weekKey];
+    if (!schedules) {
+        schedules = [NSMutableArray array];
+        self.weekSchedulesCache[weekKey] = schedules;
+    }
+
+    // Find and update or add
+    NSInteger index = NSNotFound;
+    for (NSUInteger i = 0; i < schedules.count; i++) {
+        if ([schedules[i].bundleID isEqualToString:schedule.bundleID]) {
+            index = i;
+            break;
+        }
+    }
+
+    if (index != NSNotFound) {
+        schedules[index] = schedule;
+    } else {
+        [schedules addObject:schedule];
+    }
+
+    // Save to NSUserDefaults
+    [self saveSchedulesForWeekOffset:weekOffset];
+    [self postChangeNotification];
+}
+
+- (SCWeeklySchedule *)createScheduleForBundle:(SCBlockBundle *)bundle weekOffset:(NSInteger)weekOffset {
+    SCWeeklySchedule *schedule = [SCWeeklySchedule emptyScheduleForBundleID:bundle.bundleID];
+
+    NSString *weekKey = [self weekKeyForOffset:weekOffset];
+
+    // Ensure cache exists
+    if (!self.weekSchedulesCache[weekKey]) {
+        self.weekSchedulesCache[weekKey] = [NSMutableArray array];
+    }
+
+    [self.weekSchedulesCache[weekKey] addObject:schedule];
+    [self saveSchedulesForWeekOffset:weekOffset];
+
+    return schedule;
+}
+
+- (void)saveSchedulesForWeekOffset:(NSInteger)weekOffset {
+    NSString *weekKey = [self weekKeyForOffset:weekOffset];
+    NSString *storageKey = [kWeekSchedulesPrefix stringByAppendingString:weekKey];
+
+    NSMutableArray *scheduleDicts = [NSMutableArray array];
+    for (SCWeeklySchedule *schedule in self.weekSchedulesCache[weekKey]) {
+        [scheduleDicts addObject:[schedule toDictionary]];
+    }
+
+    [[NSUserDefaults standardUserDefaults] setObject:scheduleDicts forKey:storageKey];
+    [[NSUserDefaults standardUserDefaults] synchronize];
 }
 
 #pragma mark - Commitment
 
 - (BOOL)isCommitted {
-    // Check if we have a commitment that hasn't expired
-    NSDate *endDate = self.commitmentEndDate;
-    if (!endDate) return NO;
-
-    return [endDate timeIntervalSinceNow] > 0;
+    return [self isCommittedForWeekOffset:0];
 }
 
 - (nullable NSDate *)commitmentEndDate {
-    return [[NSUserDefaults standardUserDefaults] objectForKey:kCommitmentEndDateKey];
+    return [self commitmentEndDateForWeekOffset:0];
+}
+
+- (BOOL)isCommittedForWeekOffset:(NSInteger)weekOffset {
+    NSDate *endDate = [self commitmentEndDateForWeekOffset:weekOffset];
+    if (!endDate) return NO;
+    return [endDate timeIntervalSinceNow] > 0;
+}
+
+- (nullable NSDate *)commitmentEndDateForWeekOffset:(NSInteger)weekOffset {
+    NSString *weekKey = [self weekKeyForOffset:weekOffset];
+    NSString *storageKey = [kWeekCommitmentPrefix stringByAppendingString:weekKey];
+    return [[NSUserDefaults standardUserDefaults] objectForKey:storageKey];
 }
 
 - (void)commitToWeek {
-    // Calculate end of week based on week start preference
+    [self commitToWeekWithOffset:0];
+}
+
+- (void)commitToWeekWithOffset:(NSInteger)weekOffset {
     NSCalendar *calendar = [NSCalendar currentCalendar];
-    NSDate *now = [NSDate date];
 
-    // Find the end of the current week
-    NSDateComponents *components = [calendar components:(NSCalendarUnitYearForWeekOfYear | NSCalendarUnitWeekOfYear)
-                                               fromDate:now];
-
-    // Set to end of week (Sunday 23:59:59 or Saturday 23:59:59)
-    if (self.weekStartsOnMonday) {
-        // Week ends Sunday
-        components.weekday = 1; // Sunday
+    // Get the Monday of the target week
+    NSDate *weekStart;
+    if (weekOffset == 0) {
+        weekStart = [SCWeeklySchedule startOfCurrentWeek];
     } else {
-        // Week ends Saturday
-        components.weekday = 7; // Saturday
+        weekStart = [calendar dateByAddingUnit:NSCalendarUnitDay
+                                         value:weekOffset * 7
+                                        toDate:[SCWeeklySchedule startOfCurrentWeek]
+                                       options:0];
     }
 
-    NSDate *endOfWeek = [calendar dateFromComponents:components];
+    // Week ends on Sunday (6 days after Monday) at 23:59:59
+    NSDate *endOfWeek = [calendar dateByAddingUnit:NSCalendarUnitDay value:6 toDate:weekStart options:0];
+    // Move to end of day
+    NSDateComponents *endOfDayComponents = [calendar components:(NSCalendarUnitYear | NSCalendarUnitMonth | NSCalendarUnitDay)
+                                                       fromDate:endOfWeek];
+    endOfDayComponents.hour = 23;
+    endOfDayComponents.minute = 59;
+    endOfDayComponents.second = 59;
+    endOfWeek = [calendar dateFromComponents:endOfDayComponents];
 
-    // Add a day to get to the very end
-    endOfWeek = [calendar dateByAddingUnit:NSCalendarUnitDay value:1 toDate:endOfWeek options:0];
-    // Subtract 1 second to get 23:59:59
-    endOfWeek = [endOfWeek dateByAddingTimeInterval:-1];
-
-    [[NSUserDefaults standardUserDefaults] setObject:endOfWeek forKey:kCommitmentEndDateKey];
-    [[NSUserDefaults standardUserDefaults] setBool:YES forKey:kIsCommittedKey];
+    // Store with week-specific key
+    NSString *weekKey = [self weekKeyForOffset:weekOffset];
+    NSString *storageKey = [kWeekCommitmentPrefix stringByAppendingString:weekKey];
+    [[NSUserDefaults standardUserDefaults] setObject:endOfWeek forKey:storageKey];
     [[NSUserDefaults standardUserDefaults] synchronize];
 
     [self postChangeNotification];
