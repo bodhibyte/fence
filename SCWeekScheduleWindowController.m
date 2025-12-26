@@ -469,7 +469,7 @@
     alert.informativeText = [NSString stringWithFormat:
                              @"Once committed, you can only make the schedule stricter (reduce allowed time). "
                              @"This commitment lasts until %@.\n\n"
-                             @"This is UX testing mode - actual blocking is not connected yet.", lastDay];
+                             @"Blocking will start immediately for any in-progress block windows.", lastDay];
     [alert addButtonWithTitle:@"Commit"];
     [alert addButtonWithTitle:@"Cancel"];
 

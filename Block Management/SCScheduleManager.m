@@ -4,6 +4,9 @@
 //
 
 #import "SCScheduleManager.h"
+#import "SCScheduleLaunchdBridge.h"
+#import "SCBlockUtilities.h"
+#import "SCXPCClient.h"
 
 NSNotificationName const SCScheduleManagerDidChangeNotification = @"SCScheduleManagerDidChangeNotification";
 
@@ -90,6 +93,44 @@ static NSString * const kIsCommittedKey = @"SCIsCommitted";
     if (index != NSNotFound) {
         self.mutableBundles[index] = bundle;
         [self save];
+
+        // ═══════════════════════════════════════════════════════════════════════════
+        // Live strictify: If committed and a block is running, update the active block
+        // ═══════════════════════════════════════════════════════════════════════════
+
+        if ([self isCommittedForWeekOffset:0]) {
+            // Always update the blocklist file for future jobs
+            SCScheduleLaunchdBridge *bridge = [[SCScheduleLaunchdBridge alloc] init];
+            NSError *error = nil;
+            [bridge writeBlocklistFileForBundle:bundle error:&error];
+            if (error) {
+                NSLog(@"WARNING: Failed to update blocklist file for bundle %@: %@", bundle.name, error);
+            }
+
+            // If a block is currently running, update it via XPC
+            if ([SCBlockUtilities anyBlockIsRunning]) {
+                NSLog(@"SCScheduleManager: Block is running, updating active blocklist for bundle %@", bundle.name);
+
+                SCXPCClient *xpc = [[SCXPCClient alloc] init];
+                [xpc connectAndExecuteCommandBlock:^(NSError *connectError) {
+                    if (connectError) {
+                        NSLog(@"ERROR: Failed to connect to daemon for blocklist update: %@", connectError);
+                        return;
+                    }
+
+                    [xpc updateBlocklist:bundle.entries reply:^(NSError *updateError) {
+                        if (updateError) {
+                            NSLog(@"ERROR: Failed to update active blocklist: %@", updateError);
+                        } else {
+                            NSLog(@"SCScheduleManager: Successfully updated active blocklist for bundle %@", bundle.name);
+                        }
+                    }];
+                }];
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════════════════════
+
         [self postChangeNotification];
     }
 }
@@ -378,7 +419,51 @@ static NSString * const kIsCommittedKey = @"SCIsCommitted";
     endOfDayComponents.second = 59;
     endOfWeek = [calendar dateFromComponents:endOfDayComponents];
 
-    // Store with week-specific key
+    // ═══════════════════════════════════════════════════════════════════════════
+    // NEW: Install launchd jobs for each enabled bundle
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    SCScheduleLaunchdBridge *bridge = [[SCScheduleLaunchdBridge alloc] init];
+    NSError *error = nil;
+
+    for (SCBlockBundle *bundle in self.mutableBundles) {
+        if (!bundle.enabled) {
+            NSLog(@"SCScheduleManager: Skipping disabled bundle %@", bundle.name);
+            continue;
+        }
+
+        // 1. Write blocklist file for this bundle
+        NSURL *blocklistURL = [bridge writeBlocklistFileForBundle:bundle error:&error];
+        if (!blocklistURL) {
+            NSLog(@"ERROR: Failed to write blocklist for bundle %@: %@", bundle.name, error);
+            continue;
+        }
+
+        // 2. Get schedule for this bundle (use week-specific if available, else default)
+        SCWeeklySchedule *schedule = [self scheduleForBundleID:bundle.bundleID weekOffset:weekOffset];
+        if (!schedule) {
+            schedule = [self scheduleForBundleID:bundle.bundleID];
+        }
+        if (!schedule) {
+            NSLog(@"SCScheduleManager: No schedule found for bundle %@, creating empty", bundle.name);
+            schedule = [SCWeeklySchedule emptyScheduleForBundleID:bundle.bundleID];
+        }
+
+        // 3. Install launchd jobs for this bundle's schedule
+        BOOL success = [bridge installJobsForBundle:bundle
+                                           schedule:schedule
+                                         weekOffset:weekOffset
+                                              error:&error];
+        if (!success) {
+            NSLog(@"ERROR: Failed to install launchd jobs for bundle %@: %@", bundle.name, error);
+        } else {
+            NSLog(@"SCScheduleManager: Installed launchd jobs for bundle %@", bundle.name);
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    // Store commitment end date with week-specific key
     NSString *weekKey = [self weekKeyForOffset:weekOffset];
     NSString *storageKey = [kWeekCommitmentPrefix stringByAppendingString:weekKey];
     [[NSUserDefaults standardUserDefaults] setObject:endOfWeek forKey:storageKey];
@@ -431,11 +516,51 @@ static NSString * const kIsCommittedKey = @"SCIsCommitted";
 
 - (void)clearCommitmentForDebug {
 #ifdef DEBUG
+    // Uninstall all launchd jobs
+    SCScheduleLaunchdBridge *bridge = [[SCScheduleLaunchdBridge alloc] init];
+    [bridge uninstallAllScheduleJobs:nil];
+
+    // Clear commitment metadata
     [[NSUserDefaults standardUserDefaults] removeObjectForKey:kCommitmentEndDateKey];
     [[NSUserDefaults standardUserDefaults] setBool:NO forKey:kIsCommittedKey];
+
+    // Clear week-specific commitment keys
+    NSString *currentWeekKey = [self weekKeyForOffset:0];
+    NSString *nextWeekKey = [self weekKeyForOffset:1];
+    [[NSUserDefaults standardUserDefaults] removeObjectForKey:[kWeekCommitmentPrefix stringByAppendingString:currentWeekKey]];
+    [[NSUserDefaults standardUserDefaults] removeObjectForKey:[kWeekCommitmentPrefix stringByAppendingString:nextWeekKey]];
+
     [[NSUserDefaults standardUserDefaults] synchronize];
     [self postChangeNotification];
+
+    NSLog(@"SCScheduleManager: Cleared all commitments and launchd jobs (DEBUG)");
 #endif
+}
+
+- (void)cleanupExpiredCommitments {
+    SCScheduleLaunchdBridge *bridge = [[SCScheduleLaunchdBridge alloc] init];
+
+    // Check recent weeks for expired commitments
+    for (NSInteger weekOffset = -4; weekOffset <= 0; weekOffset++) {
+        NSDate *commitmentEnd = [self commitmentEndDateForWeekOffset:weekOffset];
+        if (commitmentEnd && [commitmentEnd timeIntervalSinceNow] < 0) {
+            // This week's commitment has expired - uninstall its jobs
+            NSString *weekKey = [self weekKeyForOffset:weekOffset];
+
+            NSLog(@"SCScheduleManager: Cleaning up expired commitment for week %@", weekKey);
+
+            // Uninstall jobs for all bundles from that week
+            for (SCBlockBundle *bundle in self.mutableBundles) {
+                [bridge uninstallJobsForBundleID:bundle.bundleID error:nil];
+            }
+
+            // Clear the commitment metadata
+            NSString *storageKey = [kWeekCommitmentPrefix stringByAppendingString:weekKey];
+            [[NSUserDefaults standardUserDefaults] removeObjectForKey:storageKey];
+        }
+    }
+
+    [[NSUserDefaults standardUserDefaults] synchronize];
 }
 
 #pragma mark - Status Display
@@ -459,7 +584,11 @@ static NSString * const kIsCommittedKey = @"SCIsCommitted";
 }
 
 - (NSString *)statusStringForBundleID:(NSString *)bundleID {
-    SCWeeklySchedule *schedule = [self scheduleForBundleID:bundleID];
+    // Check week-specific schedule first (current week), then fall back to base
+    SCWeeklySchedule *schedule = [self scheduleForBundleID:bundleID weekOffset:0];
+    if (!schedule) {
+        schedule = [self scheduleForBundleID:bundleID];
+    }
     if (!schedule) {
         return @"No schedule";
     }
@@ -467,7 +596,11 @@ static NSString * const kIsCommittedKey = @"SCIsCommitted";
 }
 
 - (BOOL)wouldBundleBeAllowed:(NSString *)bundleID {
-    SCWeeklySchedule *schedule = [self scheduleForBundleID:bundleID];
+    // Check week-specific schedule first (current week), then fall back to base
+    SCWeeklySchedule *schedule = [self scheduleForBundleID:bundleID weekOffset:0];
+    if (!schedule) {
+        schedule = [self scheduleForBundleID:bundleID];
+    }
     if (!schedule) {
         return NO; // No schedule = blocked by default
     }

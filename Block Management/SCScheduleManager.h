@@ -110,6 +110,10 @@ extern NSNotificationName const SCScheduleManagerDidChangeNotification;
 /// Clears commitment (for testing/debug only)
 - (void)clearCommitmentForDebug;
 
+/// Cleans up expired commitments and their launchd jobs
+/// Called on app launch and periodically
+- (void)cleanupExpiredCommitments;
+
 #pragma mark - Status Display (UX Only)
 
 /// Returns what the status WOULD be if blocking were active
