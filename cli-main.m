@@ -47,7 +47,7 @@ int main(int argc, char* argv[]) {
           * versionSig = [XPMArgumentSignature argumentSignatureWithFormat:@"[version --version -v]"];
         NSArray * signatures = @[controllingUIDSig, startSig, blocklistSig, blockEndDateSig, blockSettingsSig, scheduleIdSig, removeSig, printSettingsSig, isRunningSig, versionSig];
         XPMArgumentPackage * arguments = [[NSProcessInfo processInfo] xpmargs_parseArgumentsWithSignatures:signatures];
-        
+
         // We'll need the controlling UID to know what settings to read
         // try reading it from the command-line, otherwise if we're not root we use the current uid
         uid_t controllingUID = (uid_t)[[arguments firstObjectForSignature: controllingUIDSig] intValue];

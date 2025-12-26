@@ -707,13 +707,14 @@
     };
 
     // Build the plist - use --schedule-id instead of --blocklist for pre-authorized blocks
+    // Note: XPMArgumentParser requires --flag=value format (not --flag value)
     NSDictionary *plist = @{
         @"Label": label,
         @"ProgramArguments": @[
             cliPath,
             @"start",
-            @"--schedule-id", segmentID,
-            @"--enddate", endDateStr
+            [NSString stringWithFormat:@"--schedule-id=%@", segmentID],
+            [NSString stringWithFormat:@"--enddate=%@", endDateStr]
         ],
         @"StartCalendarInterval": calendarInterval,
         @"RunAtLoad": @NO,
