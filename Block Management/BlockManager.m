@@ -117,6 +117,10 @@ BOOL appendMode = NO;
     [hostBlockerSet writeNewFileContents];
     [pf finishAppending];
     [pf refreshPFRules];
+
+    // Kill any newly-added blocked apps immediately (app entries are added via addBlockEntry:)
+    [self.appBlocker findAndKillBlockedApps];
+
     appendMode = NO;
 }
 
