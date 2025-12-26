@@ -492,6 +492,32 @@ static NSString * const kIsCommittedKey = @"SCIsCommitted";
 
         NSLog(@"SCScheduleManager: Installing %lu segment-based jobs", (unsigned long)segments.count);
 
+        // Install daemon ONCE before registering any schedules (will prompt for password)
+        SCXPCClient *xpc = [SCXPCClient new];
+        dispatch_semaphore_t daemonSema = dispatch_semaphore_create(0);
+        __block NSError *daemonError = nil;
+
+        [xpc installDaemon:^(NSError *err) {
+            daemonError = err;
+            dispatch_semaphore_signal(daemonSema);
+        }];
+
+        // Wait for daemon installation (use run loop to avoid main thread deadlock)
+        if (![NSThread isMainThread]) {
+            dispatch_semaphore_wait(daemonSema, DISPATCH_TIME_FOREVER);
+        } else {
+            while (dispatch_semaphore_wait(daemonSema, DISPATCH_TIME_NOW)) {
+                [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.1]];
+            }
+        }
+
+        if (daemonError) {
+            NSLog(@"ERROR: Failed to install daemon for schedule commit: %@", daemonError);
+            return; // Can't proceed without daemon
+        }
+
+        NSLog(@"SCScheduleManager: Daemon installed, proceeding with schedule registration");
+
         // Install a job for each segment
         for (SCBlockSegment *segment in segments) {
             // Skip segments that have already passed (for current week)

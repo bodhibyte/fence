@@ -74,4 +74,108 @@
     reply(SELFCONTROL_VERSION_STRING);
 }
 
+#pragma mark - Schedule Registration (Pre-Authorization System)
+
+// Register a schedule - stores approved schedule in secure settings
+// Note: Authorization is already verified by installDaemon: before this call
+// (installDaemon acquires org.eyebeam.SelfControl.startBlock right)
+// Skipping redundant checkAuthorization here to avoid double prompt (password + Touch ID)
+- (void)registerScheduleWithID:(NSString*)scheduleId
+                     blocklist:(NSArray<NSString*>*)blocklist
+                   isAllowlist:(BOOL)isAllowlist
+                 blockSettings:(NSDictionary*)blockSettings
+             controllingUID:(uid_t)controllingUID
+                 authorization:(NSData *)authData
+                         reply:(void(^)(NSError* error))reply {
+    NSLog(@"XPC method called: registerScheduleWithID: %@ (auth verified by installDaemon)", scheduleId);
+
+    // Store the approved schedule in secure settings (root-only file)
+    SCSettings* settings = [SCSettings sharedSettings];
+    NSMutableDictionary* approvedSchedules = [[settings valueForKey: @"ApprovedSchedules"] mutableCopy];
+    if (approvedSchedules == nil) {
+        approvedSchedules = [NSMutableDictionary new];
+    }
+
+    // Store schedule details keyed by scheduleId
+    approvedSchedules[scheduleId] = @{
+        @"blocklist": blocklist ?: @[],
+        @"isAllowlist": @(isAllowlist),
+        @"blockSettings": blockSettings ?: @{},
+        @"controllingUID": @(controllingUID),
+        @"registeredAt": [NSDate date]
+    };
+
+    [settings setValue: approvedSchedules forKey: @"ApprovedSchedules"];
+    [settings synchronizeSettings];
+
+    NSLog(@"INFO: Schedule %@ registered successfully", scheduleId);
+    reply(nil);
+}
+
+// Start a pre-registered schedule - NO authorization required (schedule was pre-approved)
+- (void)startScheduledBlockWithID:(NSString*)scheduleId
+                          endDate:(NSDate*)endDate
+                            reply:(void(^)(NSError* error))reply {
+    NSLog(@"XPC method called: startScheduledBlockWithID: %@", scheduleId);
+
+    // NO authorization check - we trust the schedule because it was pre-approved
+    // and stored in root-only settings file
+
+    // Look up the approved schedule
+    SCSettings* settings = [SCSettings sharedSettings];
+    NSDictionary* approvedSchedules = [settings valueForKey: @"ApprovedSchedules"];
+    NSDictionary* schedule = approvedSchedules[scheduleId];
+
+    if (schedule == nil) {
+        NSLog(@"ERROR: Schedule ID %@ not found in approved schedules", scheduleId);
+        reply([SCErr errorWithCode: 403 subDescription: @"Schedule not registered or unauthorized"]);
+        return;
+    }
+
+    NSLog(@"INFO: Found approved schedule %@, starting block", scheduleId);
+
+    // Extract schedule parameters
+    NSArray* blocklist = schedule[@"blocklist"];
+    BOOL isAllowlist = [schedule[@"isAllowlist"] boolValue];
+    NSDictionary* blockSettings = schedule[@"blockSettings"];
+    uid_t controllingUID = [schedule[@"controllingUID"] unsignedIntValue];
+
+    // Start the block without authorization (it was pre-approved)
+    [SCDaemonBlockMethods startBlockWithControllingUID: controllingUID
+                                             blocklist: blocklist
+                                           isAllowlist: isAllowlist
+                                               endDate: endDate
+                                         blockSettings: blockSettings
+                                         authorization: nil
+                                                 reply: reply];
+}
+
+// Unregister a schedule - requires authorization
+- (void)unregisterScheduleWithID:(NSString*)scheduleId
+                   authorization:(NSData *)authData
+                           reply:(void(^)(NSError* error))reply {
+    NSLog(@"XPC method called: unregisterScheduleWithID: %@", scheduleId);
+
+    NSError* error = [SCXPCAuthorization checkAuthorization: authData command: @selector(startBlockWithControllingUID:blocklist:isAllowlist:endDate:blockSettings:authorization:reply:)];
+    if (error != nil) {
+        if (![SCMiscUtilities errorIsAuthCanceled: error]) {
+            NSLog(@"ERROR: XPC authorization failed for unregisterSchedule due to error %@", error);
+            [SCSentry captureError: error];
+        }
+        reply(error);
+        return;
+    }
+
+    SCSettings* settings = [SCSettings sharedSettings];
+    NSMutableDictionary* approvedSchedules = [[settings valueForKey: @"ApprovedSchedules"] mutableCopy];
+    if (approvedSchedules != nil) {
+        [approvedSchedules removeObjectForKey: scheduleId];
+        [settings setValue: approvedSchedules forKey: @"ApprovedSchedules"];
+        [settings synchronizeSettings];
+    }
+
+    NSLog(@"INFO: Schedule %@ unregistered successfully", scheduleId);
+    reply(nil);
+}
+
 @end

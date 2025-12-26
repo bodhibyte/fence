@@ -1,83 +1,158 @@
-# Warmstart: Weekly Schedule → CLI Bridge
+# Warmstart: Pre-Authorized Scheduled Blocks (No Password Per Segment)
 
-## Current State
+## Current Status: WORKING ✅
 
-**Blocking connection is NOW DONE.** When you commit, launchd jobs are created and blocks start.
+Both "Start Block" (manual) and "Commit to Week" (scheduled) now install the daemon automatically. Password is prompted once at commit time, then all scheduled segments start without prompts.
 
-### What's Working
+---
 
-1. **Weekly Schedule UX** (committed, working):
-   - `SCWeekScheduleWindowController` - main window
-   - `SCWeekGridView` - visual grid (bundles × days)
-   - `SCScheduleManager` - app-side storage in NSUserDefaults
-   - `SCBlockBundle`, `SCWeeklySchedule`, `SCTimeRange` - data models
-   - Access: `Debug > Week Schedule (New UX)...` or `Cmd+Option+W`
+## What We Built
 
-2. **launchd Bridge** (NEW - implemented):
-   - `SCScheduleLaunchdBridge` - creates/manages launchd jobs
-   - Jobs stored in: `~/Library/LaunchAgents/org.eyebeam.selfcontrol.schedule.*.plist`
-   - Blocklist files: `~/Library/Application Support/SelfControl/Schedules/*.selfcontrol`
+**Goal:** When user commits to a weekly schedule, only prompt for password ONCE at commit time. All subsequent scheduled blocks should start without password prompts.
 
-3. **Features Implemented**:
-   - ✅ Commit creates launchd jobs for future block windows
-   - ✅ In-progress blocks start immediately on commit
-   - ✅ Live strictifying: adding sites/apps to bundle updates running block
-   - ✅ App strictifying fixed (findAndKillBlockedApps in finishAppending)
-   - ✅ Debug clear removes all schedule jobs
-   - ✅ Status bar reads from week-specific schedules (not base)
+**Why it was prompting every time:**
+1. Daemon auto-terminates after 2 min idle (calls `SMJobRemove`)
+2. Next scheduled block triggers CLI
+3. CLI calls `installDaemon:` → `SMJobBless` → password prompt
 
-## Known Issues / TODO
+---
 
-### Base Storage vs Week-Specific Storage (NEEDS CLEANUP)
+## Architecture: Pre-Authorization "Ticket" System
 
-There are **two schedule storage systems** that may be out of sync:
+### The Flow
 
-| Storage | Key | Accessed Via |
-|---------|-----|--------------|
-| Base/Default | `SCWeeklySchedules` | `scheduleForBundleID:` |
-| Week-Specific | `SCWeekSchedules_2024-12-22` | `scheduleForBundleID:weekOffset:` |
+```
+COMMIT TIME (password required once):
+  App → registerScheduleWithID → daemon stores in root-only settings
+  App → creates launchd jobs with --schedule-id (not --blocklist)
 
-**Problem:** The Week UI edits week-specific storage, but base storage may have stale data.
+SCHEDULED TIME (no password):
+  launchd → selfcontrol-cli start --schedule-id UUID --enddate ISO8601
+  CLI → startScheduledBlockWithID → daemon looks up pre-approved schedule
+  daemon → starts block (no auth check needed)
+```
 
-**Recommendation:** Either:
-1. Remove base storage entirely, always use week-specific
-2. Or sync them when edits happen
+### New XPC Methods Added
 
-For now, code tries week-specific first, falls back to base. Works but confusing.
+| Method | Auth Required? | Purpose |
+|--------|---------------|---------|
+| `registerScheduleWithID:blocklist:isAllowlist:blockSettings:controllingUID:authorization:reply:` | YES | Store approved schedule in daemon |
+| `startScheduledBlockWithID:endDate:reply:` | NO | Start pre-approved schedule |
+| `unregisterScheduleWithID:authorization:reply:` | YES | Remove approved schedule |
 
-## Key Files
+---
 
-| File | Purpose |
+## Files Modified
+
+| File | Changes |
 |------|---------|
-| `Block Management/SCScheduleLaunchdBridge.h/m` | NEW - launchd job management |
-| `Block Management/SCScheduleManager.m` | `commitToWeekWithOffset:` installs jobs |
-| `Block Management/BlockManager.m` | `finishAppending` now kills apps immediately |
-| `cli-main.m` | CLI entry point - unchanged |
-| `SCWeekScheduleWindowController.m` | UI controller |
+| `Daemon/SCDaemonProtocol.h` | Added 3 new XPC method signatures |
+| `Daemon/SCDaemonXPC.m` | Implemented the 3 methods |
+| `Daemon/SCDaemon.m` | Disabled inactivity termination (daemon runs forever) |
+| `Common/SCXPCClient.h/m` | Added client-side methods for schedule registration |
+| `cli-main.m` | Added `--schedule-id` argument, uses `startScheduledBlockWithID` |
+| `Block Management/SCScheduleLaunchdBridge.m` | Registers schedules at commit, uses `--schedule-id` in launchd plists |
+
+---
+
+## Key Code Locations
+
+### Daemon stores approved schedules
+`Daemon/SCDaemonXPC.m` lines 79-123:
+- `registerScheduleWithID:` stores schedule in `SCSettings` (root-only file)
+- Keyed by UUID, contains blocklist, settings, controllingUID
+
+### Daemon starts scheduled block (no auth)
+`Daemon/SCDaemonXPC.m` lines 125-161:
+- `startScheduledBlockWithID:` looks up UUID in settings
+- If found, calls `SCDaemonBlockMethods.startBlock` with `authorization:nil`
+
+### CLI handles --schedule-id
+`cli-main.m` lines 89-127:
+- If `--schedule-id` is passed, uses `startScheduledBlockWithID` (no password)
+- Otherwise uses old flow with `installDaemon` (password required)
+
+### Bridge registers at commit time
+`Block Management/SCScheduleLaunchdBridge.m` lines 616-730:
+- `installJobForSegmentWithBundles:` registers schedule with daemon first
+- Then creates launchd plist with `--schedule-id` instead of `--blocklist`
+
+---
+
+## Bugs Fixed
+
+### 1. Deadlock on main thread
+**Problem:** `dispatch_semaphore_wait` blocked main thread while XPC callback needed main thread.
+
+**Fix:** Use run loop-based wait:
+```objc
+if (![NSThread isMainThread]) {
+    dispatch_semaphore_wait(sema, DISPATCH_TIME_FOREVER);
+} else {
+    while (dispatch_semaphore_wait(sema, DISPATCH_TIME_NOW)) {
+        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.1]];
+    }
+}
+```
+
+### 2. Daemon not found after protocol changes
+**Problem:** Old daemon binary doesn't have new XPC methods, crashes on call.
+
+**Fix:** Reinstall daemon:
+```bash
+sudo launchctl unload /Library/LaunchDaemons/org.eyebeam.selfcontrold.plist
+sudo rm -f /Library/LaunchDaemons/org.eyebeam.selfcontrold.plist
+sudo rm -f /Library/PrivilegedHelperTools/org.eyebeam.selfcontrold
+```
+Then start a manual block to trigger `SMJobBless`.
+
+---
 
 ## Testing
 
+### To verify daemon is running:
 ```bash
-# Check launchd jobs
-ls ~/Library/LaunchAgents/org.eyebeam.selfcontrol.schedule.*
-
-# Check blocklist files
-ls ~/Library/Application\ Support/SelfControl/Schedules/
-
-# View job content
-cat ~/Library/LaunchAgents/org.eyebeam.selfcontrol.schedule.*.plist
-
-# Check if jobs are loaded
-launchctl list | grep selfcontrol.schedule
-
-# View logs
-log show --predicate 'process == "SelfControl"' --last 5m | grep -i schedule
+ps aux | grep selfcontrold
 ```
 
-## Debug Cleanup
+### To verify schedule registration worked:
+Check daemon logs for:
+```
+XPC method called: registerScheduleWithID: <UUID>
+INFO: Schedule <UUID> registered successfully
+```
 
-Use **Debug > Clear Week Commitment** in the app, or manually:
+### To verify launchd plists use --schedule-id:
 ```bash
-launchctl unload ~/Library/LaunchAgents/org.eyebeam.selfcontrol.schedule.*.plist
-rm ~/Library/LaunchAgents/org.eyebeam.selfcontrol.schedule.*.plist
+cat ~/Library/LaunchAgents/org.eyebeam.selfcontrol.schedule.*.plist | grep schedule-id
+```
+
+Should show `--schedule-id` not `--blocklist`.
+
+---
+
+## Next Steps
+
+1. **Start a manual block** to install the new daemon (will prompt for password)
+2. **Then try committing to schedule** - should only prompt once at commit
+3. **Wait for next scheduled segment** - should start without password
+
+---
+
+## Debug Commands
+
+```bash
+# Check daemon status
+ps aux | grep selfcontrold
+launchctl list | grep selfcontrold
+
+# Check launchd schedule jobs
+ls ~/Library/LaunchAgents/org.eyebeam.selfcontrol.schedule.*
+launchctl list | grep selfcontrol.schedule
+
+# View daemon logs
+log show --predicate 'process == "org.eyebeam.selfcontrold"' --last 5m
+
+# View schedule job logs
+cat /tmp/selfcontrol-schedule.log
 ```

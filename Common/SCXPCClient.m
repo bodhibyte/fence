@@ -365,6 +365,93 @@
     }];
 }
 
+#pragma mark - Schedule Registration (Pre-Authorization System)
+
+- (void)registerScheduleWithID:(NSString*)scheduleId
+                     blocklist:(NSArray<NSString*>*)blocklist
+                   isAllowlist:(BOOL)isAllowlist
+                 blockSettings:(NSDictionary*)blockSettings
+             controllingUID:(uid_t)controllingUID
+                         reply:(void(^)(NSError* error))reply {
+    [self connectAndExecuteCommandBlock:^(NSError * connectError) {
+        if (connectError != nil) {
+            NSLog(@"Register schedule failed with connection error: %@", connectError);
+            [SCSentry captureError: connectError];
+            reply(connectError);
+        } else {
+            [[self.daemonConnection remoteObjectProxyWithErrorHandler:^(NSError * proxyError) {
+                NSLog(@"Register schedule failed with remote object proxy error: %@", proxyError);
+                [SCSentry captureError: proxyError];
+                reply(proxyError);
+            }] registerScheduleWithID: scheduleId
+                            blocklist: blocklist
+                          isAllowlist: isAllowlist
+                        blockSettings: blockSettings
+                        controllingUID: controllingUID
+                        authorization: self.authorization
+                                reply:^(NSError* error) {
+                if (error != nil && ![SCMiscUtilities errorIsAuthCanceled: error]) {
+                    NSLog(@"Register schedule failed with error = %@\n", error);
+                    [SCSentry captureError: error];
+                }
+                reply(error);
+            }];
+        }
+    }];
+}
+
+- (void)startScheduledBlockWithID:(NSString*)scheduleId
+                          endDate:(NSDate*)endDate
+                            reply:(void(^)(NSError* error))reply {
+    // Note: This method does NOT require authorization - the schedule was pre-approved
+    [self connectAndExecuteCommandBlock:^(NSError * connectError) {
+        if (connectError != nil) {
+            NSLog(@"Start scheduled block failed with connection error: %@", connectError);
+            [SCSentry captureError: connectError];
+            reply(connectError);
+        } else {
+            [[self.daemonConnection remoteObjectProxyWithErrorHandler:^(NSError * proxyError) {
+                NSLog(@"Start scheduled block failed with remote object proxy error: %@", proxyError);
+                [SCSentry captureError: proxyError];
+                reply(proxyError);
+            }] startScheduledBlockWithID: scheduleId
+                                 endDate: endDate
+                                   reply:^(NSError* error) {
+                if (error != nil) {
+                    NSLog(@"Start scheduled block failed with error = %@\n", error);
+                    [SCSentry captureError: error];
+                }
+                reply(error);
+            }];
+        }
+    }];
+}
+
+- (void)unregisterScheduleWithID:(NSString*)scheduleId
+                           reply:(void(^)(NSError* error))reply {
+    [self connectAndExecuteCommandBlock:^(NSError * connectError) {
+        if (connectError != nil) {
+            NSLog(@"Unregister schedule failed with connection error: %@", connectError);
+            [SCSentry captureError: connectError];
+            reply(connectError);
+        } else {
+            [[self.daemonConnection remoteObjectProxyWithErrorHandler:^(NSError * proxyError) {
+                NSLog(@"Unregister schedule failed with remote object proxy error: %@", proxyError);
+                [SCSentry captureError: proxyError];
+                reply(proxyError);
+            }] unregisterScheduleWithID: scheduleId
+                          authorization: self.authorization
+                                  reply:^(NSError* error) {
+                if (error != nil && ![SCMiscUtilities errorIsAuthCanceled: error]) {
+                    NSLog(@"Unregister schedule failed with error = %@\n", error);
+                    [SCSentry captureError: error];
+                }
+                reply(error);
+            }];
+        }
+    }];
+}
+
 - (NSString*)selfControlHelperToolPath {
     static NSString* path;
 

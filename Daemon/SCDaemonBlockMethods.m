@@ -106,10 +106,36 @@ NSTimeInterval CHECKUP_LOCK_TIMEOUT = 0.5; // use a shorter lock timeout for che
         return;
     }
 
+    // Log block summary for debugging
+    NSMutableArray *appEntries = [NSMutableArray array];
+    NSMutableArray *siteEntries = [NSMutableArray array];
+    for (id entry in blocklist) {
+        NSString *entryStr = nil;
+        if ([entry isKindOfClass:[NSString class]]) {
+            entryStr = entry;
+        } else if ([entry isKindOfClass:[NSDictionary class]]) {
+            entryStr = [entry objectForKey:@"HostName"];
+        }
+        if (entryStr) {
+            if ([entryStr hasPrefix:@"app:"]) {
+                [appEntries addObject:[entryStr substringFromIndex:4]];
+            } else {
+                [siteEntries addObject:entryStr];
+            }
+        }
+    }
+    NSLog(@"═══════════════════════════════════════════════════════════════");
+    NSLog(@"BLOCK STARTING - End: %@", [settings valueForKey:@"BlockEndDate"]);
+    NSLog(@"  Apps (%lu): %@", (unsigned long)appEntries.count,
+          appEntries.count > 0 ? [appEntries componentsJoinedByString:@", "] : @"(none)");
+    NSLog(@"  Sites (%lu): %@", (unsigned long)siteEntries.count,
+          siteEntries.count > 0 ? [siteEntries componentsJoinedByString:@", "] : @"(none)");
+    NSLog(@"═══════════════════════════════════════════════════════════════");
+
     NSLog(@"Adding firewall rules...");
     [SCHelperToolUtilities installBlockRulesFromSettings];
     [settings setValue: @YES forKey: @"BlockIsRunning"];
-    
+
     NSError* syncErr = [settings syncSettingsAndWait: 5]; // synchronize ASAP since BlockIsRunning is a really important one
     if (syncErr != nil) {
         NSLog(@"WARNING: Sync failed or timed out with error %@ after starting block", syncErr);

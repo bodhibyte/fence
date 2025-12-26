@@ -40,11 +40,12 @@ int main(int argc, char* argv[]) {
           * blocklistSig = [XPMArgumentSignature argumentSignatureWithFormat:@"[--blocklist -b]="],
           * blockEndDateSig = [XPMArgumentSignature argumentSignatureWithFormat:@"[--enddate -d]="],
           * blockSettingsSig = [XPMArgumentSignature argumentSignatureWithFormat:@"[--settings -s]="],
+          * scheduleIdSig = [XPMArgumentSignature argumentSignatureWithFormat:@"[--schedule-id]="],  // For pre-authorized scheduled blocks
           * removeSig = [XPMArgumentSignature argumentSignatureWithFormat:@"[remove --remove]"],
           * printSettingsSig = [XPMArgumentSignature argumentSignatureWithFormat:@"[print-settings --printsettings -p]"],
           * isRunningSig = [XPMArgumentSignature argumentSignatureWithFormat:@"[is-running --isrunning -r]"],
           * versionSig = [XPMArgumentSignature argumentSignatureWithFormat:@"[version --version -v]"];
-        NSArray * signatures = @[controllingUIDSig, startSig, blocklistSig, blockEndDateSig, blockSettingsSig, removeSig, printSettingsSig, isRunningSig, versionSig];
+        NSArray * signatures = @[controllingUIDSig, startSig, blocklistSig, blockEndDateSig, blockSettingsSig, scheduleIdSig, removeSig, printSettingsSig, isRunningSig, versionSig];
         XPMArgumentPackage * arguments = [[NSProcessInfo processInfo] xpmargs_parseArgumentsWithSignatures:signatures];
         
         // We'll need the controlling UID to know what settings to read
@@ -85,6 +86,47 @@ int main(int argc, char* argv[]) {
                 exit(EX_CONFIG);
             }
 
+            // Check if this is a pre-authorized scheduled block
+            NSString* scheduleId = [arguments firstObjectForSignature: scheduleIdSig];
+            if (scheduleId != nil && scheduleId.length > 0) {
+                // This is a scheduled block - use pre-authorized flow (NO password prompt)
+                NSLog(@"INFO: Starting pre-authorized scheduled block with ID: %@", scheduleId);
+
+                NSDate* blockEndDateArg = [[NSISO8601DateFormatter new] dateFromString: [arguments firstObjectForSignature: blockEndDateSig]];
+                if (blockEndDateArg == nil || [blockEndDateArg timeIntervalSinceNow] < 1) {
+                    NSLog(@"ERROR: Scheduled block requires valid --enddate in the future");
+                    exit(EX_USAGE);
+                }
+
+                SCXPCClient* xpc = [SCXPCClient new];
+                dispatch_semaphore_t scheduledBlockSema = dispatch_semaphore_create(0);
+
+                [xpc connectAndExecuteCommandBlock:^(NSError *connectError) {
+                    // Try to start the scheduled block (no password needed!)
+                    [xpc startScheduledBlockWithID: scheduleId
+                                           endDate: blockEndDateArg
+                                             reply:^(NSError * _Nonnull error) {
+                        if (error != nil) {
+                            NSLog(@"ERROR: Failed to start scheduled block with error %@", error);
+                            exit(EX_SOFTWARE);
+                            return;
+                        }
+                        NSLog(@"INFO: Scheduled block %@ successfully started.", scheduleId);
+                        dispatch_semaphore_signal(scheduledBlockSema);
+                    }];
+                }];
+
+                if (![NSThread isMainThread]) {
+                    dispatch_semaphore_wait(scheduledBlockSema, DISPATCH_TIME_FOREVER);
+                } else {
+                    while (dispatch_semaphore_wait(scheduledBlockSema, DISPATCH_TIME_NOW)) {
+                        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate: [NSDate date]];
+                    }
+                }
+                exit(EXIT_SUCCESS);
+            }
+
+            // Standard block flow (requires password)
             NSArray* blocklist;
             NSDate* blockEndDate;
             BOOL blockAsWhitelist = NO;
@@ -180,29 +222,45 @@ int main(int argc, char* argv[]) {
             // while our blocks are still running
             dispatch_semaphore_t installingBlockSema = dispatch_semaphore_create(0);
 
-            [xpc installDaemon:^(NSError * _Nonnull error) {
-                if (error != nil) {
-                    NSLog(@"ERROR: Failed to install daemon with error %@", error);
-                    exit(EX_SOFTWARE);
-                    return;
-                } else {
-                    // ok, the new helper tool is installed! refresh the connection, then it's time to start the block
-                    [xpc refreshConnectionAndRun:^{
-                        NSLog(@"Refreshed connection and ready to start block!");
-                        [xpc startBlockWithControllingUID: controllingUID
-                                                     blocklist: blocklist
-                                                   isAllowlist: blockAsWhitelist
-                                                       endDate: blockEndDate
-                                                 blockSettings: blockSettings
-                                                         reply:^(NSError * _Nonnull error) {
-                            if (error != nil) {
-                                NSLog(@"ERROR: Daemon failed to start block with error %@", error);
-                                exit(EX_SOFTWARE);
-                                return;
-                            }
+            // Helper block to start the block once daemon is available
+            void (^startBlockOnDaemon)(void) = ^{
+                [xpc startBlockWithControllingUID: controllingUID
+                                        blocklist: blocklist
+                                      isAllowlist: blockAsWhitelist
+                                          endDate: blockEndDate
+                                    blockSettings: blockSettings
+                                            reply:^(NSError * _Nonnull error) {
+                    if (error != nil) {
+                        NSLog(@"ERROR: Daemon failed to start block with error %@", error);
+                        exit(EX_SOFTWARE);
+                        return;
+                    }
 
-                            NSLog(@"INFO: Block successfully added.");
-                            dispatch_semaphore_signal(installingBlockSema);
+                    NSLog(@"INFO: Block successfully added.");
+                    dispatch_semaphore_signal(installingBlockSema);
+                }];
+            };
+
+            // Try to connect to existing daemon first (no password prompt needed)
+            // Only install daemon if connection fails
+            [xpc connectAndExecuteCommandBlock:^(NSError *connectError) {
+                if (connectError == nil) {
+                    // Daemon already running, start block directly (no password needed!)
+                    NSLog(@"INFO: Connected to existing daemon, starting block without reinstall.");
+                    startBlockOnDaemon();
+                } else {
+                    // Daemon not running, need to install (will prompt for password)
+                    NSLog(@"INFO: Daemon not running, installing (password required)...");
+                    [xpc installDaemon:^(NSError * _Nonnull error) {
+                        if (error != nil) {
+                            NSLog(@"ERROR: Failed to install daemon with error %@", error);
+                            exit(EX_SOFTWARE);
+                            return;
+                        }
+                        // Daemon installed, refresh connection and start block
+                        [xpc refreshConnectionAndRun:^{
+                            NSLog(@"Refreshed connection and ready to start block!");
+                            startBlockOnDaemon();
                         }];
                     }];
                 }

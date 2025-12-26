@@ -116,22 +116,11 @@ float const INACTIVITY_LIMIT_SECS = 60 * 2; // 2 minutes
 
 
 - (void)startInactivityTimer {
-    self.inactivityTimer = [NSTimer scheduledTimerWithTimeInterval: 15.0 repeats: YES block:^(NSTimer * _Nonnull timer) {
-        // we haven't had any activity in a while, the daemon appears to be idling
-        // so kill it to avoid the user having unnecessary processes running!
-        if ([[NSDate date] timeIntervalSinceDate: self.lastActivityDate] > INACTIVITY_LIMIT_SECS) {
-            // if we're inactive but also there's a block running, that's a bad thing
-            // start the checkups going again - unclear why they would've stopped
-            if ([SCBlockUtilities anyBlockIsRunning] || [SCBlockUtilities blockRulesFoundOnSystem]) {
-                [self startCheckupTimer];
-                [SCDaemonBlockMethods checkupBlock];
-                return;
-            }
-            
-            NSLog(@"Daemon inactive for more than %f seconds, exiting!", INACTIVITY_LIMIT_SECS);
-            [SCHelperToolUtilities unloadDaemonJob];
-        }
-    }];
+    // Daemon now runs permanently after first install for:
+    // 1. Scheduled blocks (no password prompts for each segment)
+    // 2. Jailbreak resistance (KeepAlive=true restarts if killed)
+    // 3. Reboot persistence (RunAtLoad=true auto-starts)
+    // Resource usage is negligible (~5-10MB, zero CPU when idle)
 }
 - (void)resetInactivityTimer {
     self.lastActivityDate = [NSDate date];

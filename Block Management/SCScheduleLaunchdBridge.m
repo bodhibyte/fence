@@ -7,6 +7,7 @@
 
 #import "SCScheduleLaunchdBridge.h"
 #import "SCBlockFileReaderWriter.h"
+#import "SCXPCClient.h"
 
 #pragma mark - SCBlockWindow Implementation
 
@@ -632,11 +633,57 @@
         return NO;
     }
 
-    // Write merged blocklist file
-    NSURL *blocklistURL = [self writeMergedBlocklistForBundles:bundles segmentID:segmentID error:error];
-    if (!blocklistURL) {
+    // Merge blocklists from all bundles
+    NSMutableArray *mergedEntries = [NSMutableArray array];
+    for (SCBlockBundle *bundle in bundles) {
+        [mergedEntries addObjectsFromArray:bundle.entries ?: @[]];
+    }
+
+    // Get block settings from user defaults
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    NSDictionary *blockSettings = @{
+        @"ClearCaches": [defaults objectForKey:@"ClearCaches"] ?: @NO,
+        @"AllowLocalNetworks": [defaults objectForKey:@"AllowLocalNetworks"] ?: @YES,
+        @"EvaluateCommonSubdomains": [defaults objectForKey:@"EvaluateCommonSubdomains"] ?: @YES,
+        @"IncludeLinkedDomains": [defaults objectForKey:@"IncludeLinkedDomains"] ?: @YES,
+        @"BlockSoundShouldPlay": [defaults objectForKey:@"BlockSoundShouldPlay"] ?: @NO,
+        @"BlockSound": [defaults objectForKey:@"BlockSound"] ?: @5,
+        @"EnableErrorReporting": [defaults objectForKey:@"EnableErrorReporting"] ?: @YES
+    };
+
+    // Register the schedule with the daemon (daemon must already be installed by caller)
+    // The schedule is stored in root-owned settings, so future triggers don't need password
+    SCXPCClient *xpc = [SCXPCClient new];
+    dispatch_semaphore_t registerSema = dispatch_semaphore_create(0);
+    __block NSError *registerError = nil;
+
+    [xpc registerScheduleWithID:segmentID
+                      blocklist:mergedEntries
+                    isAllowlist:NO
+                  blockSettings:blockSettings
+              controllingUID:getuid()
+                          reply:^(NSError *err) {
+        registerError = err;
+        dispatch_semaphore_signal(registerSema);
+    }];
+
+    // Wait for registration
+    // Use run loop-based wait to avoid deadlock when called from main thread
+    if (![NSThread isMainThread]) {
+        dispatch_semaphore_wait(registerSema, DISPATCH_TIME_FOREVER);
+    } else {
+        while (dispatch_semaphore_wait(registerSema, DISPATCH_TIME_NOW)) {
+            [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.1]];
+        }
+    }
+
+    if (registerError) {
+        NSLog(@"ERROR: Failed to register schedule %@ with daemon: %@", segmentID, registerError);
+        if (error) *error = registerError;
         return NO;
     }
+
+    NSLog(@"SCScheduleLaunchdBridge: Registered schedule %@ with daemon", segmentID);
 
     // Format end date as ISO8601
     NSISO8601DateFormatter *isoFormatter = [[NSISO8601DateFormatter alloc] init];
@@ -659,13 +706,13 @@
         @"Minute": @(minute)
     };
 
-    // Build the plist
+    // Build the plist - use --schedule-id instead of --blocklist for pre-authorized blocks
     NSDictionary *plist = @{
         @"Label": label,
         @"ProgramArguments": @[
             cliPath,
             @"start",
-            @"--blocklist", blocklistURL.path,
+            @"--schedule-id", segmentID,
             @"--enddate", endDateStr
         ],
         @"StartCalendarInterval": calendarInterval,
@@ -696,60 +743,63 @@
                                         error:(NSError **)error {
     NSLog(@"SCScheduleLaunchdBridge: Starting merged block immediately for segment %@ until %@", segmentID, endDate);
 
-    // Write merged blocklist file
-    NSURL *blocklistURL = [self writeMergedBlocklistForBundles:bundles segmentID:segmentID error:error];
-    if (!blocklistURL) {
-        return NO;
+    // Merge blocklists from all bundles
+    NSMutableArray *mergedEntries = [NSMutableArray array];
+    for (SCBlockBundle *bundle in bundles) {
+        [mergedEntries addObjectsFromArray:bundle.entries ?: @[]];
     }
 
-    NSString *cliPath = [SCScheduleLaunchdBridge cliPath];
-    if (!cliPath) {
-        NSLog(@"ERROR: Cannot start block without CLI path");
-        if (error) {
-            *error = [NSError errorWithDomain:@"SCScheduleLaunchdBridge"
-                                         code:1
-                                     userInfo:@{NSLocalizedDescriptionKey: @"CLI path not found"}];
+    // Get block settings from user defaults
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    NSDictionary *blockSettings = @{
+        @"ClearCaches": [defaults objectForKey:@"ClearCaches"] ?: @NO,
+        @"AllowLocalNetworks": [defaults objectForKey:@"AllowLocalNetworks"] ?: @YES,
+        @"EvaluateCommonSubdomains": [defaults objectForKey:@"EvaluateCommonSubdomains"] ?: @YES,
+        @"IncludeLinkedDomains": [defaults objectForKey:@"IncludeLinkedDomains"] ?: @YES,
+        @"BlockSoundShouldPlay": [defaults objectForKey:@"BlockSoundShouldPlay"] ?: @NO,
+        @"BlockSound": [defaults objectForKey:@"BlockSound"] ?: @5,
+        @"EnableErrorReporting": [defaults objectForKey:@"EnableErrorReporting"] ?: @YES
+    };
+
+    // Register and start the block via XPC (this will prompt for password)
+    SCXPCClient *xpc = [SCXPCClient new];
+    dispatch_semaphore_t sema = dispatch_semaphore_create(0);
+    __block NSError *xpcError = nil;
+
+    // First register the schedule
+    [xpc registerScheduleWithID:segmentID
+                      blocklist:mergedEntries
+                    isAllowlist:NO
+                  blockSettings:blockSettings
+              controllingUID:getuid()
+                          reply:^(NSError *err) {
+        if (err) {
+            xpcError = err;
+            dispatch_semaphore_signal(sema);
+            return;
         }
-        return NO;
-    }
 
-    // Format end date as ISO8601
-    NSISO8601DateFormatter *isoFormatter = [[NSISO8601DateFormatter alloc] init];
-    isoFormatter.formatOptions = NSISO8601DateFormatWithInternetDateTime;
-    NSString *endDateStr = [isoFormatter stringFromDate:endDate];
+        // Then start it immediately
+        [xpc startScheduledBlockWithID:segmentID
+                               endDate:endDate
+                                 reply:^(NSError *startErr) {
+            xpcError = startErr;
+            dispatch_semaphore_signal(sema);
+        }];
+    }];
 
-    // Launch CLI directly
-    NSTask *task = [[NSTask alloc] init];
-    task.executableURL = [NSURL fileURLWithPath:cliPath];
-    task.arguments = @[@"start", @"--blocklist", blocklistURL.path, @"--enddate", endDateStr];
-
-    NSPipe *outputPipe = [NSPipe pipe];
-    NSPipe *errorPipe = [NSPipe pipe];
-    task.standardOutput = outputPipe;
-    task.standardError = errorPipe;
-
-    NSError *taskError = nil;
-    [task launchAndReturnError:&taskError];
-    if (taskError) {
-        NSLog(@"ERROR: Failed to launch CLI: %@", taskError);
-        if (error) *error = taskError;
-        return NO;
-    }
-
-    [task waitUntilExit];
-
-    NSData *outputData = [[outputPipe fileHandleForReading] readDataToEndOfFile];
-    NSData *errorData = [[errorPipe fileHandleForReading] readDataToEndOfFile];
-    NSString *outputStr = [[NSString alloc] initWithData:outputData encoding:NSUTF8StringEncoding];
-    NSString *errorStr = [[NSString alloc] initWithData:errorData encoding:NSUTF8StringEncoding];
-
-    if (task.terminationStatus != 0) {
-        NSLog(@"ERROR: CLI exited with status %d: %@ %@", task.terminationStatus, outputStr, errorStr);
-        if (error) {
-            *error = [NSError errorWithDomain:@"SCScheduleLaunchdBridge"
-                                         code:task.terminationStatus
-                                     userInfo:@{NSLocalizedDescriptionKey: errorStr ?: @"CLI failed"}];
+    // Use run loop-based wait to avoid deadlock when called from main thread
+    if (![NSThread isMainThread]) {
+        dispatch_semaphore_wait(sema, DISPATCH_TIME_FOREVER);
+    } else {
+        while (dispatch_semaphore_wait(sema, DISPATCH_TIME_NOW)) {
+            [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.1]];
         }
+    }
+
+    if (xpcError) {
+        NSLog(@"ERROR: Failed to start immediate block for segment %@: %@", segmentID, xpcError);
+        if (error) *error = xpcError;
         return NO;
     }
 
