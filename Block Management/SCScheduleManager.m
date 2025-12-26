@@ -18,6 +18,8 @@ static NSString * const kWeekCommitmentPrefix = @"SCWeekCommitment_"; // + week 
 static NSString * const kCommitmentEndDateKey = @"SCCommitmentEndDate";
 static NSString * const kIsCommittedKey = @"SCIsCommitted";
 
+@class SCBlockSegment;
+
 @interface SCScheduleManager ()
 
 @property (nonatomic, strong) NSMutableArray<SCBlockBundle *> *mutableBundles;
@@ -25,7 +27,48 @@ static NSString * const kIsCommittedKey = @"SCIsCommitted";
 // Cache for week-specific schedules: weekKey -> array of schedules
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSMutableArray<SCWeeklySchedule *> *> *weekSchedulesCache;
 
+// Forward declaration for segment-based merging
+- (NSArray<SCBlockSegment *> *)calculateBlockSegmentsForBundles:(NSArray<SCBlockBundle *> *)bundles
+                                                     weekOffset:(NSInteger)weekOffset
+                                                         bridge:(SCScheduleLaunchdBridge *)bridge;
+
 @end
+
+#pragma mark - SCBlockSegment (Internal Helper Class)
+
+/// A segment represents a time period with a specific set of active bundles
+@interface SCBlockSegment : NSObject
+@property (nonatomic, strong) NSDate *startDate;
+@property (nonatomic, strong) NSDate *endDate;
+@property (nonatomic, assign) SCDayOfWeek day;
+@property (nonatomic, assign) NSInteger startMinutes;
+@property (nonatomic, strong) NSMutableArray<SCBlockBundle *> *activeBundles;
+@property (nonatomic, strong) NSString *segmentID;
++ (instancetype)segmentWithStart:(NSDate *)start end:(NSDate *)end day:(SCDayOfWeek)day startMinutes:(NSInteger)minutes;
+@end
+
+@implementation SCBlockSegment
++ (instancetype)segmentWithStart:(NSDate *)start end:(NSDate *)end day:(SCDayOfWeek)day startMinutes:(NSInteger)minutes {
+    SCBlockSegment *seg = [[SCBlockSegment alloc] init];
+    seg.startDate = start;
+    seg.endDate = end;
+    seg.day = day;
+    seg.startMinutes = minutes;
+    seg.activeBundles = [NSMutableArray array];
+    seg.segmentID = [[NSUUID UUID] UUIDString];
+    return seg;
+}
+- (NSString *)description {
+    NSDateFormatter *fmt = [[NSDateFormatter alloc] init];
+    fmt.dateFormat = @"EEE HH:mm";
+    return [NSString stringWithFormat:@"<SCBlockSegment %@ - %@ bundles=%@>",
+            [fmt stringFromDate:self.startDate],
+            [fmt stringFromDate:self.endDate],
+            [self.activeBundles valueForKey:@"name"]];
+}
+@end
+
+#pragma mark - SCScheduleManager Implementation
 
 @implementation SCScheduleManager
 
@@ -420,44 +463,68 @@ static NSString * const kIsCommittedKey = @"SCIsCommitted";
     endOfWeek = [calendar dateFromComponents:endOfDayComponents];
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // NEW: Install launchd jobs for each enabled bundle
+    // Install launchd jobs using segment-based merging
     // ═══════════════════════════════════════════════════════════════════════════
 
     SCScheduleLaunchdBridge *bridge = [[SCScheduleLaunchdBridge alloc] init];
     NSError *error = nil;
 
+    // First, uninstall all existing schedule jobs
+    [bridge uninstallAllScheduleJobs:nil];
+
+    // Collect all enabled bundles
+    NSMutableArray<SCBlockBundle *> *enabledBundles = [NSMutableArray array];
     for (SCBlockBundle *bundle in self.mutableBundles) {
-        if (!bundle.enabled) {
-            NSLog(@"SCScheduleManager: Skipping disabled bundle %@", bundle.name);
-            continue;
-        }
-
-        // 1. Write blocklist file for this bundle
-        NSURL *blocklistURL = [bridge writeBlocklistFileForBundle:bundle error:&error];
-        if (!blocklistURL) {
-            NSLog(@"ERROR: Failed to write blocklist for bundle %@: %@", bundle.name, error);
-            continue;
-        }
-
-        // 2. Get schedule for this bundle (use week-specific if available, else default)
-        SCWeeklySchedule *schedule = [self scheduleForBundleID:bundle.bundleID weekOffset:weekOffset];
-        if (!schedule) {
-            schedule = [self scheduleForBundleID:bundle.bundleID];
-        }
-        if (!schedule) {
-            NSLog(@"SCScheduleManager: No schedule found for bundle %@, creating empty", bundle.name);
-            schedule = [SCWeeklySchedule emptyScheduleForBundleID:bundle.bundleID];
-        }
-
-        // 3. Install launchd jobs for this bundle's schedule
-        BOOL success = [bridge installJobsForBundle:bundle
-                                           schedule:schedule
-                                         weekOffset:weekOffset
-                                              error:&error];
-        if (!success) {
-            NSLog(@"ERROR: Failed to install launchd jobs for bundle %@: %@", bundle.name, error);
+        if (bundle.enabled) {
+            [enabledBundles addObject:bundle];
         } else {
-            NSLog(@"SCScheduleManager: Installed launchd jobs for bundle %@", bundle.name);
+            NSLog(@"SCScheduleManager: Skipping disabled bundle %@", bundle.name);
+        }
+    }
+
+    if (enabledBundles.count == 0) {
+        NSLog(@"SCScheduleManager: No enabled bundles to schedule");
+    } else {
+        // Calculate merged segments
+        NSArray<SCBlockSegment *> *segments = [self calculateBlockSegmentsForBundles:enabledBundles
+                                                                          weekOffset:weekOffset
+                                                                              bridge:bridge];
+
+        NSLog(@"SCScheduleManager: Installing %lu segment-based jobs", (unsigned long)segments.count);
+
+        // Install a job for each segment
+        for (SCBlockSegment *segment in segments) {
+            // Skip segments that have already passed (for current week)
+            if (weekOffset == 0 && [segment.startDate timeIntervalSinceNow] < 0) {
+                // Check if we're currently within this segment
+                if ([segment.endDate timeIntervalSinceNow] > 0) {
+                    // We're in the middle of this segment - start it immediately!
+                    NSLog(@"SCScheduleManager: In-progress segment %@ - starting immediately", segment);
+                    NSError *startError = nil;
+                    if (![bridge startMergedBlockImmediatelyForBundles:segment.activeBundles
+                                                            segmentID:segment.segmentID
+                                                              endDate:segment.endDate
+                                                                error:&startError]) {
+                        NSLog(@"WARNING: Failed to start in-progress segment: %@", startError);
+                    }
+                } else {
+                    NSLog(@"SCScheduleManager: Skipping past segment %@", segment);
+                }
+                continue;
+            }
+
+            // Install launchd job for this segment
+            BOOL success = [bridge installJobForSegmentWithBundles:segment.activeBundles
+                                                         segmentID:segment.segmentID
+                                                         startDate:segment.startDate
+                                                           endDate:segment.endDate
+                                                               day:segment.day
+                                                      startMinutes:segment.startMinutes
+                                                        weekOffset:weekOffset
+                                                             error:&error];
+            if (!success) {
+                NSLog(@"ERROR: Failed to install segment job: %@", error);
+            }
         }
     }
 
@@ -512,6 +579,109 @@ static NSString * const kIsCommittedKey = @"SCIsCommitted";
     }
 
     return NO;
+}
+
+#pragma mark - Segment-Based Block Merging
+
+- (NSArray<SCBlockSegment *> *)calculateBlockSegmentsForBundles:(NSArray<SCBlockBundle *> *)bundles
+                                                     weekOffset:(NSInteger)weekOffset
+                                                         bridge:(SCScheduleLaunchdBridge *)bridge {
+    // Step 1: Collect all block windows for all bundles, tagged with their bundle
+    NSMutableArray<NSDictionary *> *allWindows = [NSMutableArray array];
+
+    for (SCBlockBundle *bundle in bundles) {
+        SCWeeklySchedule *schedule = [self scheduleForBundleID:bundle.bundleID weekOffset:weekOffset];
+        if (!schedule) {
+            schedule = [self scheduleForBundleID:bundle.bundleID];
+        }
+        if (!schedule) {
+            schedule = [SCWeeklySchedule emptyScheduleForBundleID:bundle.bundleID];
+        }
+
+        NSArray<SCBlockWindow *> *windows = [bridge allBlockWindowsForSchedule:schedule weekOffset:weekOffset];
+        for (SCBlockWindow *window in windows) {
+            [allWindows addObject:@{
+                @"bundle": bundle,
+                @"window": window
+            }];
+        }
+    }
+
+    if (allWindows.count == 0) {
+        return @[];
+    }
+
+    // Step 2: Collect all unique transition times (start and end times)
+    NSMutableSet<NSDate *> *transitionTimes = [NSMutableSet set];
+    for (NSDictionary *entry in allWindows) {
+        SCBlockWindow *window = entry[@"window"];
+        [transitionTimes addObject:window.startDate];
+        [transitionTimes addObject:window.endDate];
+    }
+
+    // Sort transition times chronologically
+    NSArray<NSDate *> *sortedTimes = [[transitionTimes allObjects] sortedArrayUsingSelector:@selector(compare:)];
+
+    if (sortedTimes.count < 2) {
+        return @[];
+    }
+
+    // Step 3: For each pair of consecutive times, determine active bundles
+    NSMutableArray<SCBlockSegment *> *segments = [NSMutableArray array];
+    NSCalendar *calendar = [NSCalendar currentCalendar];
+
+    for (NSUInteger i = 0; i < sortedTimes.count - 1; i++) {
+        NSDate *segmentStart = sortedTimes[i];
+        NSDate *segmentEnd = sortedTimes[i + 1];
+
+        // Determine which bundles are active during this segment
+        // A bundle is active if its block window contains this segment
+        NSMutableArray<SCBlockBundle *> *activeBundles = [NSMutableArray array];
+
+        for (NSDictionary *entry in allWindows) {
+            SCBlockBundle *bundle = entry[@"bundle"];
+            SCBlockWindow *window = entry[@"window"];
+
+            // Check if this window covers the segment
+            // Window must start at or before segment start AND end at or after segment end
+            if ([window.startDate compare:segmentStart] != NSOrderedDescending &&
+                [window.endDate compare:segmentEnd] != NSOrderedAscending) {
+                // Avoid duplicates (same bundle may have multiple windows)
+                if (![activeBundles containsObject:bundle]) {
+                    [activeBundles addObject:bundle];
+                }
+            }
+        }
+
+        // Skip segments with no active bundles (these are allowed periods)
+        if (activeBundles.count == 0) {
+            continue;
+        }
+
+        // Apply 1-minute gap: end the segment 1 minute early
+        NSDate *adjustedEnd = [calendar dateByAddingUnit:NSCalendarUnitMinute value:-1 toDate:segmentEnd options:0];
+
+        // Get day and start minutes for launchd scheduling
+        NSDateComponents *startComponents = [calendar components:(NSCalendarUnitWeekday | NSCalendarUnitHour | NSCalendarUnitMinute)
+                                                        fromDate:segmentStart];
+        // Convert NSCalendar weekday (1=Sunday) to SCDayOfWeek (0=Sunday)
+        SCDayOfWeek day = (SCDayOfWeek)(startComponents.weekday - 1);
+        NSInteger startMinutes = startComponents.hour * 60 + startComponents.minute;
+
+        SCBlockSegment *segment = [SCBlockSegment segmentWithStart:segmentStart
+                                                               end:adjustedEnd
+                                                               day:day
+                                                      startMinutes:startMinutes];
+        [segment.activeBundles addObjectsFromArray:activeBundles];
+        [segments addObject:segment];
+    }
+
+    NSLog(@"SCScheduleManager: Calculated %lu segments from %lu bundles", (unsigned long)segments.count, (unsigned long)bundles.count);
+    for (SCBlockSegment *seg in segments) {
+        NSLog(@"  %@", seg);
+    }
+
+    return segments;
 }
 
 - (void)clearCommitmentForDebug {

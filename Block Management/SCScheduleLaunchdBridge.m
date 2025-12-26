@@ -366,8 +366,27 @@
     [unloadTask waitUntilExit];
     // Ignore unload errors - job might not be loaded
 
-    // Then delete the plist file
     NSFileManager *fm = [NSFileManager defaultManager];
+
+    // Delete associated blocklist file for merged segment jobs
+    // Label format: org.eyebeam.selfcontrol.schedule.merged-{UUID}.{day}.{time}
+    if ([label containsString:@".merged-"]) {
+        NSArray *parts = [label componentsSeparatedByString:@".merged-"];
+        if (parts.count > 1) {
+            NSString *remainder = parts[1];  // {UUID}.{day}.{time}
+            NSString *segmentID = [remainder componentsSeparatedByString:@"."].firstObject;
+            if (segmentID.length > 0) {
+                NSURL *blocklistURL = [[SCScheduleLaunchdBridge schedulesDirectory]
+                                       URLByAppendingPathComponent:[NSString stringWithFormat:@"%@.selfcontrol", segmentID]];
+                if ([fm fileExistsAtPath:blocklistURL.path]) {
+                    [fm removeItemAtURL:blocklistURL error:nil];
+                    NSLog(@"SCScheduleLaunchdBridge: Removed merged blocklist file %@", blocklistURL.path);
+                }
+            }
+        }
+    }
+
+    // Then delete the plist file
     if ([fm fileExistsAtPath:plistURL.path]) {
         NSError *removeError = nil;
         if (![fm removeItemAtURL:plistURL error:&removeError]) {
@@ -558,6 +577,185 @@
     }
 
     return labels;
+}
+
+#pragma mark - Segment-Based Merged Job Installation
+
+- (nullable NSURL *)writeMergedBlocklistForBundles:(NSArray<SCBlockBundle *> *)bundles
+                                         segmentID:(NSString *)segmentID
+                                             error:(NSError **)error {
+    // Merge all entries from all bundles, deduplicating
+    NSMutableOrderedSet *mergedEntries = [NSMutableOrderedSet orderedSet];
+    for (SCBlockBundle *bundle in bundles) {
+        [mergedEntries addObjectsFromArray:bundle.entries];
+    }
+
+    NSURL *fileURL = [[SCScheduleLaunchdBridge schedulesDirectory]
+                      URLByAppendingPathComponent:[NSString stringWithFormat:@"%@.selfcontrol", segmentID]];
+
+    NSDictionary *blockInfo = @{
+        @"Blocklist": mergedEntries.array,
+        @"BlockAsWhitelist": @NO
+    };
+
+    BOOL success = [SCBlockFileReaderWriter writeBlocklistToFileURL:fileURL
+                                                          blockInfo:blockInfo
+                                                              error:error];
+
+    if (!success) {
+        NSLog(@"ERROR: Failed to write merged blocklist for segment %@", segmentID);
+        return nil;
+    }
+
+    NSLog(@"SCScheduleLaunchdBridge: Wrote merged blocklist file to %@ with %lu entries from %lu bundles",
+          fileURL.path, (unsigned long)mergedEntries.count, (unsigned long)bundles.count);
+
+    return fileURL;
+}
+
+- (BOOL)installJobForSegmentWithBundles:(NSArray<SCBlockBundle *> *)bundles
+                              segmentID:(NSString *)segmentID
+                              startDate:(NSDate *)startDate
+                                endDate:(NSDate *)endDate
+                                    day:(SCDayOfWeek)day
+                           startMinutes:(NSInteger)startMinutes
+                             weekOffset:(NSInteger)weekOffset
+                                  error:(NSError **)error {
+    NSString *cliPath = [SCScheduleLaunchdBridge cliPath];
+    if (!cliPath) {
+        NSLog(@"ERROR: Cannot create plist without CLI path");
+        if (error) {
+            *error = [NSError errorWithDomain:@"SCScheduleLaunchdBridge"
+                                         code:1
+                                     userInfo:@{NSLocalizedDescriptionKey: @"CLI path not found"}];
+        }
+        return NO;
+    }
+
+    // Write merged blocklist file
+    NSURL *blocklistURL = [self writeMergedBlocklistForBundles:bundles segmentID:segmentID error:error];
+    if (!blocklistURL) {
+        return NO;
+    }
+
+    // Format end date as ISO8601
+    NSISO8601DateFormatter *isoFormatter = [[NSISO8601DateFormatter alloc] init];
+    isoFormatter.formatOptions = NSISO8601DateFormatWithInternetDateTime;
+    NSString *endDateStr = [isoFormatter stringFromDate:endDate];
+
+    // Job label: org.eyebeam.selfcontrol.schedule.merged-{segmentID}.{day}.{time}
+    NSString *dayStr = [[SCWeeklySchedule stringForDay:day] lowercaseString];
+    NSString *timeStr = [NSString stringWithFormat:@"%02ld%02ld", (long)(startMinutes / 60), (long)(startMinutes % 60)];
+    NSString *label = [NSString stringWithFormat:@"%@.merged-%@.%@.%@",
+                       [SCScheduleLaunchdBridge jobLabelPrefix], segmentID, dayStr, timeStr];
+
+    // Calculate StartCalendarInterval
+    NSInteger hour = startMinutes / 60;
+    NSInteger minute = startMinutes % 60;
+
+    NSDictionary *calendarInterval = @{
+        @"Weekday": @(day),
+        @"Hour": @(hour),
+        @"Minute": @(minute)
+    };
+
+    // Build the plist
+    NSDictionary *plist = @{
+        @"Label": label,
+        @"ProgramArguments": @[
+            cliPath,
+            @"start",
+            @"--blocklist", blocklistURL.path,
+            @"--enddate", endDateStr
+        ],
+        @"StartCalendarInterval": calendarInterval,
+        @"RunAtLoad": @NO,
+        @"StandardOutPath": @"/tmp/selfcontrol-schedule.log",
+        @"StandardErrorPath": @"/tmp/selfcontrol-schedule.log"
+    };
+
+    // Write plist
+    if (![self writeLaunchdPlist:plist toLabel:label error:error]) {
+        return NO;
+    }
+
+    // Load job
+    if (![self loadJobWithLabel:label error:error]) {
+        return NO;
+    }
+
+    NSLog(@"SCScheduleLaunchdBridge: Installed merged segment job %@ for bundles: %@",
+          label, [bundles valueForKey:@"name"]);
+
+    return YES;
+}
+
+- (BOOL)startMergedBlockImmediatelyForBundles:(NSArray<SCBlockBundle *> *)bundles
+                                    segmentID:(NSString *)segmentID
+                                      endDate:(NSDate *)endDate
+                                        error:(NSError **)error {
+    NSLog(@"SCScheduleLaunchdBridge: Starting merged block immediately for segment %@ until %@", segmentID, endDate);
+
+    // Write merged blocklist file
+    NSURL *blocklistURL = [self writeMergedBlocklistForBundles:bundles segmentID:segmentID error:error];
+    if (!blocklistURL) {
+        return NO;
+    }
+
+    NSString *cliPath = [SCScheduleLaunchdBridge cliPath];
+    if (!cliPath) {
+        NSLog(@"ERROR: Cannot start block without CLI path");
+        if (error) {
+            *error = [NSError errorWithDomain:@"SCScheduleLaunchdBridge"
+                                         code:1
+                                     userInfo:@{NSLocalizedDescriptionKey: @"CLI path not found"}];
+        }
+        return NO;
+    }
+
+    // Format end date as ISO8601
+    NSISO8601DateFormatter *isoFormatter = [[NSISO8601DateFormatter alloc] init];
+    isoFormatter.formatOptions = NSISO8601DateFormatWithInternetDateTime;
+    NSString *endDateStr = [isoFormatter stringFromDate:endDate];
+
+    // Launch CLI directly
+    NSTask *task = [[NSTask alloc] init];
+    task.executableURL = [NSURL fileURLWithPath:cliPath];
+    task.arguments = @[@"start", @"--blocklist", blocklistURL.path, @"--enddate", endDateStr];
+
+    NSPipe *outputPipe = [NSPipe pipe];
+    NSPipe *errorPipe = [NSPipe pipe];
+    task.standardOutput = outputPipe;
+    task.standardError = errorPipe;
+
+    NSError *taskError = nil;
+    [task launchAndReturnError:&taskError];
+    if (taskError) {
+        NSLog(@"ERROR: Failed to launch CLI: %@", taskError);
+        if (error) *error = taskError;
+        return NO;
+    }
+
+    [task waitUntilExit];
+
+    NSData *outputData = [[outputPipe fileHandleForReading] readDataToEndOfFile];
+    NSData *errorData = [[errorPipe fileHandleForReading] readDataToEndOfFile];
+    NSString *outputStr = [[NSString alloc] initWithData:outputData encoding:NSUTF8StringEncoding];
+    NSString *errorStr = [[NSString alloc] initWithData:errorData encoding:NSUTF8StringEncoding];
+
+    if (task.terminationStatus != 0) {
+        NSLog(@"ERROR: CLI exited with status %d: %@ %@", task.terminationStatus, outputStr, errorStr);
+        if (error) {
+            *error = [NSError errorWithDomain:@"SCScheduleLaunchdBridge"
+                                         code:task.terminationStatus
+                                     userInfo:@{NSLocalizedDescriptionKey: errorStr ?: @"CLI failed"}];
+        }
+        return NO;
+    }
+
+    NSLog(@"SCScheduleLaunchdBridge: Merged block started successfully for segment %@ with bundles: %@",
+          segmentID, [bundles valueForKey:@"name"]);
+    return YES;
 }
 
 @end

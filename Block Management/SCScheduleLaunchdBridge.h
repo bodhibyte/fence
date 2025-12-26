@@ -107,6 +107,43 @@ NS_ASSUME_NONNULL_BEGIN
 /// Uninstalls all SelfControl schedule-related launchd jobs
 - (BOOL)uninstallAllScheduleJobs:(NSError **)error;
 
+#pragma mark - Segment-Based Merged Job Installation
+
+/// Writes a merged blocklist file for multiple bundles
+/// @param bundles Array of bundles whose entries should be merged
+/// @param segmentID Unique identifier for this merged segment
+/// @param error Error output if write fails
+/// @return URL of the written file, or nil on failure
+- (nullable NSURL *)writeMergedBlocklistForBundles:(NSArray<SCBlockBundle *> *)bundles
+                                         segmentID:(NSString *)segmentID
+                                             error:(NSError **)error;
+
+/// Installs a launchd job for a merged segment
+/// @param bundles Array of bundles contributing to this segment
+/// @param segmentID Unique identifier for this segment
+/// @param startDate When the block should start
+/// @param endDate When the block should end
+/// @param day Which day of the week
+/// @param startMinutes Start time as minutes from midnight
+/// @param weekOffset 0 = current week, 1 = next week
+/// @param error Error output if installation fails
+/// @return YES on success
+- (BOOL)installJobForSegmentWithBundles:(NSArray<SCBlockBundle *> *)bundles
+                              segmentID:(NSString *)segmentID
+                              startDate:(NSDate *)startDate
+                                endDate:(NSDate *)endDate
+                                    day:(SCDayOfWeek)day
+                           startMinutes:(NSInteger)startMinutes
+                             weekOffset:(NSInteger)weekOffset
+                                  error:(NSError **)error;
+
+/// Starts a merged block immediately for multiple bundles
+/// Used when committing during an in-progress merged segment
+- (BOOL)startMergedBlockImmediatelyForBundles:(NSArray<SCBlockBundle *> *)bundles
+                                    segmentID:(NSString *)segmentID
+                                      endDate:(NSDate *)endDate
+                                        error:(NSError **)error;
+
 /// Returns labels of all installed jobs for a bundle
 - (NSArray<NSString *> *)installedJobLabelsForBundleID:(NSString *)bundleID;
 
