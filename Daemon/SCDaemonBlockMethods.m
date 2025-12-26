@@ -13,6 +13,7 @@
 #import "SCDaemon.h"
 #import "LaunchctlHelper.h"
 #import "HostFileBlockerSet.h"
+#import "AppBlocker.h"
 
 NSTimeInterval METHOD_LOCK_TIMEOUT = 5.0;
 NSTimeInterval CHECKUP_LOCK_TIMEOUT = 0.5; // use a shorter lock timeout for checkups, because we'd prefer not to have tons pile up
@@ -349,8 +350,25 @@ NSTimeInterval CHECKUP_LOCK_TIMEOUT = 0.5; // use a shorter lock timeout for che
     SCSettings* settings = [SCSettings sharedSettings];
     PacketFilter* pf = [[PacketFilter alloc] init];
     HostFileBlockerSet* hostFileBlockerSet = [[HostFileBlockerSet alloc] init];
-    if(![pf containsSelfControlBlock] || (![settings boolForKey: @"ActiveBlockAsWhitelist"] && ![hostFileBlockerSet.defaultBlocker containsSelfControlBlock])) {
-        NSLog(@"INFO: Block is missing in PF or hosts, re-adding...");
+
+    // Check if network blocking is intact
+    BOOL pfIntact = [pf containsSelfControlBlock];
+    BOOL hostsIntact = [settings boolForKey: @"ActiveBlockAsWhitelist"] || [hostFileBlockerSet.defaultBlocker containsSelfControlBlock];
+
+    // Check if app blocking is intact (if there are app entries in settings, AppBlocker should be monitoring)
+    AppBlocker* appBlocker = [AppBlocker sharedBlocker];
+    NSArray* activeBlocklist = [settings valueForKey: @"ActiveBlocklist"];
+    BOOL hasAppEntriesInSettings = NO;
+    for (NSString* entry in activeBlocklist) {
+        if ([entry hasPrefix:@"app:"]) {
+            hasAppEntriesInSettings = YES;
+            break;
+        }
+    }
+    BOOL appBlockingIntact = !hasAppEntriesInSettings || appBlocker.isMonitoring;
+
+    if(!pfIntact || !hostsIntact || !appBlockingIntact) {
+        NSLog(@"INFO: Block integrity compromised (PF:%d hosts:%d apps:%d), re-adding...", pfIntact, hostsIntact, appBlockingIntact);
         // The firewall is missing at least the block header.  Let's clear everything
         // before we re-add to make sure everything goes smoothly.
 
