@@ -8,6 +8,7 @@
 #import "SCHelperToolUtilities.h"
 #import "SCSettings.h"
 #import <CommonCrypto/CommonCrypto.h>
+#import <SystemConfiguration/SystemConfiguration.h>
 #include <IOKit/IOKitLib.h>
 
 @implementation SCMiscUtilities
@@ -245,6 +246,15 @@
 
 + (NSString*)killerKeyForDate:(NSDate*)date {
     return [SCMiscUtilities sha1: [NSString stringWithFormat: @"SelfControlKillerKey%@%@", [SCMiscUtilities getSerialNumber], [date descriptionWithLocale: nil]]];
+}
+
++ (uid_t)consoleUserUID {
+    uid_t uid = 0;
+    CFStringRef userName = SCDynamicStoreCopyConsoleUser(NULL, &uid, NULL);
+    if (userName) {
+        CFRelease(userName);
+    }
+    return uid;
 }
 
 @end

@@ -48,4 +48,42 @@ static NSString* const kDebugBlockingDisabledKey = @"DebugBlockingDisabled";
 #endif
 }
 
++ (BOOL)clearExistingBlockingRules {
+#ifdef DEBUG
+    NSLog(@"DEBUG: Clearing existing blocking rules...");
+
+    // Build the shell script to clear all blocking rules
+    // This needs to run with admin privileges
+    NSString *script = @""
+        // Clear PF firewall rules
+        "pfctl -a org.eyebeam -F all 2>/dev/null; "
+        // Clear hosts file entries
+        "sed -i '' '/# BEGIN SELFCONTROL BLOCK/,/# END SELFCONTROL BLOCK/d' /etc/hosts; "
+        // Flush DNS cache
+        "dscacheutil -flushcache; "
+        "killall -HUP mDNSResponder 2>/dev/null; "
+        "echo 'done'";
+
+    // Use AppleScript to run the command with admin privileges
+    NSString *appleScript = [NSString stringWithFormat:
+        @"do shell script \"%@\" with administrator privileges", script];
+
+    NSDictionary *errorDict = nil;
+    NSAppleScript *scriptObject = [[NSAppleScript alloc] initWithSource:appleScript];
+    NSAppleEventDescriptor *result = [scriptObject executeAndReturnError:&errorDict];
+
+    if (errorDict) {
+        NSLog(@"DEBUG: Failed to clear blocking rules: %@", errorDict);
+        return NO;
+    }
+
+    NSLog(@"DEBUG: Successfully cleared blocking rules. Result: %@", [result stringValue]);
+    return YES;
+#else
+    // No-op in release builds
+    NSLog(@"WARNING: Attempted to clear blocking rules in release build - ignored");
+    return NO;
+#endif
+}
+
 @end

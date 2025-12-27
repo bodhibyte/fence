@@ -8,8 +8,9 @@
 #import "SCDaemon.h"
 #import "SCDaemonProtocol.h"
 #import "SCDaemonXPC.h"
-#import"SCDaemonBlockMethods.h"
+#import "SCDaemonBlockMethods.h"
 #import "SCFileWatcher.h"
+#import "SCScheduleManager.h"
 
 static NSString* serviceName = @"org.eyebeam.selfcontrold";
 float const INACTIVITY_LIMIT_SECS = 60 * 2; // 2 minutes
@@ -68,6 +69,12 @@ float const INACTIVITY_LIMIT_SECS = 60 * 2; // 2 minutes
         [self startCheckupTimer];
     }
     NSLog(@"selfcontrold: start() - Block check complete");
+
+    // Check for missed scheduled blocks (e.g., after reboot during scheduled window)
+    NSLog(@"selfcontrold: start() - Checking for missed scheduled blocks...");
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        [[SCScheduleManager sharedManager] startMissedBlockIfNeeded];
+    });
 
     NSLog(@"selfcontrold: start() - Starting inactivity timer...");
     [self startInactivityTimer];

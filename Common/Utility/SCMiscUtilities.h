@@ -32,4 +32,7 @@
 
 + (NSString*)killerKeyForDate:(NSDate*)date;
 
+/// Returns the UID of the currently logged-in console user, or 0 if none/error
++ (uid_t)consoleUserUID;
+
 @end

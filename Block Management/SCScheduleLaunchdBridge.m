@@ -8,6 +8,7 @@
 #import "SCScheduleLaunchdBridge.h"
 #import "SCBlockFileReaderWriter.h"
 #import "SCXPCClient.h"
+#import "SCMiscUtilities.h"
 
 #pragma mark - SCBlockWindow Implementation
 
@@ -742,6 +743,14 @@
                                     segmentID:(NSString *)segmentID
                                       endDate:(NSDate *)endDate
                                         error:(NSError **)error {
+    // Debug logging to file (NSLog doesn't show up from daemon)
+    NSMutableString *debugLog = [NSMutableString string];
+    [debugLog appendFormat:@"\n=== startMergedBlockImmediately %@ ===\n", [NSDate date]];
+    [debugLog appendFormat:@"segmentID: %@\n", segmentID];
+    [debugLog appendFormat:@"endDate: %@\n", endDate];
+    [debugLog appendFormat:@"bundles count: %lu\n", (unsigned long)bundles.count];
+    [debugLog appendFormat:@"euid: %d, uid: %d\n", geteuid(), getuid()];
+
     NSLog(@"SCScheduleLaunchdBridge: Starting merged block immediately for segment %@ until %@", segmentID, endDate);
 
     // Merge blocklists from all bundles
@@ -749,20 +758,117 @@
     for (SCBlockBundle *bundle in bundles) {
         [mergedEntries addObjectsFromArray:bundle.entries ?: @[]];
     }
+    [debugLog appendFormat:@"mergedEntries count: %lu\n", (unsigned long)mergedEntries.count];
 
-    // Get block settings from user defaults
-    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    // Get the controlling UID - use console user if running as root (daemon)
+    uid_t controllingUID = getuid();
+    if (geteuid() == 0) {
+        controllingUID = [SCMiscUtilities consoleUserUID];
+    }
+    [debugLog appendFormat:@"controllingUID: %d\n", controllingUID];
+
+    // Get block settings from user defaults (use console user's defaults if running as root)
+    NSDictionary *userDefaults = nil;
+    if (geteuid() == 0) {
+        userDefaults = [SCMiscUtilities defaultsDictForUser:controllingUID];
+    }
     NSDictionary *blockSettings = @{
-        @"ClearCaches": [defaults objectForKey:@"ClearCaches"] ?: @NO,
-        @"AllowLocalNetworks": [defaults objectForKey:@"AllowLocalNetworks"] ?: @YES,
-        @"EvaluateCommonSubdomains": [defaults objectForKey:@"EvaluateCommonSubdomains"] ?: @YES,
-        @"IncludeLinkedDomains": [defaults objectForKey:@"IncludeLinkedDomains"] ?: @YES,
-        @"BlockSoundShouldPlay": [defaults objectForKey:@"BlockSoundShouldPlay"] ?: @NO,
-        @"BlockSound": [defaults objectForKey:@"BlockSound"] ?: @5,
-        @"EnableErrorReporting": [defaults objectForKey:@"EnableErrorReporting"] ?: @YES
+        @"ClearCaches": (userDefaults ? userDefaults[@"ClearCaches"] : [[NSUserDefaults standardUserDefaults] objectForKey:@"ClearCaches"]) ?: @NO,
+        @"AllowLocalNetworks": (userDefaults ? userDefaults[@"AllowLocalNetworks"] : [[NSUserDefaults standardUserDefaults] objectForKey:@"AllowLocalNetworks"]) ?: @YES,
+        @"EvaluateCommonSubdomains": (userDefaults ? userDefaults[@"EvaluateCommonSubdomains"] : [[NSUserDefaults standardUserDefaults] objectForKey:@"EvaluateCommonSubdomains"]) ?: @YES,
+        @"IncludeLinkedDomains": (userDefaults ? userDefaults[@"IncludeLinkedDomains"] : [[NSUserDefaults standardUserDefaults] objectForKey:@"IncludeLinkedDomains"]) ?: @YES,
+        @"BlockSoundShouldPlay": (userDefaults ? userDefaults[@"BlockSoundShouldPlay"] : [[NSUserDefaults standardUserDefaults] objectForKey:@"BlockSoundShouldPlay"]) ?: @NO,
+        @"BlockSound": (userDefaults ? userDefaults[@"BlockSound"] : [[NSUserDefaults standardUserDefaults] objectForKey:@"BlockSound"]) ?: @5,
+        @"EnableErrorReporting": (userDefaults ? userDefaults[@"EnableErrorReporting"] : [[NSUserDefaults standardUserDefaults] objectForKey:@"EnableErrorReporting"]) ?: @YES
     };
 
-    // Register and start the block via XPC (this will prompt for password)
+    // If running as daemon (euid == 0), bypass XPC and call SCDaemonBlockMethods directly
+    // XPC doesn't work when a process tries to connect to its own Mach service
+    if (geteuid() == 0) {
+        [debugLog appendFormat:@"Running as daemon - bypassing XPC, calling SCDaemonBlockMethods directly\n"];
+        [debugLog writeToFile:@"/tmp/selfcontrol_xpc_debug.log" atomically:YES encoding:NSUTF8StringEncoding error:nil];
+
+        // Use dynamic invocation since SCDaemonBlockMethods is only in daemon target
+        Class daemonBlockMethods = NSClassFromString(@"SCDaemonBlockMethods");
+        if (!daemonBlockMethods) {
+            [debugLog appendFormat:@"ERROR: SCDaemonBlockMethods class not found!\n"];
+            [debugLog writeToFile:@"/tmp/selfcontrol_xpc_debug.log" atomically:YES encoding:NSUTF8StringEncoding error:nil];
+            if (error) *error = [NSError errorWithDomain:@"SelfControl" code:500 userInfo:@{NSLocalizedDescriptionKey: @"SCDaemonBlockMethods class not available"}];
+            return NO;
+        }
+
+        dispatch_semaphore_t sema = dispatch_semaphore_create(0);
+        __block NSError *blockError = nil;
+
+        // Call: +[SCDaemonBlockMethods startBlockWithControllingUID:blocklist:isAllowlist:endDate:blockSettings:authorization:reply:]
+        SEL startBlockSel = NSSelectorFromString(@"startBlockWithControllingUID:blocklist:isAllowlist:endDate:blockSettings:authorization:reply:");
+        if (![daemonBlockMethods respondsToSelector:startBlockSel]) {
+            [debugLog appendFormat:@"ERROR: SCDaemonBlockMethods doesn't respond to startBlockWithControllingUID:!\n"];
+            [debugLog writeToFile:@"/tmp/selfcontrol_xpc_debug.log" atomically:YES encoding:NSUTF8StringEncoding error:nil];
+            if (error) *error = [NSError errorWithDomain:@"SelfControl" code:500 userInfo:@{NSLocalizedDescriptionKey: @"startBlock method not found"}];
+            return NO;
+        }
+
+        [debugLog appendFormat:@"Calling SCDaemonBlockMethods startBlock...\n"];
+        [debugLog writeToFile:@"/tmp/selfcontrol_xpc_debug.log" atomically:YES encoding:NSUTF8StringEncoding error:nil];
+
+        // Use NSInvocation for the complex method signature
+        NSMethodSignature *sig = [daemonBlockMethods methodSignatureForSelector:startBlockSel];
+        NSInvocation *invocation = [NSInvocation invocationWithMethodSignature:sig];
+        [invocation setSelector:startBlockSel];
+        [invocation setTarget:daemonBlockMethods];
+
+        uid_t uidArg = controllingUID;
+        BOOL isAllowlist = NO;
+        NSData *authData = nil;
+        void (^replyBlock)(NSError *) = ^(NSError *err) {
+            NSMutableString *replyLog = [NSMutableString stringWithContentsOfFile:@"/tmp/selfcontrol_xpc_debug.log" encoding:NSUTF8StringEncoding error:nil] ?: [NSMutableString string];
+            [replyLog appendFormat:@"SCDaemonBlockMethods reply: err=%@\n", err];
+            [replyLog writeToFile:@"/tmp/selfcontrol_xpc_debug.log" atomically:YES encoding:NSUTF8StringEncoding error:nil];
+            blockError = err;
+            dispatch_semaphore_signal(sema);
+        };
+
+        [invocation setArgument:&uidArg atIndex:2];
+        [invocation setArgument:&mergedEntries atIndex:3];
+        [invocation setArgument:&isAllowlist atIndex:4];
+        [invocation setArgument:&endDate atIndex:5];
+        [invocation setArgument:&blockSettings atIndex:6];
+        [invocation setArgument:&authData atIndex:7];
+        [invocation setArgument:&replyBlock atIndex:8];
+
+        [invocation invoke];
+
+        // Wait for completion with timeout
+        dispatch_time_t timeout = dispatch_time(DISPATCH_TIME_NOW, 30 * NSEC_PER_SEC);
+        long result = dispatch_semaphore_wait(sema, timeout);
+
+        NSMutableString *finalLog = [NSMutableString stringWithContentsOfFile:@"/tmp/selfcontrol_xpc_debug.log" encoding:NSUTF8StringEncoding error:nil] ?: [NSMutableString string];
+
+        if (result != 0) {
+            [finalLog appendFormat:@"TIMEOUT: Direct call timed out after 30 seconds!\n"];
+            [finalLog writeToFile:@"/tmp/selfcontrol_xpc_debug.log" atomically:YES encoding:NSUTF8StringEncoding error:nil];
+            if (error) *error = [NSError errorWithDomain:@"SelfControl" code:408 userInfo:@{NSLocalizedDescriptionKey: @"Direct block call timed out"}];
+            return NO;
+        }
+
+        if (blockError) {
+            [finalLog appendFormat:@"FINAL: FAILED (direct) - %@\n", blockError];
+            [finalLog writeToFile:@"/tmp/selfcontrol_xpc_debug.log" atomically:YES encoding:NSUTF8StringEncoding error:nil];
+            if (error) *error = blockError;
+            return NO;
+        }
+
+        [finalLog appendFormat:@"FINAL: SUCCESS (direct) for segment %@\n", segmentID];
+        [finalLog writeToFile:@"/tmp/selfcontrol_xpc_debug.log" atomically:YES encoding:NSUTF8StringEncoding error:nil];
+        NSLog(@"SCScheduleLaunchdBridge: Merged block started successfully (direct) for segment %@", segmentID);
+        return YES;
+    }
+
+    // Not running as daemon - use XPC as normal
+    [debugLog appendFormat:@"Running as app - using XPC\n"];
+    [debugLog writeToFile:@"/tmp/selfcontrol_xpc_debug.log" atomically:YES encoding:NSUTF8StringEncoding error:nil];
+
     SCXPCClient *xpc = [SCXPCClient new];
     dispatch_semaphore_t sema = dispatch_semaphore_create(0);
     __block NSError *xpcError = nil;
@@ -772,7 +878,7 @@
                       blocklist:mergedEntries
                     isAllowlist:NO
                   blockSettings:blockSettings
-              controllingUID:getuid()
+              controllingUID:controllingUID
                           reply:^(NSError *err) {
         if (err) {
             xpcError = err;
@@ -791,7 +897,12 @@
 
     // Use run loop-based wait to avoid deadlock when called from main thread
     if (![NSThread isMainThread]) {
-        dispatch_semaphore_wait(sema, DISPATCH_TIME_FOREVER);
+        dispatch_time_t timeout = dispatch_time(DISPATCH_TIME_NOW, 30 * NSEC_PER_SEC);
+        long result = dispatch_semaphore_wait(sema, timeout);
+        if (result != 0) {
+            if (error) *error = [NSError errorWithDomain:@"SelfControl" code:408 userInfo:@{NSLocalizedDescriptionKey: @"XPC call timed out"}];
+            return NO;
+        }
     } else {
         while (dispatch_semaphore_wait(sema, DISPATCH_TIME_NOW)) {
             [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.1]];

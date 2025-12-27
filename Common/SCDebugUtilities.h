@@ -23,6 +23,11 @@ NS_ASSUME_NONNULL_BEGIN
 /// Returns YES if the current build is a debug build.
 + (BOOL)isDebugBuild;
 
+/// Clears all existing blocking rules (PF firewall, hosts file, DNS cache).
+/// Requires admin password. Only works in DEBUG builds.
+/// Returns YES if successful.
++ (BOOL)clearExistingBlockingRules;
+
 @end
 
 NS_ASSUME_NONNULL_END

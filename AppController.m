@@ -999,25 +999,41 @@
 
 - (IBAction)toggleDebugBlocking:(id)sender {
     BOOL currentState = [SCDebugUtilities isDebugBlockingDisabled];
-    [SCDebugUtilities setDebugBlockingDisabled:!currentState];
+    BOOL newState = !currentState;
+
+    [SCDebugUtilities setDebugBlockingDisabled:newState];
 
     // Update the window title to show debug mode is active
     [self updateDebugIndicator];
 
+    // If enabling debug mode, also clear existing blocking rules
+    BOOL clearedRules = NO;
+    if (newState) {
+        clearedRules = [SCDebugUtilities clearExistingBlockingRules];
+    }
+
     // Show alert to confirm
     NSAlert* alert = [[NSAlert alloc] init];
-    if (!currentState) {
+    if (newState) {
         // Just enabled debug mode
         [alert setMessageText:@"Debug Mode Enabled"];
-        [alert setInformativeText:@"ALL blocking is now disabled. This includes:\n"
-                                  @"- Website blocking (hosts file + firewall)\n"
-                                  @"- App blocking\n\n"
-                                  @"The block timer will continue but rules won't be enforced."];
+        if (clearedRules) {
+            [alert setInformativeText:@"ALL blocking is now disabled AND existing rules have been cleared.\n\n"
+                                      @"This includes:\n"
+                                      @"- Website blocking (hosts file + firewall)\n"
+                                      @"- App blocking\n\n"
+                                      @"The block timer will continue but no rules are enforced."];
+        } else {
+            [alert setInformativeText:@"Debug mode enabled but failed to clear existing rules.\n"
+                                      @"You may need to run the emergency.sh script manually."];
+        }
         [alert setAlertStyle:NSAlertStyleWarning];
     } else {
         // Just disabled debug mode
         [alert setMessageText:@"Debug Mode Disabled"];
-        [alert setInformativeText:@"Blocking is now active again."];
+        [alert setInformativeText:@"Blocking is now active again.\n"
+                                  @"Note: Previously cleared rules will NOT be restored.\n"
+                                  @"Restart the daemon to re-apply blocking."];
     }
     [alert addButtonWithTitle:@"OK"];
     [alert runModal];
