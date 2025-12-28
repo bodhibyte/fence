@@ -452,6 +452,52 @@
     }];
 }
 
+- (void)clearAllApprovedSchedules:(void(^)(NSError* error))reply {
+    [self connectAndExecuteCommandBlock:^(NSError * connectError) {
+        if (connectError != nil) {
+            NSLog(@"Clear all approved schedules failed with connection error: %@", connectError);
+            [SCSentry captureError: connectError];
+            reply(connectError);
+        } else {
+            [[self.daemonConnection remoteObjectProxyWithErrorHandler:^(NSError * proxyError) {
+                NSLog(@"Clear all approved schedules failed with remote object proxy error: %@", proxyError);
+                [SCSentry captureError: proxyError];
+                reply(proxyError);
+            }] clearAllApprovedSchedulesWithAuthorization: self.authorization
+                                                    reply:^(NSError* error) {
+                if (error != nil && ![SCMiscUtilities errorIsAuthCanceled: error]) {
+                    NSLog(@"Clear all approved schedules failed with error = %@\n", error);
+                    [SCSentry captureError: error];
+                }
+                reply(error);
+            }];
+        }
+    }];
+}
+
+- (void)clearBlockForDebug:(void(^)(NSError* error))reply {
+    [self connectAndExecuteCommandBlock:^(NSError * connectError) {
+        if (connectError != nil) {
+            NSLog(@"Clear block for debug failed with connection error: %@", connectError);
+            [SCSentry captureError: connectError];
+            reply(connectError);
+        } else {
+            [[self.daemonConnection remoteObjectProxyWithErrorHandler:^(NSError * proxyError) {
+                NSLog(@"Clear block for debug failed with remote object proxy error: %@", proxyError);
+                [SCSentry captureError: proxyError];
+                reply(proxyError);
+            }] clearBlockForDebugWithAuthorization: self.authorization
+                                             reply:^(NSError* error) {
+                if (error != nil && ![SCMiscUtilities errorIsAuthCanceled: error]) {
+                    NSLog(@"Clear block for debug failed with error = %@\n", error);
+                    [SCSentry captureError: error];
+                }
+                reply(error);
+            }];
+        }
+    }];
+}
+
 - (NSString*)selfControlHelperToolPath {
     static NSString* path;
 

@@ -42,6 +42,14 @@ NS_ASSUME_NONNULL_BEGIN
                    authorization:(NSData *)authData
                            reply:(void(^)(NSError* error))reply;
 
+// XPC method to clear all approved schedules (for debug reset)
+- (void)clearAllApprovedSchedulesWithAuthorization:(NSData *)authData
+                                             reply:(void(^)(NSError* error))reply;
+
+// XPC method to forcibly clear an active block (DEBUG ONLY)
+- (void)clearBlockForDebugWithAuthorization:(NSData *)authData
+                                      reply:(void(^)(NSError* error))reply;
+
 @end
 
 NS_ASSUME_NONNULL_END

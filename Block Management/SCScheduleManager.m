@@ -8,6 +8,7 @@
 #import "SCBlockUtilities.h"
 #import "SCXPCClient.h"
 #import "SCMiscUtilities.h"
+#import "SCSettings.h"
 
 NSNotificationName const SCScheduleManagerDidChangeNotification = @"SCScheduleManagerDidChangeNotification";
 
@@ -123,19 +124,31 @@ static NSString * const kIsCommittedKey = @"SCIsCommitted";
 }
 
 - (void)removeBundleWithID:(NSString *)bundleID {
-    SCBlockBundle *bundle = [self bundleWithID:bundleID];
-    if (bundle) {
-        [self.mutableBundles removeObject:bundle];
-
-        // Also remove the schedule
-        SCWeeklySchedule *schedule = [self scheduleForBundleID:bundleID];
-        if (schedule) {
-            [self.mutableSchedules removeObject:schedule];
-        }
-
-        [self save];
-        [self postChangeNotification];
+    // Cannot delete bundles while committed - this would loosen restrictions
+    if ([self isCommittedForWeekOffset:0]) {
+        NSLog(@"SCScheduleManager: Cannot delete bundle while committed - would loosen restrictions");
+        return;
     }
+
+    SCBlockBundle *bundle = [self bundleWithID:bundleID];
+    if (!bundle) return;
+
+    // 1. Remove from bundles array
+    [self.mutableBundles removeObject:bundle];
+
+    // 2. Remove from legacy schedules
+    SCWeeklySchedule *schedule = [self scheduleForBundleID:bundleID];
+    if (schedule) {
+        [self.mutableSchedules removeObject:schedule];
+    }
+
+    // 3. Clean weekSchedulesCache and SCWeekSchedules_* for all weeks
+    [self removeSchedulesForBundleID:bundleID];
+
+    // 4. Save
+    [self save];
+
+    [self postChangeNotification];
 }
 
 - (void)updateBundle:(SCBlockBundle *)bundle {
@@ -417,6 +430,37 @@ static NSString * const kIsCommittedKey = @"SCIsCommitted";
 
     [[NSUserDefaults standardUserDefaults] setObject:scheduleDicts forKey:storageKey];
     [[NSUserDefaults standardUserDefaults] synchronize];
+}
+
+- (void)removeSchedulesForBundleID:(NSString *)bundleID {
+    // Clean weekSchedulesCache for all cached weeks
+    for (NSString *weekKey in [self.weekSchedulesCache.allKeys copy]) {
+        NSMutableArray *schedules = self.weekSchedulesCache[weekKey];
+        NSMutableArray *toRemove = [NSMutableArray array];
+        for (SCWeeklySchedule *s in schedules) {
+            if ([s.bundleID isEqualToString:bundleID]) {
+                [toRemove addObject:s];
+            }
+        }
+        [schedules removeObjectsInArray:toRemove];
+    }
+
+    // Clean all SCWeekSchedules_* keys in NSUserDefaults
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    NSDictionary *allDefaults = [defaults dictionaryRepresentation];
+    for (NSString *key in allDefaults.allKeys) {
+        if ([key hasPrefix:kWeekSchedulesPrefix]) {
+            NSArray *scheduleDicts = [defaults objectForKey:key];
+            NSMutableArray *filtered = [NSMutableArray array];
+            for (NSDictionary *dict in scheduleDicts) {
+                if (![dict[@"bundleID"] isEqualToString:bundleID]) {
+                    [filtered addObject:dict];
+                }
+            }
+            [defaults setObject:filtered forKey:key];
+        }
+    }
+    [defaults synchronize];
 }
 
 #pragma mark - Commitment
@@ -758,10 +802,51 @@ static NSString * const kIsCommittedKey = @"SCIsCommitted";
     [[NSUserDefaults standardUserDefaults] removeObjectForKey:[kWeekCommitmentPrefix stringByAppendingString:currentWeekKey]];
     [[NSUserDefaults standardUserDefaults] removeObjectForKey:[kWeekCommitmentPrefix stringByAppendingString:nextWeekKey]];
 
-    [[NSUserDefaults standardUserDefaults] synchronize];
+    // Clear all week schedule data (SCWeekSchedules_*) - wipe schedule drawings
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    NSDictionary *allDefaults = [defaults dictionaryRepresentation];
+    for (NSString *key in allDefaults.allKeys) {
+        if ([key hasPrefix:kWeekSchedulesPrefix]) {
+            [defaults removeObjectForKey:key];
+        }
+    }
+
+    // Clear in-memory cache
+    [self.weekSchedulesCache removeAllObjects];
+
+    // Clear legacy schedules (in-memory and storage)
+    [self.mutableSchedules removeAllObjects];
+    [defaults removeObjectForKey:kSchedulesKey];
+
+    [defaults synchronize];
+
+    // Clear ApprovedSchedules and active block in daemon (requires XPC)
+    SCXPCClient *xpc = [[SCXPCClient alloc] init];
+
+    // Clear ApprovedSchedules
+    [xpc clearAllApprovedSchedules:^(NSError *error) {
+        if (error) {
+            NSLog(@"WARNING: Failed to clear ApprovedSchedules: %@", error);
+        } else {
+            NSLog(@"SCScheduleManager: Cleared ApprovedSchedules in daemon");
+        }
+    }];
+
+    // If a block is running, forcibly clear it (DEBUG ONLY)
+    if ([SCBlockUtilities anyBlockIsRunning]) {
+        NSLog(@"SCScheduleManager: Active block detected, clearing via debug method...");
+        [xpc clearBlockForDebug:^(NSError *error) {
+            if (error) {
+                NSLog(@"WARNING: Failed to clear active block: %@", error);
+            } else {
+                NSLog(@"SCScheduleManager: Active block cleared via debug method");
+            }
+        }];
+    }
+
     [self postChangeNotification];
 
-    NSLog(@"SCScheduleManager: Cleared all commitments and launchd jobs (DEBUG)");
+    NSLog(@"SCScheduleManager: Cleared all commitments, schedules, and launchd jobs (DEBUG)");
 #endif
 }
 
@@ -789,166 +874,6 @@ static NSString * const kIsCommittedKey = @"SCIsCommitted";
     }
 
     [[NSUserDefaults standardUserDefaults] synchronize];
-}
-
-- (void)startMissedBlockIfNeeded {
-    // Debug logging to file (NSLog doesn't show in system log for daemons)
-    NSMutableString *debugLog = [NSMutableString string];
-    [debugLog appendFormat:@"\n=== startMissedBlockIfNeeded %@ ===\n", [NSDate date]];
-    [debugLog appendFormat:@"euid: %d\n", geteuid()];
-
-    NSLog(@"SCScheduleManager: Checking for missed scheduled blocks...");
-
-    // When running as root (daemon), we need to read from the console user's defaults
-    NSDictionary *userDefaults = nil;
-    uid_t consoleUID = 0;
-    if (geteuid() == 0) {
-        consoleUID = [SCMiscUtilities consoleUserUID];
-        [debugLog appendFormat:@"consoleUID: %d\n", consoleUID];
-        if (consoleUID == 0) {
-            [debugLog appendString:@"ERROR: No console user found\n"];
-            [debugLog writeToFile:@"/tmp/selfcontrol_debug.log" atomically:YES encoding:NSUTF8StringEncoding error:nil];
-            NSLog(@"SCScheduleManager: Running as root but no console user found, skipping");
-            return;
-        }
-        userDefaults = [SCMiscUtilities defaultsDictForUser:consoleUID];
-        [debugLog appendFormat:@"userDefaults keys: %@\n", [userDefaults allKeys]];
-        if (!userDefaults) {
-            [debugLog appendString:@"ERROR: Could not read defaults\n"];
-            [debugLog writeToFile:@"/tmp/selfcontrol_debug.log" atomically:YES encoding:NSUTF8StringEncoding error:nil];
-            NSLog(@"SCScheduleManager: Could not read defaults for console user %d", consoleUID);
-            return;
-        }
-        NSLog(@"SCScheduleManager: Running as root, reading defaults for console user %d", consoleUID);
-    }
-
-    // Check commitment status
-    NSString *weekKey = [self weekKeyForOffset:0];
-    NSString *commitmentKey = [kWeekCommitmentPrefix stringByAppendingString:weekKey];
-    NSDate *commitmentEndDate = nil;
-
-    if (userDefaults) {
-        commitmentEndDate = userDefaults[commitmentKey];
-    } else {
-        commitmentEndDate = [[NSUserDefaults standardUserDefaults] objectForKey:commitmentKey];
-    }
-
-    [debugLog appendFormat:@"weekKey: %@\n", weekKey];
-    [debugLog appendFormat:@"commitmentKey: %@\n", commitmentKey];
-    [debugLog appendFormat:@"commitmentEndDate: %@\n", commitmentEndDate];
-
-    BOOL isCommitted = (commitmentEndDate != nil && [commitmentEndDate timeIntervalSinceNow] > 0);
-    [debugLog appendFormat:@"isCommitted: %d\n", isCommitted];
-    if (!isCommitted) {
-        [debugLog appendString:@"EXIT: Not committed\n"];
-        [debugLog writeToFile:@"/tmp/selfcontrol_debug.log" atomically:YES encoding:NSUTF8StringEncoding error:nil];
-        NSLog(@"SCScheduleManager: Not committed (key: %@, value: %@), no missed block check needed",
-              commitmentKey, commitmentEndDate);
-        return;
-    }
-
-    // Don't check if a block is already running
-    BOOL blockRunning = [SCBlockUtilities anyBlockIsRunning];
-    [debugLog appendFormat:@"blockAlreadyRunning: %d\n", blockRunning];
-    if (blockRunning) {
-        [debugLog appendString:@"EXIT: Block already running\n"];
-        [debugLog writeToFile:@"/tmp/selfcontrol_debug.log" atomically:YES encoding:NSUTF8StringEncoding error:nil];
-        NSLog(@"SCScheduleManager: Block already running, skipping missed block check");
-        return;
-    }
-
-    // Load bundles from appropriate defaults
-    NSArray *bundleDicts = nil;
-    if (userDefaults) {
-        bundleDicts = userDefaults[kBundlesKey];
-    } else {
-        bundleDicts = [[NSUserDefaults standardUserDefaults] objectForKey:kBundlesKey];
-    }
-
-    [debugLog appendFormat:@"bundleDicts count: %lu\n", (unsigned long)bundleDicts.count];
-
-    NSMutableArray<SCBlockBundle *> *enabledBundles = [NSMutableArray array];
-    for (NSDictionary *dict in bundleDicts) {
-        SCBlockBundle *bundle = [SCBlockBundle bundleFromDictionary:dict];
-        if (bundle && bundle.enabled) {
-            [enabledBundles addObject:bundle];
-        }
-    }
-
-    [debugLog appendFormat:@"enabledBundles count: %lu\n", (unsigned long)enabledBundles.count];
-
-    if (enabledBundles.count == 0) {
-        [debugLog appendString:@"EXIT: No enabled bundles\n"];
-        [debugLog writeToFile:@"/tmp/selfcontrol_debug.log" atomically:YES encoding:NSUTF8StringEncoding error:nil];
-        NSLog(@"SCScheduleManager: No enabled bundles");
-        return;
-    }
-
-    NSLog(@"SCScheduleManager: Found %lu enabled bundles", (unsigned long)enabledBundles.count);
-
-    // Load schedules from appropriate defaults
-    NSArray *scheduleDicts = nil;
-    if (userDefaults) {
-        scheduleDicts = userDefaults[kSchedulesKey];
-    } else {
-        scheduleDicts = [[NSUserDefaults standardUserDefaults] objectForKey:kSchedulesKey];
-    }
-
-    [debugLog appendFormat:@"scheduleDicts count: %lu\n", (unsigned long)scheduleDicts.count];
-
-    NSMutableArray<SCWeeklySchedule *> *schedules = [NSMutableArray array];
-    for (NSDictionary *dict in scheduleDicts) {
-        SCWeeklySchedule *schedule = [SCWeeklySchedule scheduleFromDictionary:dict];
-        if (schedule) {
-            [schedules addObject:schedule];
-        }
-    }
-
-    [debugLog appendFormat:@"schedules count: %lu\n", (unsigned long)schedules.count];
-
-    // Calculate block segments using loaded schedules
-    SCScheduleLaunchdBridge *bridge = [[SCScheduleLaunchdBridge alloc] init];
-    NSArray<SCBlockSegment *> *segments = [self calculateBlockSegmentsForBundles:enabledBundles
-                                                                       schedules:schedules
-                                                                      weekOffset:0
-                                                                          bridge:bridge];
-
-    [debugLog appendFormat:@"segments count: %lu\n", (unsigned long)segments.count];
-
-    NSDate *now = [NSDate date];
-    [debugLog appendFormat:@"now: %@\n", now];
-
-    // Find segment that contains "now"
-    for (SCBlockSegment *segment in segments) {
-        BOOL startedInPast = [segment.startDate timeIntervalSinceDate:now] <= 0;
-        BOOL endsInFuture = [segment.endDate timeIntervalSinceDate:now] > 0;
-
-        [debugLog appendFormat:@"Segment: start=%@, end=%@, startedInPast=%d, endsInFuture=%d\n",
-                  segment.startDate, segment.endDate, startedInPast, endsInFuture];
-
-        if (startedInPast && endsInFuture) {
-            [debugLog appendFormat:@"MATCH: Starting block for segment %@\n", segment.segmentID];
-            [debugLog writeToFile:@"/tmp/selfcontrol_debug.log" atomically:YES encoding:NSUTF8StringEncoding error:nil];
-            NSLog(@"SCScheduleManager: Found missed block! Segment %@ should be active (start: %@, end: %@)",
-                  segment.segmentID, segment.startDate, segment.endDate);
-
-            NSError *error = nil;
-            BOOL success = [bridge startMergedBlockImmediatelyForBundles:segment.activeBundles
-                                                              segmentID:segment.segmentID
-                                                                endDate:segment.endDate
-                                                                  error:&error];
-            if (success) {
-                NSLog(@"SCScheduleManager: Successfully started missed block for segment %@", segment.segmentID);
-            } else {
-                NSLog(@"SCScheduleManager: Failed to start missed block: %@", error);
-            }
-            return; // Only start one segment
-        }
-    }
-
-    [debugLog appendString:@"EXIT: No matching segment found\n"];
-    [debugLog writeToFile:@"/tmp/selfcontrol_debug.log" atomically:YES encoding:NSUTF8StringEncoding error:nil];
-    NSLog(@"SCScheduleManager: No missed blocks found - not inside any scheduled block window");
 }
 
 #pragma mark - Status Display

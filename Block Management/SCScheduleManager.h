@@ -114,11 +114,6 @@ extern NSNotificationName const SCScheduleManagerDidChangeNotification;
 /// Called on app launch and periodically
 - (void)cleanupExpiredCommitments;
 
-/// Checks if we're inside a scheduled block window but no block is running.
-/// If so, starts the block immediately. Called by daemon on startup to recover
-/// from missed launchd triggers (e.g., after reboot during scheduled block).
-- (void)startMissedBlockIfNeeded;
-
 #pragma mark - Status Display (UX Only)
 
 /// Returns what the status WOULD be if blocking were active

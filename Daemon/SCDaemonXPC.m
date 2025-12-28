@@ -8,6 +8,7 @@
 #import "SCDaemonXPC.h"
 #import "SCDaemonBlockMethods.h"
 #import "SCXPCAuthorization.h"
+#import "SCHelperToolUtilities.h"
 
 @implementation SCDaemonXPC
 
@@ -176,6 +177,54 @@
 
     NSLog(@"INFO: Schedule %@ unregistered successfully", scheduleId);
     reply(nil);
+}
+
+- (void)clearAllApprovedSchedulesWithAuthorization:(NSData *)authData
+                                             reply:(void(^)(NSError* error))reply {
+    NSLog(@"XPC method called: clearAllApprovedSchedules");
+
+    NSError* error = [SCXPCAuthorization checkAuthorization: authData command: @selector(startBlockWithControllingUID:blocklist:isAllowlist:endDate:blockSettings:authorization:reply:)];
+    if (error != nil) {
+        if (![SCMiscUtilities errorIsAuthCanceled: error]) {
+            NSLog(@"ERROR: XPC authorization failed for clearAllApprovedSchedules due to error %@", error);
+            [SCSentry captureError: error];
+        }
+        reply(error);
+        return;
+    }
+
+    SCSettings* settings = [SCSettings sharedSettings];
+    [settings setValue: nil forKey: @"ApprovedSchedules"];
+    [settings synchronizeSettings];
+
+    NSLog(@"INFO: All approved schedules cleared successfully");
+    reply(nil);
+}
+
+- (void)clearBlockForDebugWithAuthorization:(NSData *)authData
+                                      reply:(void(^)(NSError* error))reply {
+    NSLog(@"XPC method called: clearBlockForDebug");
+
+#ifdef DEBUG
+    NSError* error = [SCXPCAuthorization checkAuthorization: authData command: @selector(startBlockWithControllingUID:blocklist:isAllowlist:endDate:blockSettings:authorization:reply:)];
+    if (error != nil) {
+        if (![SCMiscUtilities errorIsAuthCanceled: error]) {
+            NSLog(@"ERROR: XPC authorization failed for clearBlockForDebug due to error %@", error);
+            [SCSentry captureError: error];
+        }
+        reply(error);
+        return;
+    }
+
+    NSLog(@"WARNING: Forcibly clearing active block (DEBUG MODE)");
+    [SCHelperToolUtilities removeBlock];
+
+    NSLog(@"INFO: Block cleared via debug method");
+    reply(nil);
+#else
+    NSLog(@"ERROR: clearBlockForDebug called in non-DEBUG build - ignoring");
+    reply([SCErr errorWithCode: 500 subDescription: @"Debug methods not available in release builds"]);
+#endif
 }
 
 @end

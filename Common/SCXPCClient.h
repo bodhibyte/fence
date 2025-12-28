@@ -40,6 +40,10 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)unregisterScheduleWithID:(NSString*)scheduleId
                            reply:(void(^)(NSError* error))reply;
 
+- (void)clearAllApprovedSchedules:(void(^)(NSError* error))reply;
+
+- (void)clearBlockForDebug:(void(^)(NSError* error))reply;
+
 @end
 
 NS_ASSUME_NONNULL_END

@@ -11,6 +11,9 @@
 #import "SCDaemonBlockMethods.h"
 #import "SCFileWatcher.h"
 #import "SCScheduleManager.h"
+#import "SCSettings.h"
+#import "SCMiscUtilities.h"
+#include <pwd.h>
 
 static NSString* serviceName = @"org.eyebeam.selfcontrold";
 float const INACTIVITY_LIMIT_SECS = 60 * 2; // 2 minutes
@@ -73,7 +76,7 @@ float const INACTIVITY_LIMIT_SECS = 60 * 2; // 2 minutes
     // Check for missed scheduled blocks (e.g., after reboot during scheduled window)
     NSLog(@"selfcontrold: start() - Checking for missed scheduled blocks...");
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-        [[SCScheduleManager sharedManager] startMissedBlockIfNeeded];
+        [self startMissedBlockIfNeeded];
     });
 
     NSLog(@"selfcontrold: start() - Starting inactivity timer...");
@@ -146,6 +149,195 @@ float const INACTIVITY_LIMIT_SECS = 60 * 2; // 2 minutes
         [self.hostsFileWatcher stopWatching];
         self.hostsFileWatcher = nil;
     }
+}
+
+#pragma mark - Missed Block Recovery
+
+/// Checks if we're inside a scheduled block window but no block is running.
+/// If so, starts the block immediately. Called on daemon startup to recover
+/// from missed launchd triggers (e.g., after reboot during scheduled block).
+- (void)startMissedBlockIfNeeded {
+    // Debug logging to file (NSLog doesn't show in system log for daemons)
+    NSMutableString *debugLog = [NSMutableString string];
+    [debugLog appendFormat:@"\n=== startMissedBlockIfNeeded %@ ===\n", [NSDate date]];
+    [debugLog appendFormat:@"euid: %d\n", geteuid()];
+
+    NSLog(@"SCDaemon: Checking for missed scheduled blocks...");
+
+    // Don't check if a block is already running
+    BOOL blockRunning = [SCBlockUtilities anyBlockIsRunning];
+    [debugLog appendFormat:@"blockAlreadyRunning: %d\n", blockRunning];
+    if (blockRunning) {
+        [debugLog appendString:@"EXIT: Block already running\n"];
+        [debugLog writeToFile:@"/tmp/selfcontrol_debug.log" atomically:YES encoding:NSUTF8StringEncoding error:nil];
+        NSLog(@"SCDaemon: Block already running, skipping missed block check");
+        return;
+    }
+
+    // Use ApprovedSchedules + launchd jobs instead of recalculating
+    // This works because:
+    // 1. ApprovedSchedules is in daemon's own settings (readable as root)
+    // 2. Launchd jobs contain the timing info (start time, end date)
+    // 3. We just need to find which approved segment should be active NOW
+
+    SCSettings *settings = [SCSettings sharedSettings];
+    NSDictionary *approvedSchedules = [settings valueForKey:@"ApprovedSchedules"];
+    [debugLog appendFormat:@"approvedSchedules count: %lu\n", (unsigned long)approvedSchedules.count];
+
+    if (approvedSchedules.count == 0) {
+        [debugLog appendString:@"EXIT: No approved schedules\n"];
+        [debugLog writeToFile:@"/tmp/selfcontrol_debug.log" atomically:YES encoding:NSUTF8StringEncoding error:nil];
+        NSLog(@"SCDaemon: No approved schedules found");
+        return;
+    }
+
+    // Get console user's home directory to find launchd jobs
+    uid_t consoleUID = [SCMiscUtilities consoleUserUID];
+    [debugLog appendFormat:@"consoleUID: %d\n", consoleUID];
+    if (consoleUID == 0) {
+        [debugLog appendString:@"EXIT: No console user\n"];
+        [debugLog writeToFile:@"/tmp/selfcontrol_debug.log" atomically:YES encoding:NSUTF8StringEncoding error:nil];
+        NSLog(@"SCDaemon: No console user found");
+        return;
+    }
+
+    // Find user's LaunchAgents directory
+    struct passwd *pw = getpwuid(consoleUID);
+    if (!pw) {
+        [debugLog appendString:@"EXIT: Could not get user home dir\n"];
+        [debugLog writeToFile:@"/tmp/selfcontrol_debug.log" atomically:YES encoding:NSUTF8StringEncoding error:nil];
+        NSLog(@"SCDaemon: Could not get home directory for user %d", consoleUID);
+        return;
+    }
+    NSString *homeDir = [NSString stringWithUTF8String:pw->pw_dir];
+    NSString *launchAgentsDir = [homeDir stringByAppendingPathComponent:@"Library/LaunchAgents"];
+    [debugLog appendFormat:@"launchAgentsDir: %@\n", launchAgentsDir];
+
+    // Find all SelfControl schedule jobs
+    NSFileManager *fm = [NSFileManager defaultManager];
+    NSArray *files = [fm contentsOfDirectoryAtPath:launchAgentsDir error:nil];
+    NSString *jobPrefix = @"org.eyebeam.selfcontrol.schedule.merged-";
+
+    NSDate *now = [NSDate date];
+    NSCalendar *calendar = [NSCalendar currentCalendar];
+    NSDateComponents *nowComponents = [calendar components:(NSCalendarUnitWeekday | NSCalendarUnitHour | NSCalendarUnitMinute)
+                                                  fromDate:now];
+    // NSCalendar weekday: 1=Sunday, 2=Monday, ... 7=Saturday
+    // launchd weekday: 0=Sunday, 1=Monday, ... 6=Saturday
+    NSInteger nowWeekday = nowComponents.weekday - 1;
+    NSInteger nowMinutes = nowComponents.hour * 60 + nowComponents.minute;
+    [debugLog appendFormat:@"now: %@ (weekday=%ld, minutes=%ld)\n", now, (long)nowWeekday, (long)nowMinutes];
+
+    NSString *activeSegmentID = nil;
+    NSDate *activeEndDate = nil;
+    NSInteger activeStartMinutes = -1;  // Track start time for "most recent" comparison
+
+    for (NSString *file in files) {
+        if (![file hasPrefix:jobPrefix]) continue;
+
+        NSString *jobPath = [launchAgentsDir stringByAppendingPathComponent:file];
+        NSDictionary *jobPlist = [NSDictionary dictionaryWithContentsOfFile:jobPath];
+        if (!jobPlist) continue;
+
+        // Extract segment ID from label: org.eyebeam.selfcontrol.schedule.merged-{UUID}.{day}.{time}
+        NSString *label = jobPlist[@"Label"];
+        NSArray *parts = [label componentsSeparatedByString:@".merged-"];
+        if (parts.count < 2) continue;
+
+        NSString *remainder = parts[1]; // {UUID}.{day}.{time}
+        NSArray *remainderParts = [remainder componentsSeparatedByString:@"."];
+        if (remainderParts.count < 3) continue;
+
+        NSString *segmentID = remainderParts[0];
+
+        // Check if this segment is in ApprovedSchedules
+        if (!approvedSchedules[segmentID]) {
+            [debugLog appendFormat:@"Skipping job %@ - not in ApprovedSchedules\n", segmentID];
+            continue;
+        }
+
+        // Get start time from StartCalendarInterval
+        NSDictionary *startInterval = jobPlist[@"StartCalendarInterval"];
+        if (!startInterval) continue;
+
+        NSInteger jobWeekday = [startInterval[@"Weekday"] integerValue];
+        NSInteger jobHour = [startInterval[@"Hour"] integerValue];
+        NSInteger jobMinute = [startInterval[@"Minute"] integerValue];
+        NSInteger jobStartMinutes = jobHour * 60 + jobMinute;
+
+        // Get end date from ProgramArguments
+        NSArray *args = jobPlist[@"ProgramArguments"];
+        NSDate *endDate = nil;
+        for (NSString *arg in args) {
+            if ([arg hasPrefix:@"--enddate="]) {
+                NSString *endDateStr = [arg substringFromIndex:10];
+                NSISO8601DateFormatter *isoFormatter = [[NSISO8601DateFormatter alloc] init];
+                endDate = [isoFormatter dateFromString:endDateStr];
+                break;
+            }
+        }
+
+        if (!endDate) continue;
+
+        [debugLog appendFormat:@"Job %@: weekday=%ld, start=%ld, end=%@\n",
+                  segmentID, (long)jobWeekday, (long)jobStartMinutes, endDate];
+
+        // Check if this segment is active NOW
+        // Active if: same weekday, started in past (or same time), ends in future
+        BOOL sameWeekday = (jobWeekday == nowWeekday);
+        BOOL startedOrNow = (jobStartMinutes <= nowMinutes);
+        BOOL endsInFuture = ([endDate timeIntervalSinceNow] > 0);
+
+        [debugLog appendFormat:@"  sameWeekday=%d, startedOrNow=%d, endsInFuture=%d\n",
+                  sameWeekday, startedOrNow, endsInFuture];
+
+        if (sameWeekday && startedOrNow && endsInFuture) {
+            // This segment should be active!
+            // If multiple match, pick the one that started most recently
+            if (activeSegmentID == nil || jobStartMinutes > activeStartMinutes) {
+                activeSegmentID = segmentID;
+                activeEndDate = endDate;
+                activeStartMinutes = jobStartMinutes;
+                [debugLog appendFormat:@"  -> CANDIDATE: %@ (starts at %ld)\n", segmentID, (long)jobStartMinutes];
+            }
+        }
+    }
+
+    if (!activeSegmentID) {
+        [debugLog appendString:@"EXIT: No active segment found\n"];
+        [debugLog writeToFile:@"/tmp/selfcontrol_debug.log" atomically:YES encoding:NSUTF8StringEncoding error:nil];
+        NSLog(@"SCDaemon: No approved segment is active right now");
+        return;
+    }
+
+    [debugLog appendFormat:@"MATCH: Starting approved segment %@ until %@\n", activeSegmentID, activeEndDate];
+    [debugLog writeToFile:@"/tmp/selfcontrol_debug.log" atomically:YES encoding:NSUTF8StringEncoding error:nil];
+
+    NSLog(@"SCDaemon: Found missed block! Approved segment %@ should be active (ends: %@)",
+          activeSegmentID, activeEndDate);
+
+    // Start the block using the approved schedule
+    NSDictionary *schedule = approvedSchedules[activeSegmentID];
+    NSArray *blocklist = schedule[@"blocklist"];
+    BOOL isAllowlist = [schedule[@"isAllowlist"] boolValue];
+    NSDictionary *blockSettings = schedule[@"blockSettings"];
+    uid_t controllingUID = [schedule[@"controllingUID"] unsignedIntValue];
+
+    [debugLog appendFormat:@"Starting block with %lu entries\n", (unsigned long)blocklist.count];
+
+    [SCDaemonBlockMethods startBlockWithControllingUID:controllingUID
+                                             blocklist:blocklist
+                                           isAllowlist:isAllowlist
+                                               endDate:activeEndDate
+                                         blockSettings:blockSettings
+                                         authorization:nil
+                                                 reply:^(NSError *error) {
+        if (error) {
+            NSLog(@"SCDaemon: Failed to start approved segment %@: %@", activeSegmentID, error);
+        } else {
+            NSLog(@"SCDaemon: Successfully started approved segment %@", activeSegmentID);
+        }
+    }];
 }
 
 #pragma mark - NSXPCListenerDelegate
