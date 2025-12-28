@@ -496,29 +496,21 @@ static const CGFloat kTimelinePaddingBottom = 12.0; // Padding so bottom 12am la
     SCTimeRange *window = self.allowedWindows[self.draggingWindowIndex];
 
     if (self.draggingStartEdge) {
+        // Block all resizing when committed
+        if (self.isCommitted) return;
+
         // Moving start time (resize from top)
         NSInteger endMinutes = [window endMinutes];
         if (minutes < endMinutes - 15) {
-            // Check commitment constraint
-            if (self.isCommitted && self.originalDragRange) {
-                // Can only make window smaller, not larger
-                if (minutes < [self.originalDragRange startMinutes]) {
-                    minutes = [self.originalDragRange startMinutes];
-                }
-            }
             window.startTime = [self timeStringFromMinutes:minutes];
         }
     } else if (self.draggingEndEdge) {
+        // Block all resizing when committed
+        if (self.isCommitted) return;
+
         // Moving end time (resize from bottom)
         NSInteger startMinutes = [window startMinutes];
         if (minutes > startMinutes + 15) {
-            // Check commitment constraint
-            if (self.isCommitted && self.originalDragRange) {
-                // Can only make window smaller, not larger
-                if (minutes > [self.originalDragRange endMinutes]) {
-                    minutes = [self.originalDragRange endMinutes];
-                }
-            }
             window.endTime = [self timeStringFromMinutes:minutes];
         }
     } else if (self.draggingWholeBlock) {
@@ -718,7 +710,6 @@ static const CGFloat kTimelinePaddingBottom = 12.0; // Padding so bottom 12am la
 @property (nonatomic, strong) NSDatePicker *startTimePicker;
 @property (nonatomic, strong) NSDatePicker *endTimePicker;
 @property (nonatomic, assign) NSInteger editingBlockIndex;
-@property (nonatomic, assign) BOOL deletedBlocksWhileCommitted; // Track if blocks deleted during committed session
 
 @end
 
@@ -907,20 +898,13 @@ static const CGFloat kTimelinePaddingBottom = 12.0; // Padding so bottom 12am la
 
     NSArray<SCTimeRange *> *sourceWindows = [self.schedule allowedWindowsForDay:sourceDay];
 
-    // Check commitment
+    // Block all copying when committed
     if (self.isCommitted) {
-        NSInteger currentTotal = [self.workingSchedule totalAllowedMinutesForDay:self.day];
-        NSInteger newTotal = 0;
-        for (SCTimeRange *r in sourceWindows) {
-            newTotal += [r durationMinutes];
-        }
-        if (newTotal > currentTotal) {
-            NSAlert *alert = [[NSAlert alloc] init];
-            alert.messageText = @"Cannot Loosen Schedule";
-            alert.informativeText = @"You're committed to this week. You can only make the schedule stricter.";
-            [alert runModal];
-            return;
-        }
+        NSAlert *alert = [[NSAlert alloc] init];
+        alert.messageText = @"Schedule Locked";
+        alert.informativeText = @"You're committed to this week. The schedule cannot be modified.";
+        [alert runModal];
+        return;
     }
 
     // Deep copy windows
@@ -989,20 +973,6 @@ static const CGFloat kTimelinePaddingBottom = 12.0; // Padding so bottom 12am la
             [self mergeOverlappingBlocks];
             [self timelineWindowsChanged];
         } else {
-            return;  // User cancelled
-        }
-    }
-
-    // Warn if blocks were deleted while committed (can't be re-added)
-    if (self.deletedBlocksWhileCommitted) {
-        NSAlert *alert = [[NSAlert alloc] init];
-        alert.messageText = @"Confirm Schedule Change";
-        alert.informativeText = @"You deleted time blocks while committed. These changes make your schedule stricter and cannot be undone until the commitment expires. Are you sure?";
-        [alert addButtonWithTitle:@"Save Changes"];
-        [alert addButtonWithTitle:@"Cancel"];
-        alert.alertStyle = NSAlertStyleWarning;
-
-        if ([alert runModal] != NSAlertFirstButtonReturn) {
             return;  // User cancelled
         }
     }
@@ -1283,6 +1253,16 @@ static const CGFloat kTimelinePaddingBottom = 12.0; // Padding so bottom 12am la
         return;
     }
 
+    // Block all edits when committed
+    if (self.isCommitted) {
+        NSAlert *alert = [[NSAlert alloc] init];
+        alert.messageText = @"Schedule Locked";
+        alert.informativeText = @"You're committed to this week. The schedule cannot be modified.";
+        [alert runModal];
+        [self.editBlockPopover close];
+        return;
+    }
+
     NSInteger startMinutes = [self minutesFromDate:self.startTimePicker.dateValue];
     NSInteger endMinutes = [self minutesFromDate:self.endTimePicker.dateValue];
 
@@ -1303,18 +1283,6 @@ static const CGFloat kTimelinePaddingBottom = 12.0; // Padding so bottom 12am la
         return;
     }
 
-    // Check commitment constraint - can only make block stricter
-    if (self.isCommitted) {
-        SCTimeRange *original = self.timelineView.allowedWindows[self.editingBlockIndex];
-        if (startMinutes < [original startMinutes] || endMinutes > [original endMinutes]) {
-            NSAlert *alert = [[NSAlert alloc] init];
-            alert.messageText = @"Cannot Loosen Schedule";
-            alert.informativeText = @"You're committed to this week. You can only make the time block smaller.";
-            [alert runModal];
-            return;
-        }
-    }
-
     // Update the block with undo support
     NSString *newStart = [NSString stringWithFormat:@"%02ld:%02ld", (long)(startMinutes / 60), (long)(startMinutes % 60)];
     NSString *newEnd = [NSString stringWithFormat:@"%02ld:%02ld", (long)(endMinutes / 60), (long)(endMinutes % 60)];
@@ -1329,9 +1297,13 @@ static const CGFloat kTimelinePaddingBottom = 12.0; // Padding so bottom 12am la
 - (void)deleteBlockAtIndex:(NSInteger)blockIndex {
     if (blockIndex < 0 || blockIndex >= (NSInteger)self.timelineView.allowedWindows.count) return;
 
-    // Track if we're deleting while committed (for confirmation on save)
+    // Block all deletion when committed
     if (self.isCommitted) {
-        self.deletedBlocksWhileCommitted = YES;
+        NSAlert *alert = [[NSAlert alloc] init];
+        alert.messageText = @"Schedule Locked";
+        alert.informativeText = @"You're committed to this week. Time blocks cannot be deleted.";
+        [alert runModal];
+        return;
     }
 
     // Use undo-aware deletion
