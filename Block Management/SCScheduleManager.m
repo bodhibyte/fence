@@ -814,9 +814,7 @@ static const NSInteger kDefaultEmergencyUnlockCredits = 5;
         if (self.isCommitted) {
             NSDate *commitmentEnd = [self commitmentEndDateForWeekOffset:0];
             if (commitmentEnd) {
-                NSDateFormatter *formatter = [[NSDateFormatter alloc] init];
-                formatter.dateFormat = @"EEE h:mma";  // "Sun 12:00am"
-                return [NSString stringWithFormat:@"till %@", [formatter stringFromDate:commitmentEnd]];
+                return [self formatStatusStringForDate:commitmentEnd];
             }
         }
         return @"";
@@ -829,13 +827,24 @@ static const NSInteger kDefaultEmergencyUnlockCredits = 5;
     if (baseStatus.length == 0) {
         NSDate *commitmentEnd = [self commitmentEndDateForWeekOffset:0];
         if (commitmentEnd) {
-            NSDateFormatter *formatter = [[NSDateFormatter alloc] init];
-            formatter.dateFormat = @"EEE h:mma";  // "Sun 12:00am"
-            return [NSString stringWithFormat:@"till %@", [formatter stringFromDate:commitmentEnd]];
+            return [self formatStatusStringForDate:commitmentEnd];
         }
         return @"";  // Fallback
     }
     return baseStatus;
+}
+
+/// Formats a date as "till X" - shows just time if today, otherwise day + time
+- (NSString *)formatStatusStringForDate:(NSDate *)date {
+    NSDateFormatter *formatter = [[NSDateFormatter alloc] init];
+    NSCalendar *calendar = [NSCalendar currentCalendar];
+
+    if ([calendar isDateInToday:date]) {
+        formatter.dateFormat = @"h:mma";  // Just time: "11:59pm"
+    } else {
+        formatter.dateFormat = @"EEE h:mma";  // Day + time: "Sun 11:59pm"
+    }
+    return [NSString stringWithFormat:@"till %@", [formatter stringFromDate:date]];
 }
 
 - (BOOL)wouldBundleBeAllowed:(NSString *)bundleID {
