@@ -552,6 +552,9 @@
 	}
     domainListWindowController_.readOnly = [SCUIUtilities blockIsRunning];
     [domainListWindowController_ showWindow: self];
+
+    // Activate app to bring window to front (required for LSUIElement apps)
+    [NSApp activateIgnoringOtherApps:YES];
 }
 
 - (void)closeDomainList {
@@ -907,6 +910,9 @@
     [self.weekScheduleWindowController showWindow:self];
     [self.weekScheduleWindowController.window makeKeyAndOrderFront:self];
     [self.weekScheduleWindowController.window center];
+
+    // Activate app to bring window to front (required for LSUIElement apps)
+    [NSApp activateIgnoringOtherApps:YES];
 }
 
 #pragma mark - Frosted Glass Appearance

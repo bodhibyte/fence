@@ -156,13 +156,15 @@
     scheduleItem.target = self;
     [self.statusMenu addItem:scheduleItem];
 
-    // View Blocklist with count
-    NSString *blocklistTitle = [self blocklistMenuTitle];
-    NSMenuItem *blocklistItem = [[NSMenuItem alloc] initWithTitle:blocklistTitle
-                                                           action:@selector(showBlocklistClicked:)
-                                                    keyEquivalent:@""];
-    blocklistItem.target = self;
-    [self.statusMenu addItem:blocklistItem];
+    // View Blocklist - only when committed
+    if (manager.isCommitted) {
+        NSString *blocklistTitle = [self blocklistMenuTitle];
+        NSMenuItem *blocklistItem = [[NSMenuItem alloc] initWithTitle:blocklistTitle
+                                                               action:@selector(showBlocklistClicked:)
+                                                        keyEquivalent:@""];
+        blocklistItem.target = self;
+        [self.statusMenu addItem:blocklistItem];
+    }
 
 #ifdef DEBUG
     [self.statusMenu addItem:[NSMenuItem separatorItem]];
@@ -188,6 +190,15 @@
     debugItem.submenu = debugMenu;
     [self.statusMenu addItem:debugItem];
 #endif
+
+    [self.statusMenu addItem:[NSMenuItem separatorItem]];
+
+    // Quit
+    NSMenuItem *quitItem = [[NSMenuItem alloc] initWithTitle:@"Quit Fence"
+                                                      action:@selector(quitClicked:)
+                                               keyEquivalent:@"q"];
+    quitItem.target = self;
+    [self.statusMenu addItem:quitItem];
 }
 
 - (NSString *)blocklistMenuTitle {
@@ -289,6 +300,10 @@
     if (self.onShowBlocklist) {
         self.onShowBlocklist();
     }
+}
+
+- (void)quitClicked:(id)sender {
+    [NSApp terminate:nil];
 }
 
 #ifdef DEBUG
