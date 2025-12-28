@@ -174,34 +174,9 @@
 }
 
 - (NSImage *)statusImage {
-    SCScheduleManager *manager = [SCScheduleManager sharedManager];
-
-    // Determine state
-    BOOL hasActiveBlocking = NO;
-    BOOL allAllowed = YES;
-
-    for (SCBlockBundle *bundle in manager.bundles) {
-        if (![manager wouldBundleBeAllowed:bundle.bundleID]) {
-            hasActiveBlocking = YES;
-            allAllowed = NO;
-        }
-    }
-
-    // Create appropriate icon
-    NSImage *image;
-
-    if (manager.bundles.count == 0 || !manager.isCommitted) {
-        // Gray circle - no commitment
-        image = [self circleImageWithColor:[NSColor tertiaryLabelColor]];
-    } else if (allAllowed) {
-        // Green - all allowed
-        image = [self circleImageWithColor:[NSColor systemGreenColor]];
-    } else {
-        // Red - something is blocked
-        image = [self circleImageWithColor:[NSColor systemRedColor]];
-    }
-
-    [image setTemplate:NO];
+    // Load the fence image as a template (macOS will handle light/dark mode)
+    NSImage *image = [NSImage imageNamed:@"MenuBarFence"];
+    [image setTemplate:YES];
     return image;
 }
 

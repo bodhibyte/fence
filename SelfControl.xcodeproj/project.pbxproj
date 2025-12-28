@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		07CCB4F5C9424725B598B04E /* SCDebugUtilities.m in Sources */ = {isa = PBXBuildFile; fileRef = 520B6A02C0CE497EBCB5CCF3 /* SCDebugUtilities.m */; };
+		167A631F7107878D77965A24 /* MenuBarFence@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = AA5F3568C5F305D28DF0F7AC /* MenuBarFence@2x.png */; };
 		1869042B4D754EE781990073 /* AppBlocker.m in Sources */ = {isa = PBXBuildFile; fileRef = 2B4CBC9BC7A744309802C589 /* AppBlocker.m */; };
 		1BD67B4BD6AD4D2390C3C1ED /* SCDebugUtilities.m in Sources */ = {isa = PBXBuildFile; fileRef = 520B6A02C0CE497EBCB5CCF3 /* SCDebugUtilities.m */; };
 		1F27973C853B40AD9E95BB1E /* SCDebugUtilities.m in Sources */ = {isa = PBXBuildFile; fileRef = 520B6A02C0CE497EBCB5CCF3 /* SCDebugUtilities.m */; };
@@ -262,6 +263,7 @@
 		DC4DBA9148D8D67A11899C5E /* Pods_SelfControl.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 6EBDE7B29D92764A409E4FDA /* Pods_SelfControl.framework */; };
 		E263B809965135813A557CD5 /* Pods_SelfControl_Killer.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 86DAD6532C67CBE72E99084C /* Pods_SelfControl_Killer.framework */; };
 		E82315BF8250E61F370530F9 /* SCScheduleLaunchdBridge.m in Sources */ = {isa = PBXBuildFile; fileRef = CF1441F5703140F3C25B9C5E /* SCScheduleLaunchdBridge.m */; };
+		F3DD61C74CAE8F0C43AD3921 /* MenuBarFence.png in Resources */ = {isa = PBXBuildFile; fileRef = 28BCD291A785AB33E7343087 /* MenuBarFence.png */; };
 		F5B8CBEE19EE21C30026F3A5 /* SCTimeIntervalFormatter.m in Sources */ = {isa = PBXBuildFile; fileRef = F5B8CBED19EE21C30026F3A5 /* SCTimeIntervalFormatter.m */; };
 /* End PBXBuildFile section */
 
@@ -599,6 +601,7 @@
 		228355242EFB7C8100E77469 /* SCMenuBarController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SCMenuBarController.h; sourceTree = "<group>"; };
 		228355252EFB7C8100E77469 /* SCMenuBarController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = SCMenuBarController.m; sourceTree = "<group>"; };
 		2387372C4819C994AC3040AB /* SCVersionTracker.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = SCVersionTracker.h; path = Common/Utility/SCVersionTracker.h; sourceTree = "<group>"; };
+		28BCD291A785AB33E7343087 /* MenuBarFence.png */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = image.png; path = MenuBarFence.png; sourceTree = "<group>"; };
 		29B97316FDCFA39411CA2CEA /* main.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
 		29B97324FDCFA39411CA2CEA /* AppKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AppKit.framework; path = /System/Library/Frameworks/AppKit.framework; sourceTree = "<absolute>"; };
 		29B97325FDCFA39411CA2CEA /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = /System/Library/Frameworks/Foundation.framework; sourceTree = "<absolute>"; };
@@ -627,6 +630,7 @@
 		8D1107320486CEB800E47090 /* SelfControl.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SelfControl.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		949F9F8815B32EC6007B8B42 /* zh-Hans */ = {isa = PBXFileReference; fileEncoding = 10; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/Localizable.strings"; sourceTree = "<group>"; };
 		949F9F8D15B333A1007B8B42 /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/InfoPlist.strings"; sourceTree = "<group>"; };
+		AA5F3568C5F305D28DF0F7AC /* MenuBarFence@2x.png */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = image.png; path = "MenuBarFence@2x.png"; sourceTree = "<group>"; };
 		AF899A50A17F0C6C8C6B84A2 /* libPods-SCKillerHelper.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-SCKillerHelper.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		C72025F2499F9F07E281CB50 /* Pods-SelfControl-SelfControlTests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-SelfControl-SelfControlTests.release.xcconfig"; path = "Pods/Target Support Files/Pods-SelfControl-SelfControlTests/Pods-SelfControl-SelfControlTests.release.xcconfig"; sourceTree = "<group>"; };
 		C85A094F15E20A0DB58665A8 /* libPods-selfcontrol-cli.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-selfcontrol-cli.a"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -1694,6 +1698,8 @@
 				3F481A9B3BB13815269D74D1 /* SCStartupSafetyCheck.m */,
 				EC9A7B9C279AFE0B72259B2B /* SCSafetyCheckWindowController.h */,
 				5AA687B207D9494C0056038B /* SCSafetyCheckWindowController.m */,
+				28BCD291A785AB33E7343087 /* MenuBarFence.png */,
+				AA5F3568C5F305D28DF0F7AC /* MenuBarFence@2x.png */,
 			);
 			name = SelfControl;
 			sourceTree = "<group>";
@@ -3522,6 +3528,8 @@
 				CB0385E119D77051004614B6 /* PreferencesAdvancedViewController.xib in Resources */,
 				CB1B44BE23B7F1ED00EBA087 /* cheater-background.png in Resources */,
 				CB1465C425B0285300130D2E /* SCError.strings in Resources */,
+				F3DD61C74CAE8F0C43AD3921 /* MenuBarFence.png in Resources */,
+				167A631F7107878D77965A24 /* MenuBarFence@2x.png in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
