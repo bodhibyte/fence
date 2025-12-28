@@ -43,20 +43,6 @@ extern NSNotificationName const SCScheduleManagerDidChangeNotification;
 /// Reorders bundles
 - (void)reorderBundles:(NSArray<SCBlockBundle *> *)bundles;
 
-#pragma mark - Schedules
-
-/// All weekly schedules (one per bundle)
-@property (nonatomic, readonly) NSArray<SCWeeklySchedule *> *schedules;
-
-/// Gets schedule for a specific bundle
-- (nullable SCWeeklySchedule *)scheduleForBundleID:(NSString *)bundleID;
-
-/// Updates schedule for a bundle
-- (void)updateSchedule:(SCWeeklySchedule *)schedule;
-
-/// Creates an empty schedule for a new bundle
-- (SCWeeklySchedule *)createScheduleForBundle:(SCBlockBundle *)bundle;
-
 #pragma mark - Week Settings
 
 /// Returns remaining days in current week (always Mon-Sun)
@@ -115,10 +101,6 @@ extern NSNotificationName const SCScheduleManagerDidChangeNotification;
 - (void)cleanupExpiredCommitments;
 
 #pragma mark - Status Display (UX Only)
-
-/// Returns what the status WOULD be if blocking were active
-/// This is for UX display only - does not affect actual blocking
-- (NSDictionary<NSString *, NSDictionary *> *)currentStatusForDisplay;
 
 /// Returns status string for a specific bundle
 - (NSString *)statusStringForBundleID:(NSString *)bundleID;

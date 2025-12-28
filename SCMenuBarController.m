@@ -91,40 +91,42 @@
 
     SCScheduleManager *manager = [SCScheduleManager sharedManager];
 
-    // Bundle statuses with status-pill style
-    for (SCBlockBundle *bundle in manager.bundles) {
-        BOOL allowed = [manager wouldBundleBeAllowed:bundle.bundleID];
-        NSString *statusStr = [manager statusStringForBundleID:bundle.bundleID];
-        NSString *statusWord = allowed ? @"allowed" : @"blocked";
-        NSColor *statusColor = allowed ? [NSColor systemGreenColor] : [NSColor systemRedColor];
+    // Only show bundle status pills when committed (like week schedule window)
+    if (manager.isCommitted) {
+        for (SCBlockBundle *bundle in manager.bundles) {
+            BOOL allowed = [manager wouldBundleBeAllowed:bundle.bundleID];
+            NSString *statusStr = [manager statusStringForBundleID:bundle.bundleID];
+            NSString *statusWord = allowed ? @"allowed" : @"blocked";
+            NSColor *statusColor = allowed ? [NSColor systemGreenColor] : [NSColor systemRedColor];
 
-        // Format: "● noise allowed till 8:16pm"
-        NSString *fullText = [NSString stringWithFormat:@"● %@ %@ %@", bundle.name, statusWord, statusStr];
+            // Format: "● noise allowed till 8:16pm"
+            NSString *fullText = [NSString stringWithFormat:@"● %@ %@ %@", bundle.name, statusWord, statusStr];
 
-        NSMenuItem *bundleItem = [[NSMenuItem alloc] initWithTitle:fullText
-                                                            action:nil
-                                                     keyEquivalent:@""];
+            NSMenuItem *bundleItem = [[NSMenuItem alloc] initWithTitle:fullText
+                                                                action:nil
+                                                         keyEquivalent:@""];
 
-        // Create attributed string with colored text
-        NSMutableAttributedString *attrTitle = [[NSMutableAttributedString alloc] initWithString:fullText];
-        [attrTitle addAttribute:NSForegroundColorAttributeName value:statusColor range:NSMakeRange(0, fullText.length)];
-        [attrTitle addAttribute:NSFontAttributeName value:[NSFont systemFontOfSize:13] range:NSMakeRange(0, fullText.length)];
+            // Create attributed string with colored text
+            NSMutableAttributedString *attrTitle = [[NSMutableAttributedString alloc] initWithString:fullText];
+            [attrTitle addAttribute:NSForegroundColorAttributeName value:statusColor range:NSMakeRange(0, fullText.length)];
+            [attrTitle addAttribute:NSFontAttributeName value:[NSFont systemFontOfSize:13] range:NSMakeRange(0, fullText.length)];
 
-        bundleItem.attributedTitle = attrTitle;
-        bundleItem.enabled = NO;
+            bundleItem.attributedTitle = attrTitle;
+            bundleItem.enabled = NO;
 
-        [self.statusMenu addItem:bundleItem];
+            [self.statusMenu addItem:bundleItem];
+        }
+
+        if (manager.bundles.count == 0) {
+            NSMenuItem *noBundlesItem = [[NSMenuItem alloc] initWithTitle:@"No bundles configured"
+                                                                   action:nil
+                                                            keyEquivalent:@""];
+            noBundlesItem.enabled = NO;
+            [self.statusMenu addItem:noBundlesItem];
+        }
+
+        [self.statusMenu addItem:[NSMenuItem separatorItem]];
     }
-
-    if (manager.bundles.count == 0) {
-        NSMenuItem *noBundlesItem = [[NSMenuItem alloc] initWithTitle:@"No bundles configured"
-                                                               action:nil
-                                                        keyEquivalent:@""];
-        noBundlesItem.enabled = NO;
-        [self.statusMenu addItem:noBundlesItem];
-    }
-
-    [self.statusMenu addItem:[NSMenuItem separatorItem]];
 
     // Commitment info
     if (manager.isCommitted) {

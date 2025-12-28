@@ -14,7 +14,6 @@ NSNotificationName const SCScheduleManagerDidChangeNotification = @"SCScheduleMa
 
 // NSUserDefaults keys (app-layer only, not in SCSettings)
 static NSString * const kBundlesKey = @"SCScheduleBundles";
-static NSString * const kSchedulesKey = @"SCWeeklySchedules";
 static NSString * const kWeekSchedulesPrefix = @"SCWeekSchedules_"; // + week key (e.g., "2024-12-23")
 static NSString * const kWeekCommitmentPrefix = @"SCWeekCommitment_"; // + week key
 static NSString * const kCommitmentEndDateKey = @"SCCommitmentEndDate";
@@ -28,7 +27,6 @@ static const NSInteger kDefaultEmergencyUnlockCredits = 5;
 @interface SCScheduleManager ()
 
 @property (nonatomic, strong) NSMutableArray<SCBlockBundle *> *mutableBundles;
-@property (nonatomic, strong) NSMutableArray<SCWeeklySchedule *> *mutableSchedules;
 // Cache for week-specific schedules: weekKey -> array of schedules
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSMutableArray<SCWeeklySchedule *> *> *weekSchedulesCache;
 
@@ -98,7 +96,6 @@ static const NSInteger kDefaultEmergencyUnlockCredits = 5;
     self = [super init];
     if (self) {
         _mutableBundles = [NSMutableArray array];
-        _mutableSchedules = [NSMutableArray array];
         _weekSchedulesCache = [NSMutableDictionary dictionary];
         [self reload];
     }
@@ -119,8 +116,7 @@ static const NSInteger kDefaultEmergencyUnlockCredits = 5;
     bundle.displayOrder = self.mutableBundles.count;
     [self.mutableBundles addObject:bundle];
 
-    // Create empty schedule for this bundle
-    [self createScheduleForBundle:bundle];
+    // Schedule is created when user edits it in the week view
 
     [self save];
     [self postChangeNotification];
@@ -139,16 +135,10 @@ static const NSInteger kDefaultEmergencyUnlockCredits = 5;
     // 1. Remove from bundles array
     [self.mutableBundles removeObject:bundle];
 
-    // 2. Remove from legacy schedules
-    SCWeeklySchedule *schedule = [self scheduleForBundleID:bundleID];
-    if (schedule) {
-        [self.mutableSchedules removeObject:schedule];
-    }
-
-    // 3. Clean weekSchedulesCache and SCWeekSchedules_* for all weeks
+    // 2. Clean weekSchedulesCache and SCWeekSchedules_* for all weeks
     [self removeSchedulesForBundleID:bundleID];
 
-    // 4. Save
+    // 3. Save
     [self save];
 
     [self postChangeNotification];
@@ -230,63 +220,6 @@ static const NSInteger kDefaultEmergencyUnlockCredits = 5;
 
     [self save];
     [self postChangeNotification];
-}
-
-#pragma mark - Schedules
-
-- (NSArray<SCWeeklySchedule *> *)schedules {
-    return [self.mutableSchedules copy];
-}
-
-- (nullable SCWeeklySchedule *)scheduleForBundleID:(NSString *)bundleID {
-    for (SCWeeklySchedule *schedule in self.mutableSchedules) {
-        if ([schedule.bundleID isEqualToString:bundleID]) {
-            return schedule;
-        }
-    }
-    return nil;
-}
-
-- (void)updateSchedule:(SCWeeklySchedule *)schedule {
-    // Check if this would loosen the schedule when committed
-    if (self.isCommitted) {
-        SCWeeklySchedule *oldSchedule = [self scheduleForBundleID:schedule.bundleID];
-        if (oldSchedule) {
-            // Check each day
-            for (SCDayOfWeek day = SCDayOfWeekSunday; day <= SCDayOfWeekSaturday; day++) {
-                if ([self changeWouldLoosenSchedule:oldSchedule toSchedule:schedule forDay:day]) {
-                    NSLog(@"Rejecting schedule change that would loosen restrictions while committed");
-                    return;
-                }
-            }
-        }
-    }
-
-    NSInteger index = [self indexOfScheduleWithBundleID:schedule.bundleID];
-    if (index != NSNotFound) {
-        self.mutableSchedules[index] = schedule;
-    } else {
-        [self.mutableSchedules addObject:schedule];
-    }
-
-    [self save];
-    [self postChangeNotification];
-}
-
-- (SCWeeklySchedule *)createScheduleForBundle:(SCBlockBundle *)bundle {
-    SCWeeklySchedule *schedule = [SCWeeklySchedule emptyScheduleForBundleID:bundle.bundleID];
-    [self.mutableSchedules addObject:schedule];
-    [self save];
-    return schedule;
-}
-
-- (NSInteger)indexOfScheduleWithBundleID:(NSString *)bundleID {
-    for (NSUInteger i = 0; i < self.mutableSchedules.count; i++) {
-        if ([self.mutableSchedules[i].bundleID isEqualToString:bundleID]) {
-            return i;
-        }
-    }
-    return NSNotFound;
 }
 
 #pragma mark - Week Settings
@@ -694,9 +627,6 @@ static const NSInteger kDefaultEmergencyUnlockCredits = 5;
         } else {
             // Use self's schedule lookup
             schedule = [self scheduleForBundleID:bundle.bundleID weekOffset:weekOffset];
-            if (!schedule) {
-                schedule = [self scheduleForBundleID:bundle.bundleID];
-            }
         }
 
         if (!schedule) {
@@ -817,10 +747,6 @@ static const NSInteger kDefaultEmergencyUnlockCredits = 5;
     // Clear in-memory cache
     [self.weekSchedulesCache removeAllObjects];
 
-    // Clear legacy schedules (in-memory and storage)
-    [self.mutableSchedules removeAllObjects];
-    [defaults removeObjectForKey:kSchedulesKey];
-
     [defaults synchronize];
 
     // Clear ApprovedSchedules and active block in daemon (requires XPC)
@@ -881,37 +807,17 @@ static const NSInteger kDefaultEmergencyUnlockCredits = 5;
 
 #pragma mark - Status Display
 
-- (NSDictionary<NSString *, NSDictionary *> *)currentStatusForDisplay {
-    NSMutableDictionary *status = [NSMutableDictionary dictionary];
-
-    for (SCBlockBundle *bundle in self.mutableBundles) {
-        SCWeeklySchedule *schedule = [self scheduleForBundleID:bundle.bundleID];
-        BOOL allowed = schedule ? [schedule isAllowedNow] : NO;
-
-        status[bundle.bundleID] = @{
-            @"name": bundle.name,
-            @"allowed": @(allowed),
-            @"statusString": [self statusStringForBundleID:bundle.bundleID],
-            @"color": bundle.color ?: [NSColor grayColor]
-        };
-    }
-
-    return status;
-}
-
 - (NSString *)statusStringForBundleID:(NSString *)bundleID {
-    // Check week-specific schedule first (current week), then fall back to base
     SCWeeklySchedule *schedule = [self scheduleForBundleID:bundleID weekOffset:0];
     if (!schedule) {
-        schedule = [self scheduleForBundleID:bundleID];
-    }
-    if (!schedule) {
-        // No schedule - use commitment end date directly
-        NSDate *commitmentEnd = [self commitmentEndDateForWeekOffset:0];
-        if (commitmentEnd) {
-            NSDateFormatter *formatter = [[NSDateFormatter alloc] init];
-            formatter.dateFormat = @"EEE h:mma";  // "Sun 12:00am"
-            return [NSString stringWithFormat:@"till %@", [formatter stringFromDate:commitmentEnd]];
+        // No schedule: if committed show commitment end, otherwise empty
+        if (self.isCommitted) {
+            NSDate *commitmentEnd = [self commitmentEndDateForWeekOffset:0];
+            if (commitmentEnd) {
+                NSDateFormatter *formatter = [[NSDateFormatter alloc] init];
+                formatter.dateFormat = @"EEE h:mma";  // "Sun 12:00am"
+                return [NSString stringWithFormat:@"till %@", [formatter stringFromDate:commitmentEnd]];
+            }
         }
         return @"";
     }
@@ -933,13 +839,10 @@ static const NSInteger kDefaultEmergencyUnlockCredits = 5;
 }
 
 - (BOOL)wouldBundleBeAllowed:(NSString *)bundleID {
-    // Check week-specific schedule first (current week), then fall back to base
     SCWeeklySchedule *schedule = [self scheduleForBundleID:bundleID weekOffset:0];
     if (!schedule) {
-        schedule = [self scheduleForBundleID:bundleID];
-    }
-    if (!schedule) {
-        return NO; // No schedule = blocked by default
+        // No schedule: committed = blocked (safe default), not committed = allowed
+        return !self.isCommitted;
     }
     return [schedule isAllowedNow];
 }
@@ -953,20 +856,11 @@ static const NSInteger kDefaultEmergencyUnlockCredits = 5;
         [bundleDicts addObject:[bundle toDictionary]];
     }
     [[NSUserDefaults standardUserDefaults] setObject:bundleDicts forKey:kBundlesKey];
-
-    // Save schedules
-    NSMutableArray *scheduleDicts = [NSMutableArray array];
-    for (SCWeeklySchedule *schedule in self.mutableSchedules) {
-        [scheduleDicts addObject:[schedule toDictionary]];
-    }
-    [[NSUserDefaults standardUserDefaults] setObject:scheduleDicts forKey:kSchedulesKey];
-
     [[NSUserDefaults standardUserDefaults] synchronize];
 }
 
 - (void)reload {
     [self.mutableBundles removeAllObjects];
-    [self.mutableSchedules removeAllObjects];
 
     // Load bundles
     NSArray *bundleDicts = [[NSUserDefaults standardUserDefaults] objectForKey:kBundlesKey];
@@ -981,23 +875,13 @@ static const NSInteger kDefaultEmergencyUnlockCredits = 5;
     [self.mutableBundles sortUsingComparator:^NSComparisonResult(SCBlockBundle *b1, SCBlockBundle *b2) {
         return [@(b1.displayOrder) compare:@(b2.displayOrder)];
     }];
-
-    // Load schedules
-    NSArray *scheduleDicts = [[NSUserDefaults standardUserDefaults] objectForKey:kSchedulesKey];
-    for (NSDictionary *dict in scheduleDicts) {
-        SCWeeklySchedule *schedule = [SCWeeklySchedule scheduleFromDictionary:dict];
-        if (schedule) {
-            [self.mutableSchedules addObject:schedule];
-        }
-    }
 }
 
 - (void)clearAllData {
     [self.mutableBundles removeAllObjects];
-    [self.mutableSchedules removeAllObjects];
+    [self.weekSchedulesCache removeAllObjects];
 
     [[NSUserDefaults standardUserDefaults] removeObjectForKey:kBundlesKey];
-    [[NSUserDefaults standardUserDefaults] removeObjectForKey:kSchedulesKey];
     [[NSUserDefaults standardUserDefaults] removeObjectForKey:kCommitmentEndDateKey];
     [[NSUserDefaults standardUserDefaults] removeObjectForKey:kIsCommittedKey];
     [[NSUserDefaults standardUserDefaults] synchronize];
