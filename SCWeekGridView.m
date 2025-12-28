@@ -169,13 +169,14 @@ static const CGFloat kTimelineHeight = 48.0;
     };
 
     SCDayOfWeek today = [SCWeeklySchedule today];
+    BOOL isCurrentWeek = (self.weekOffset == 0);
 
     for (NSUInteger i = 0; i < days.count; i++) {
         SCDayOfWeek day = [days[i] integerValue];
         NSRect headerRect = [self rectForDayHeader:i dayCount:days.count];
 
-        // Highlight today
-        if (day == today) {
+        // Highlight today (only for current week)
+        if (isCurrentWeek && day == today) {
             [[NSColor controlAccentColor] setFill];
             NSRect highlightRect = NSInsetRect(headerRect, 2, 2);
             highlightRect.size.height -= 2;
@@ -335,6 +336,9 @@ static const CGFloat kTimelineHeight = 48.0;
 }
 
 - (void)drawNowLine:(NSArray<NSNumber *> *)days {
+    // Only draw the NOW line for current week
+    if (self.weekOffset != 0) return;
+
     // Find if today is visible
     SCDayOfWeek today = [SCWeeklySchedule today];
     NSInteger todayIndex = -1;

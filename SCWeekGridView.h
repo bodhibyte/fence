@@ -48,6 +48,9 @@ NS_ASSUME_NONNULL_BEGIN
 /// Whether the schedule is committed (affects editability display)
 @property (nonatomic, assign) BOOL isCommitted;
 
+/// Current week offset (0 = this week, 1 = next week). Affects whether current-time indicators are shown.
+@property (nonatomic, assign) NSInteger weekOffset;
+
 /// Bundles to display as rows
 @property (nonatomic, copy, nullable) NSArray<SCBlockBundle *> *bundles;
 

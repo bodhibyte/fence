@@ -246,6 +246,7 @@
 
     // Show only remaining days for current week, all days for future weeks
     self.weekGridView.showOnlyRemainingDays = (self.currentWeekOffset == 0);
+    self.weekGridView.weekOffset = self.currentWeekOffset;
     [self.weekGridView reloadData];
 
     // Update status (only for current week)
