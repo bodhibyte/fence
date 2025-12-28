@@ -91,42 +91,24 @@
 
     SCScheduleManager *manager = [SCScheduleManager sharedManager];
 
-    // Header with current time
-    NSDateFormatter *formatter = [[NSDateFormatter alloc] init];
-    formatter.dateFormat = @"h:mma EEEE";
-    NSString *timeStr = [[formatter stringFromDate:[NSDate date]] lowercaseString];
-
-    NSMenuItem *headerItem = [[NSMenuItem alloc] initWithTitle:[NSString stringWithFormat:@"NOW (%@)", timeStr]
-                                                        action:nil
-                                                 keyEquivalent:@""];
-    headerItem.enabled = NO;
-    [self.statusMenu addItem:headerItem];
-
-    [self.statusMenu addItem:[NSMenuItem separatorItem]];
-
-    // Bundle statuses
+    // Bundle statuses with status-pill style
     for (SCBlockBundle *bundle in manager.bundles) {
         BOOL allowed = [manager wouldBundleBeAllowed:bundle.bundleID];
         NSString *statusStr = [manager statusStringForBundleID:bundle.bundleID];
+        NSString *statusWord = allowed ? @"allowed" : @"blocked";
+        NSColor *statusColor = allowed ? [NSColor systemGreenColor] : [NSColor systemRedColor];
 
-        NSString *icon = allowed ? @"✅" : @"🔒";
-        NSString *title = [NSString stringWithFormat:@"%@ %@", icon, bundle.name];
+        // Format: "● noise allowed till 8:16pm"
+        NSString *fullText = [NSString stringWithFormat:@"● %@ %@ %@", bundle.name, statusWord, statusStr];
 
-        NSMenuItem *bundleItem = [[NSMenuItem alloc] initWithTitle:title
+        NSMenuItem *bundleItem = [[NSMenuItem alloc] initWithTitle:fullText
                                                             action:nil
                                                      keyEquivalent:@""];
 
-        // Add status as attributed subtitle
-        NSMutableAttributedString *attrTitle = [[NSMutableAttributedString alloc] initWithString:title];
-        [attrTitle appendAttributedString:[[NSAttributedString alloc] initWithString:@"\n"]];
-
-        NSDictionary *subtitleAttrs = @{
-            NSFontAttributeName: [NSFont systemFontOfSize:10],
-            NSForegroundColorAttributeName: [NSColor secondaryLabelColor]
-        };
-        NSAttributedString *subtitle = [[NSAttributedString alloc] initWithString:[NSString stringWithFormat:@"     %@", statusStr]
-                                                                       attributes:subtitleAttrs];
-        [attrTitle appendAttributedString:subtitle];
+        // Create attributed string with colored text
+        NSMutableAttributedString *attrTitle = [[NSMutableAttributedString alloc] initWithString:fullText];
+        [attrTitle addAttribute:NSForegroundColorAttributeName value:statusColor range:NSMakeRange(0, fullText.length)];
+        [attrTitle addAttribute:NSFontAttributeName value:[NSFont systemFontOfSize:13] range:NSMakeRange(0, fullText.length)];
 
         bundleItem.attributedTitle = attrTitle;
         bundleItem.enabled = NO;
@@ -165,12 +147,67 @@
 
     [self.statusMenu addItem:[NSMenuItem separatorItem]];
 
-    // Open SelfControl
-    NSMenuItem *openItem = [[NSMenuItem alloc] initWithTitle:@"Open SelfControl"
-                                                      action:@selector(openAppClicked:)
-                                               keyEquivalent:@""];
-    openItem.target = self;
-    [self.statusMenu addItem:openItem];
+    // Show Week Schedule
+    NSMenuItem *scheduleItem = [[NSMenuItem alloc] initWithTitle:@"Show Week Schedule"
+                                                          action:@selector(showScheduleClicked:)
+                                                   keyEquivalent:@""];
+    scheduleItem.target = self;
+    [self.statusMenu addItem:scheduleItem];
+
+    // View Blocklist with count
+    NSString *blocklistTitle = [self blocklistMenuTitle];
+    NSMenuItem *blocklistItem = [[NSMenuItem alloc] initWithTitle:blocklistTitle
+                                                           action:@selector(showBlocklistClicked:)
+                                                    keyEquivalent:@""];
+    blocklistItem.target = self;
+    [self.statusMenu addItem:blocklistItem];
+
+#ifdef DEBUG
+    [self.statusMenu addItem:[NSMenuItem separatorItem]];
+
+    // Debug submenu
+    NSMenuItem *debugItem = [[NSMenuItem alloc] initWithTitle:@"Debug Options"
+                                                       action:nil
+                                                keyEquivalent:@""];
+    NSMenu *debugMenu = [[NSMenu alloc] init];
+
+    NSMenuItem *disableBlockingItem = [[NSMenuItem alloc] initWithTitle:@"Disable All Blocking"
+                                                                 action:@selector(debugDisableBlocking:)
+                                                          keyEquivalent:@""];
+    disableBlockingItem.target = self;
+    [debugMenu addItem:disableBlockingItem];
+
+    NSMenuItem *resetCreditsItem = [[NSMenuItem alloc] initWithTitle:@"Reset Emergency Credits"
+                                                              action:@selector(debugResetCredits:)
+                                                       keyEquivalent:@""];
+    resetCreditsItem.target = self;
+    [debugMenu addItem:resetCreditsItem];
+
+    debugItem.submenu = debugMenu;
+    [self.statusMenu addItem:debugItem];
+#endif
+}
+
+- (NSString *)blocklistMenuTitle {
+    SCScheduleManager *manager = [SCScheduleManager sharedManager];
+    NSInteger siteCount = 0;
+    NSInteger appCount = 0;
+
+    // Count entries across all bundles
+    for (SCBlockBundle *bundle in manager.bundles) {
+        for (id entry in bundle.entries) {
+            if ([entry isKindOfClass:[NSString class]]) {
+                NSString *entryStr = (NSString *)entry;
+                if ([entryStr hasPrefix:@"app:"]) {
+                    appCount++;
+                } else {
+                    siteCount++;
+                }
+            }
+        }
+    }
+
+    return [NSString stringWithFormat:@"View Blocklist (%ld sites, %ld apps)", (long)siteCount, (long)appCount];
 }
 
 - (NSImage *)statusImage {
@@ -236,5 +273,29 @@
 - (void)openAppClicked:(id)sender {
     [self.delegate menuBarControllerDidRequestOpenApp:self];
 }
+
+- (void)showScheduleClicked:(id)sender {
+    if (self.onShowSchedule) {
+        self.onShowSchedule();
+    } else {
+        [self.delegate menuBarControllerDidRequestOpenApp:self];
+    }
+}
+
+- (void)showBlocklistClicked:(id)sender {
+    if (self.onShowBlocklist) {
+        self.onShowBlocklist();
+    }
+}
+
+#ifdef DEBUG
+- (void)debugDisableBlocking:(id)sender {
+    [[NSNotificationCenter defaultCenter] postNotificationName:@"SCDebugDisableBlockingRequested" object:nil];
+}
+
+- (void)debugResetCredits:(id)sender {
+    [[NSNotificationCenter defaultCenter] postNotificationName:@"SCDebugResetCreditsRequested" object:nil];
+}
+#endif
 
 @end

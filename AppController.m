@@ -197,6 +197,15 @@
 			// Always show menu bar when block is running
 			[[SCMenuBarController sharedController] setVisible:YES];
 
+			// Set up menu bar action handlers
+			__weak typeof(self) weakSelf = self;
+			[SCMenuBarController sharedController].onShowSchedule = ^{
+				[weakSelf showWeekSchedule:weakSelf];
+			};
+			[SCMenuBarController sharedController].onShowBlocklist = ^{
+				[weakSelf showDomainList:weakSelf];
+			};
+
 			// Show week schedule only if not committed (if committed, menu bar is sufficient)
 			SCScheduleManager *manager = [SCScheduleManager sharedManager];
 			if (![manager isCommitted]) {
@@ -369,8 +378,20 @@
 
 - (void)applicationDidFinishLaunching:(NSNotification *)aNotification {
 	[NSApplication sharedApplication].delegate = self;
-    
+
     [SCSentry startSentry: @"org.eyebeam.SelfControl"];
+
+#ifdef DEBUG
+    // Listen for debug actions from menu bar
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(toggleDebugBlocking:)
+                                                 name:@"SCDebugDisableBlockingRequested"
+                                               object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(resetEmergencyCredits:)
+                                                 name:@"SCDebugResetCreditsRequested"
+                                               object:nil];
+#endif
 
     settings_ = [SCSettings sharedSettings];
     // go copy over any preferences from legacy setting locations

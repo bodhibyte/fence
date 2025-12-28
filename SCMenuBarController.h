@@ -29,6 +29,10 @@ NS_ASSUME_NONNULL_BEGIN
 /// Whether the menu bar item is visible
 @property (nonatomic, assign) BOOL isVisible;
 
+/// Action blocks for menu items
+@property (nonatomic, copy, nullable) void (^onShowSchedule)(void);
+@property (nonatomic, copy, nullable) void (^onShowBlocklist)(void);
+
 /// Shared instance
 + (instancetype)sharedController;
 
