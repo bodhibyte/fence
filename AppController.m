@@ -34,10 +34,11 @@
 #import <TransformerKit/NSValueTransformer+TransformerKit.h>
 #import "SCDebugUtilities.h"
 #import "SCWeekScheduleWindowController.h"
+#import "SCScheduleManager.h"
+#import "SCMenuBarController.h"
 #ifdef DEBUG
 #import "SCStartupSafetyCheck.h"
 #import "SCSafetyCheckWindowController.h"
-#import "SCScheduleManager.h"
 #endif
 
 @interface AppController () {}
@@ -190,10 +191,18 @@
 	if(blockIsOn) { // block is on
 		if(!blockWasOn) { // if we just switched states to on...
 			[self closeTimerWindow];
-			[self showTimerWindow];
 			[initialWindow_ close];
 			[self closeDomainList];
-            
+
+			// Always show menu bar when block is running
+			[[SCMenuBarController sharedController] setVisible:YES];
+
+			// Show week schedule only if not committed (if committed, menu bar is sufficient)
+			SCScheduleManager *manager = [SCScheduleManager sharedManager];
+			if (![manager isCommitted]) {
+				[self showWeekSchedule:self];
+			}
+
             // apparently, a block is running, so make sure FirstBlockStarted is true
             [defaults_ setBool: YES forKey: @"FirstBlockStarted"];
 		}
@@ -534,10 +543,14 @@
 	// INCLUDE the HUD-style timer window.
 	if([[timerWindowController_ window] isVisible])
 		return NO;
-    
+
+	// Don't terminate if menu bar UI is active (block is running)
+	if([[SCMenuBarController sharedController] isVisible])
+		return NO;
+
     if (PFMoveIsInProgress())
         return NO;
-    
+
 	return YES;
 }
 
