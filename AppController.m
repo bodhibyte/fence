@@ -963,6 +963,14 @@
     resetCommitmentItem.target = self;
     [debugMenu addItem:resetCommitmentItem];
 
+    // Add "Reset Emergency Credits" item
+    NSMenuItem* resetCreditsItem = [[NSMenuItem alloc]
+        initWithTitle:@"Reset Emergency Credits"
+               action:@selector(resetEmergencyCredits:)
+        keyEquivalent:@""];
+    resetCreditsItem.target = self;
+    [debugMenu addItem:resetCreditsItem];
+
     // Add separator
     [debugMenu addItem:[NSMenuItem separatorItem]];
 
@@ -1076,6 +1084,18 @@
         [doneAlert addButtonWithTitle:@"OK"];
         [doneAlert runModal];
     }
+}
+
+- (IBAction)resetEmergencyCredits:(id)sender {
+    SCScheduleManager *manager = [SCScheduleManager sharedManager];
+    [manager resetEmergencyUnlockCredits];
+
+    NSInteger credits = [manager emergencyUnlockCreditsRemaining];
+    NSAlert *alert = [[NSAlert alloc] init];
+    alert.messageText = @"Emergency Credits Reset";
+    alert.informativeText = [NSString stringWithFormat:@"Emergency unlock credits have been reset to %ld.\n\n(DEBUG ONLY)", (long)credits];
+    [alert addButtonWithTitle:@"OK"];
+    [alert runModal];
 }
 
 - (BOOL)validateMenuItem:(NSMenuItem*)menuItem {

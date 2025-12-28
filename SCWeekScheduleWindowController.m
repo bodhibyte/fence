@@ -26,6 +26,7 @@
 @property (nonatomic, strong) SCWeekGridView *weekGridView;
 @property (nonatomic, strong) NSScrollView *gridScrollView;
 @property (nonatomic, strong) NSButton *addBundleButton;
+@property (nonatomic, strong) NSButton *emergencyUnlockButton;
 @property (nonatomic, strong) NSButton *commitButton;
 @property (nonatomic, strong) NSTextField *commitmentLabel;
 
@@ -179,6 +180,15 @@
     self.addBundleButton.action = @selector(addBundleClicked:);
     self.addBundleButton.autoresizingMask = NSViewMaxYMargin; // Stay at bottom
     [contentView addSubview:self.addBundleButton];
+
+    // Emergency Unlock button (red, next to commit button)
+    self.emergencyUnlockButton = [[NSButton alloc] initWithFrame:NSMakeRect(contentView.bounds.size.width - padding - 150 - 10 - 160, buttonY, 160, 30)];
+    self.emergencyUnlockButton.bezelStyle = NSBezelStyleRounded;
+    self.emergencyUnlockButton.target = self;
+    self.emergencyUnlockButton.action = @selector(emergencyUnlockClicked:);
+    self.emergencyUnlockButton.autoresizingMask = NSViewMinXMargin | NSViewMaxYMargin; // Stay at bottom-right
+    [self updateEmergencyButtonTitle:@"Emergency Unlock (5)"];
+    [contentView addSubview:self.emergencyUnlockButton];
 
     self.commitButton = [[NSButton alloc] initWithFrame:NSMakeRect(contentView.bounds.size.width - padding - 150, buttonY, 150, 30)];
     self.commitButton.title = @"Commit to Week";
@@ -353,9 +363,26 @@
     [self.statusStackView addArrangedSubview:spacer];
 }
 
+- (void)updateEmergencyButtonTitle:(NSString *)title {
+    NSMutableAttributedString *redTitle = [[NSMutableAttributedString alloc] initWithString:title];
+    [redTitle addAttribute:NSForegroundColorAttributeName
+                     value:[NSColor systemRedColor]
+                     range:NSMakeRange(0, redTitle.length)];
+    [redTitle addAttribute:NSFontAttributeName
+                     value:[NSFont systemFontOfSize:13]
+                     range:NSMakeRange(0, redTitle.length)];
+    self.emergencyUnlockButton.attributedTitle = redTitle;
+}
+
 - (void)updateCommitmentUI {
     SCScheduleManager *manager = [SCScheduleManager sharedManager];
     BOOL isCommitted = [manager isCommittedForWeekOffset:self.currentWeekOffset];
+
+    // Update emergency unlock button
+    NSInteger credits = [manager emergencyUnlockCreditsRemaining];
+    [self updateEmergencyButtonTitle:[NSString stringWithFormat:@"Emergency Unlock (%ld)", (long)credits]];
+    // Only enabled when committed AND have credits remaining
+    self.emergencyUnlockButton.enabled = (isCommitted && credits > 0);
 
     if (isCommitted) {
         self.commitButton.title = @"Committed ✓";
@@ -482,6 +509,114 @@
             [self reloadData];
         }
     }];
+}
+
+- (void)emergencyUnlockClicked:(id)sender {
+    SCScheduleManager *manager = [SCScheduleManager sharedManager];
+    NSInteger credits = [manager emergencyUnlockCreditsRemaining];
+
+    if (credits <= 0) {
+        NSAlert *alert = [[NSAlert alloc] init];
+        alert.messageText = @"No Credits Remaining";
+        alert.informativeText = @"You have used all your emergency unlock credits.";
+        [alert runModal];
+        return;
+    }
+
+    // Confirmation dialog
+    NSAlert *alert = [[NSAlert alloc] init];
+    alert.messageText = @"Use Emergency Unlock?";
+    alert.informativeText = [NSString stringWithFormat:
+        @"This will immediately end all blocking and use 1 of your %ld remaining emergency unlock%@.\n\n"
+        @"This cannot be undone.",
+        (long)credits, credits == 1 ? @"" : @"s"];
+    alert.alertStyle = NSAlertStyleWarning;
+    [alert addButtonWithTitle:@"Unlock"];
+    [alert addButtonWithTitle:@"Cancel"];
+
+    [alert beginSheetModalForWindow:self.window completionHandler:^(NSModalResponse returnCode) {
+        if (returnCode == NSAlertFirstButtonReturn) {
+            [self performEmergencyUnlock];
+        }
+    }];
+}
+
+- (void)performEmergencyUnlock {
+    SCScheduleManager *manager = [SCScheduleManager sharedManager];
+
+    // Get path to emergency.sh in the app bundle or project directory
+    NSString *scriptPath = [[NSBundle mainBundle] pathForResource:@"emergency" ofType:@"sh"];
+
+    // Fallback: check project directory (for development)
+    if (!scriptPath) {
+        NSString *projectPath = [[[NSBundle mainBundle] bundlePath] stringByDeletingLastPathComponent];
+        scriptPath = [projectPath stringByAppendingPathComponent:@"emergency.sh"];
+        if (![[NSFileManager defaultManager] fileExistsAtPath:scriptPath]) {
+            // Try one more level up (in case we're in build/Release)
+            projectPath = [[projectPath stringByDeletingLastPathComponent] stringByDeletingLastPathComponent];
+            scriptPath = [projectPath stringByAppendingPathComponent:@"emergency.sh"];
+        }
+    }
+
+    if (![[NSFileManager defaultManager] fileExistsAtPath:scriptPath]) {
+        NSAlert *alert = [[NSAlert alloc] init];
+        alert.messageText = @"Script Not Found";
+        alert.informativeText = @"Could not find emergency.sh script.";
+        alert.alertStyle = NSAlertStyleCritical;
+        [alert runModal];
+        return;
+    }
+
+    // Run script with admin privileges using AppleScript
+    NSString *appleScriptSource = [NSString stringWithFormat:
+        @"do shell script \"/bin/bash '%@'\" with administrator privileges", scriptPath];
+
+    NSDictionary *errorInfo = nil;
+    NSAppleScript *appleScript = [[NSAppleScript alloc] initWithSource:appleScriptSource];
+    NSAppleEventDescriptor *result = [appleScript executeAndReturnError:&errorInfo];
+
+    if (!result && errorInfo) {
+        // User cancelled or error occurred
+        NSNumber *errorNumber = errorInfo[NSAppleScriptErrorNumber];
+        if (errorNumber && [errorNumber integerValue] == -128) {
+            // User cancelled - don't show error, don't use credit
+            return;
+        }
+
+        NSAlert *alert = [[NSAlert alloc] init];
+        alert.messageText = @"Emergency Unlock Failed";
+        alert.informativeText = [NSString stringWithFormat:@"Error: %@",
+            errorInfo[NSAppleScriptErrorMessage] ?: @"Unknown error"];
+        alert.alertStyle = NSAlertStyleCritical;
+        [alert runModal];
+        return;
+    }
+
+    // Success - use credit
+    [manager useEmergencyUnlockCredit];
+
+    // Clear commitment from NSUserDefaults (script clears daemon state, we clear app state)
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    NSDictionary *allDefaults = [defaults dictionaryRepresentation];
+    for (NSString *key in allDefaults.allKeys) {
+        if ([key hasPrefix:@"SCWeekCommitment_"] || [key hasPrefix:@"SCWeekSchedules_"]) {
+            [defaults removeObjectForKey:key];
+        }
+    }
+    [defaults removeObjectForKey:@"SCIsCommitted"];
+    [defaults synchronize];
+
+    // Post notification to refresh UI
+    [[NSNotificationCenter defaultCenter] postNotificationName:SCScheduleManagerDidChangeNotification object:nil];
+
+    // Show success message
+    NSInteger remaining = [manager emergencyUnlockCreditsRemaining];
+    NSAlert *successAlert = [[NSAlert alloc] init];
+    successAlert.messageText = @"Emergency Unlock Complete";
+    successAlert.informativeText = [NSString stringWithFormat:
+        @"All blocking has been removed.\n\nYou have %ld emergency unlock%@ remaining.",
+        (long)remaining, remaining == 1 ? @"" : @"s"];
+    [successAlert runModal];
 }
 
 #pragma mark - Notifications

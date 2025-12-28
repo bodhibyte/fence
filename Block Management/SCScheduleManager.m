@@ -19,6 +19,9 @@ static NSString * const kWeekSchedulesPrefix = @"SCWeekSchedules_"; // + week ke
 static NSString * const kWeekCommitmentPrefix = @"SCWeekCommitment_"; // + week key
 static NSString * const kCommitmentEndDateKey = @"SCCommitmentEndDate";
 static NSString * const kIsCommittedKey = @"SCIsCommitted";
+static NSString * const kEmergencyUnlockCreditsKey = @"SCEmergencyUnlockCredits";
+static NSString * const kEmergencyUnlockCreditsInitializedKey = @"SCEmergencyUnlockCreditsInitialized";
+static const NSInteger kDefaultEmergencyUnlockCredits = 5;
 
 @class SCBlockSegment;
 
@@ -986,6 +989,45 @@ static NSString * const kIsCommittedKey = @"SCIsCommitted";
 - (void)postChangeNotification {
     [[NSNotificationCenter defaultCenter] postNotificationName:SCScheduleManagerDidChangeNotification
                                                         object:self];
+}
+
+#pragma mark - Emergency Unlock Credits
+
+- (NSInteger)emergencyUnlockCreditsRemaining {
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+
+    // Initialize credits on first access
+    if (![defaults boolForKey:kEmergencyUnlockCreditsInitializedKey]) {
+        [defaults setInteger:kDefaultEmergencyUnlockCredits forKey:kEmergencyUnlockCreditsKey];
+        [defaults setBool:YES forKey:kEmergencyUnlockCreditsInitializedKey];
+        [defaults synchronize];
+        return kDefaultEmergencyUnlockCredits;
+    }
+
+    return [defaults integerForKey:kEmergencyUnlockCreditsKey];
+}
+
+- (BOOL)useEmergencyUnlockCredit {
+    NSInteger remaining = [self emergencyUnlockCreditsRemaining];
+    if (remaining <= 0) {
+        return NO;
+    }
+
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    [defaults setInteger:remaining - 1 forKey:kEmergencyUnlockCreditsKey];
+    [defaults synchronize];
+
+    NSLog(@"SCScheduleManager: Used emergency unlock credit. %ld remaining.", (long)(remaining - 1));
+    return YES;
+}
+
+- (void)resetEmergencyUnlockCredits {
+#ifdef DEBUG
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    [defaults setInteger:kDefaultEmergencyUnlockCredits forKey:kEmergencyUnlockCreditsKey];
+    [defaults synchronize];
+    NSLog(@"SCScheduleManager: Reset emergency unlock credits to %ld (DEBUG)", (long)kDefaultEmergencyUnlockCredits);
+#endif
 }
 
 @end

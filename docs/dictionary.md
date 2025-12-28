@@ -19,6 +19,8 @@
 | **Bundle** | Named group of websites/apps with a color for identification | [→ Full Entry](dictionary/bundle.md) |
 | **Entry** | Single blocked item (domain or app bundle ID) | [→ Full Entry](dictionary/entry.md) |
 | **Week Offset** | Index for week navigation (0=current, 1=next) | [→ Full Entry](dictionary/week-offset.md) |
+| **Emergency Unlock** | Escape hatch to break out of committed state using credits | [→ Full Entry](dictionary/emergency-unlock.md) |
+| **Emergency Credits** | Limited currency (5 lifetime) for emergency unlocks | [→ Full Entry](dictionary/emergency-credits.md) |
 
 ---
 

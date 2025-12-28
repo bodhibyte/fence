@@ -137,6 +137,17 @@ extern NSNotificationName const SCScheduleManagerDidChangeNotification;
 /// Clears all data (for testing)
 - (void)clearAllData;
 
+#pragma mark - Emergency Unlock Credits
+
+/// Returns the number of emergency unlock credits remaining (default: 5 for new users)
+- (NSInteger)emergencyUnlockCreditsRemaining;
+
+/// Uses one emergency unlock credit. Returns YES if successful, NO if no credits remaining.
+- (BOOL)useEmergencyUnlockCredit;
+
+/// Resets emergency unlock credits to 5 (DEBUG only)
+- (void)resetEmergencyUnlockCredits;
+
 @end
 
 NS_ASSUME_NONNULL_END

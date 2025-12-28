@@ -88,6 +88,7 @@ graph TD
 - [Segment](segment.md) - Created at commit time
 - [Pre-Authorized Schedule](pre-authorized-schedule.md) - Registered at commit time
 - [Week Offset](week-offset.md) - Commitment is per-week
+- [Emergency Unlock](emergency-unlock.md) - Escape mechanism (costs credits)
 
 ---
 
@@ -95,7 +96,7 @@ graph TD
 
 - **NOT** the same as "saving" - saves are editable, commits are not
 - **NOT** auto-triggered - requires explicit user action
-- **NOT** reversible within the same week (anti-cheat measure)
+- **NOT** reversible within the same week (except via [Emergency Unlock](emergency-unlock.md) which costs finite credits)
 - **NOT** a single timestamp - includes start date, end date, and status
 
 ---
@@ -108,6 +109,7 @@ graph TD
 | Navigate weeks | Can view other weeks normally |
 | View current week | Read-only, no editing |
 | Start block manually | Still possible (separate from schedule) |
+| Emergency Unlock button | Enabled (if credits > 0) - escape hatch |
 
 ---
 

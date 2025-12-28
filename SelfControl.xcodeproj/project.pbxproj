@@ -12,6 +12,7 @@
 		1BD67B4BD6AD4D2390C3C1ED /* SCDebugUtilities.m in Sources */ = {isa = PBXBuildFile; fileRef = 520B6A02C0CE497EBCB5CCF3 /* SCDebugUtilities.m */; };
 		1F27973C853B40AD9E95BB1E /* SCDebugUtilities.m in Sources */ = {isa = PBXBuildFile; fileRef = 520B6A02C0CE497EBCB5CCF3 /* SCDebugUtilities.m */; };
 		1FEB91F11AD92FF528C0B287 /* SCStartupSafetyCheck.m in Sources */ = {isa = PBXBuildFile; fileRef = 3F481A9B3BB13815269D74D1 /* SCStartupSafetyCheck.m */; };
+		224577BA2F0198C80050F2F4 /* emergency.sh in Resources */ = {isa = PBXBuildFile; fileRef = 224577B92F0198C80050F2F4 /* emergency.sh */; };
 		228354F82EFB7BCB00E77469 /* SCTimeRange.m in Sources */ = {isa = PBXBuildFile; fileRef = 228354F72EFB7BCB00E77469 /* SCTimeRange.m */; };
 		228354F92EFB7BCB00E77469 /* SCTimeRange.h in Headers */ = {isa = PBXBuildFile; fileRef = 228354F62EFB7BCB00E77469 /* SCTimeRange.h */; };
 		228354FA2EFB7BCB00E77469 /* SCTimeRange.m in Sources */ = {isa = PBXBuildFile; fileRef = 228354F72EFB7BCB00E77469 /* SCTimeRange.m */; };
@@ -578,6 +579,7 @@
 		0534B42090794A569FD6AAA4 /* SCDebugUtilities.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = SCDebugUtilities.h; path = Common/SCDebugUtilities.h; sourceTree = SOURCE_ROOT; };
 		1058C7A1FEA54F0111CA2CBB /* Cocoa.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Cocoa.framework; path = /System/Library/Frameworks/Cocoa.framework; sourceTree = "<absolute>"; };
 		1FF38B4CA7B04483AB6E70BB /* AppBlocker.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AppBlocker.h; sourceTree = "<group>"; };
+		224577B92F0198C80050F2F4 /* emergency.sh */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; path = emergency.sh; sourceTree = "<group>"; };
 		228354F62EFB7BCB00E77469 /* SCTimeRange.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SCTimeRange.h; sourceTree = "<group>"; };
 		228354F72EFB7BCB00E77469 /* SCTimeRange.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = SCTimeRange.m; sourceTree = "<group>"; };
 		228354FF2EFB7C0100E77469 /* SCBlockBundle.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SCBlockBundle.h; sourceTree = "<group>"; };
@@ -1652,6 +1654,7 @@
 		19C28FACFE9D520D11CA2CBB /* Products */ = {
 			isa = PBXGroup;
 			children = (
+				224577B92F0198C80050F2F4 /* emergency.sh */,
 				8D1107320486CEB800E47090 /* SelfControl.app */,
 				CBA2AFD20F39EC12005AFEBE /* selfcontrol-cli */,
 				CB9C80F719CFB79700CDCAE1 /* SelfControl Killer.app */,
@@ -3503,6 +3506,7 @@
 				CB4C58DA0F3F90B000B5D7CB /* Credits.rtf in Resources */,
 				CB9365620F8581B000EF284E /* dsa_pub.pem in Resources */,
 				CB9366E80F85BEF100EF284E /* NSRemoveTemplate.jpg in Resources */,
+				224577BA2F0198C80050F2F4 /* emergency.sh in Resources */,
 				CB9366E90F85BEF100EF284E /* NSAddTemplate.jpg in Resources */,
 				CBDB118C2084239D0010397E /* FirstTime.xib in Resources */,
 				CB62FC3024B11A4F00ADBC40 /* selfcontrold-Info.plist in Resources */,
