@@ -239,6 +239,7 @@
 
     self.statusItem.button.image = [self statusImage];
     [self rebuildMenu];
+    self.statusItem.menu = self.statusMenu;
 }
 
 - (void)startUpdateTimer {
