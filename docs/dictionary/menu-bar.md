@@ -20,7 +20,7 @@ The Menu Bar is an `NSStatusItem`-based interface that appears in the macOS menu
 - **Icon:** Picket fence template image (adapts to light/dark mode)
 - **Click:** Opens dropdown menu with status and actions
 
-**Menu structure:**
+**Menu structure (when committed):**
 ```
 ┌─────────────────────────────────────┐
 │ ● noise allowed till 8:16pm        │  ← Status pill (green)
@@ -35,13 +35,27 @@ The Menu Bar is an `NSStatusItem`-based interface that appears in the macOS menu
 └─────────────────────────────────────┘
 ```
 
+**Menu structure (when NOT committed):**
+```
+┌─────────────────────────────────────┐
+│ No active commitment               │  ← Info (disabled)
+├─────────────────────────────────────┤
+│ Show Week Schedule                 │  ← Action
+│ View Blocklist (4 sites, 2 apps)   │  ← Action with count
+├─────────────────────────────────────┤
+│ Debug Options                      │  ← DEBUG builds only
+└─────────────────────────────────────┘
+```
+
+**Note:** Status pills are only shown when committed (same as week schedule status bar).
+
 ---
 
 ## Context/Trigger
 
 - **Created:** When block starts running (`refreshUserInterface` in AppController)
 - **Visibility:** Controlled via `[[SCMenuBarController sharedController] setVisible:YES/NO]`
-- **Updates:** Every 60 seconds via timer + on schedule change notifications
+- **Updates:** Immediately on `SCScheduleManagerDidChangeNotification` + every 60 seconds via timer
 - **Primary UI:** When committed, this is the only visible UI (no windows open)
 
 ---
@@ -50,7 +64,7 @@ The Menu Bar is an `NSStatusItem`-based interface that appears in the macOS menu
 
 | Item | Type | Action |
 |------|------|--------|
-| Bundle status pills | Info (disabled) | Shows "● name status till time" with colored text |
+| Bundle status pills | Info (disabled) | Shows "● name status till time" with colored text (only when committed) |
 | Commitment info | Info (disabled) | Shows "Committed until [day]" or "No active commitment" |
 | Show Week Schedule | Action | Opens `SCWeekScheduleWindowController` |
 | View Blocklist (X sites, Y apps) | Action | Opens `DomainListWindowController` |
