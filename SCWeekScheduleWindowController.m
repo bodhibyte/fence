@@ -416,8 +416,10 @@
 #pragma mark - Actions
 
 - (void)addBundleClicked:(id)sender {
+    SCScheduleManager *manager = [SCScheduleManager sharedManager];
     self.bundleEditorController = [[SCBundleEditorController alloc] initForNewBundle];
     self.bundleEditorController.delegate = self;
+    self.bundleEditorController.isCommitted = [manager isCommittedForWeekOffset:self.currentWeekOffset];
     [self.bundleEditorController beginSheetModalForWindow:self.window completionHandler:nil];
 }
 
@@ -467,7 +469,7 @@
     }
 
     alert.informativeText = [NSString stringWithFormat:
-                             @"Once committed, you can only make the schedule stricter (reduce allowed time). "
+                             @"Once committed, the schedule is locked and cannot be modified. "
                              @"This commitment lasts until %@.\n\n"
                              @"Blocking will start immediately for any in-progress block windows.", lastDay];
     [alert addButtonWithTitle:@"Commit"];
@@ -498,6 +500,15 @@
     // Remember which week we're editing
     self.editingWeekOffset = self.currentWeekOffset;
 
+    // Block opening editor when committed - schedule is locked
+    if ([manager isCommittedForWeekOffset:self.editingWeekOffset]) {
+        NSAlert *alert = [[NSAlert alloc] init];
+        alert.messageText = @"Schedule Locked";
+        alert.informativeText = @"You're committed to this week. The schedule cannot be modified.";
+        [alert runModal];
+        return;
+    }
+
     SCWeeklySchedule *schedule = [manager scheduleForBundleID:bundle.bundleID weekOffset:self.editingWeekOffset];
 
     if (!schedule) {
@@ -508,14 +519,16 @@
                                                                             schedule:schedule
                                                                                  day:day];
     self.dayEditorController.delegate = self;
-    self.dayEditorController.isCommitted = [manager isCommittedForWeekOffset:self.editingWeekOffset];
+    self.dayEditorController.isCommitted = NO;  // Will never be YES now since we block above
 
     [self.dayEditorController beginSheetModalForWindow:self.window completionHandler:nil];
 }
 
 - (void)weekGridView:(SCWeekGridView *)gridView didRequestEditBundle:(SCBlockBundle *)bundle {
+    SCScheduleManager *manager = [SCScheduleManager sharedManager];
     self.bundleEditorController = [[SCBundleEditorController alloc] initWithBundle:bundle];
     self.bundleEditorController.delegate = self;
+    self.bundleEditorController.isCommitted = [manager isCommittedForWeekOffset:self.currentWeekOffset];
     [self.bundleEditorController beginSheetModalForWindow:self.window completionHandler:nil];
 }
 

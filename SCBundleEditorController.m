@@ -6,7 +6,7 @@
 #import "SCBundleEditorController.h"
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 
-@interface SCBundleEditorController () <NSTableViewDataSource, NSTableViewDelegate>
+@interface SCBundleEditorController () <NSTableViewDataSource, NSTableViewDelegate, NSWindowDelegate>
 
 @property (nonatomic, strong, nullable) SCBlockBundle *bundle;
 @property (nonatomic, strong) SCBlockBundle *workingBundle;
@@ -20,10 +20,17 @@
 @property (nonatomic, strong) NSButton *addWebsiteButton;
 @property (nonatomic, strong) NSButton *removeEntryButton;
 @property (nonatomic, strong) NSButton *deleteButton;
-@property (nonatomic, strong) NSButton *doneButton;
 @property (nonatomic, strong) NSButton *cancelButton;
+@property (nonatomic, strong) NSButton *doneButton;
+@property (nonatomic, strong) NSTextField *committedWarningLabel;
 
 @property (nonatomic, strong) NSArray<NSView *> *colorViews;
+
+// Track original entries to detect additions
+@property (nonatomic, assign) NSUInteger originalEntryCount;
+
+// Event monitor for click-outside-to-close
+@property (nonatomic, strong) id clickOutsideMonitor;
 
 @end
 
@@ -32,7 +39,7 @@
 - (instancetype)initForNewBundle {
     NSRect frame = NSMakeRect(0, 0, 400, 450);
     NSWindow *window = [[NSWindow alloc] initWithContentRect:frame
-                                                   styleMask:NSWindowStyleMaskTitled
+                                                   styleMask:NSWindowStyleMaskTitled | NSWindowStyleMaskClosable
                                                      backing:NSBackingStoreBuffered
                                                        defer:NO];
     window.title = @"New Bundle";
@@ -42,6 +49,8 @@
         _bundle = nil;
         _workingBundle = [SCBlockBundle bundleWithName:@"New Bundle" color:[SCBlockBundle colorBlue]];
         _isNewBundle = YES;
+        _originalEntryCount = 0;
+        window.delegate = self;
 
         [self setupUI];
     }
@@ -51,7 +60,7 @@
 - (instancetype)initWithBundle:(SCBlockBundle *)bundle {
     NSRect frame = NSMakeRect(0, 0, 400, 450);
     NSWindow *window = [[NSWindow alloc] initWithContentRect:frame
-                                                   styleMask:NSWindowStyleMaskTitled
+                                                   styleMask:NSWindowStyleMaskTitled | NSWindowStyleMaskClosable
                                                      backing:NSBackingStoreBuffered
                                                        defer:NO];
     window.title = @"Edit Bundle";
@@ -61,6 +70,8 @@
         _bundle = bundle;
         _workingBundle = [bundle copy];
         _isNewBundle = NO;
+        _originalEntryCount = bundle.entries.count;
+        window.delegate = self;
 
         [self setupUI];
     }
@@ -174,14 +185,14 @@
     self.addAppButton.action = @selector(addAppClicked:);
     [contentView addSubview:self.addAppButton];
 
-    self.addWebsiteButton = [[NSButton alloc] initWithFrame:NSMakeRect(padding + 100, y, 110, 28)];
+    self.addWebsiteButton = [[NSButton alloc] initWithFrame:NSMakeRect(padding + 100, y, 120, 28)];
     self.addWebsiteButton.title = @"+ Add Website";
     self.addWebsiteButton.bezelStyle = NSBezelStyleRounded;
     self.addWebsiteButton.target = self;
     self.addWebsiteButton.action = @selector(addWebsiteClicked:);
     [contentView addSubview:self.addWebsiteButton];
 
-    self.removeEntryButton = [[NSButton alloc] initWithFrame:NSMakeRect(padding + 280, y, 90, 28)];
+    self.removeEntryButton = [[NSButton alloc] initWithFrame:NSMakeRect(padding + 290, y, 90, 28)];
     self.removeEntryButton.title = @"Remove";
     self.removeEntryButton.bezelStyle = NSBezelStyleRounded;
     self.removeEntryButton.target = self;
@@ -202,13 +213,7 @@
         [contentView addSubview:self.deleteButton];
     }
 
-    self.cancelButton = [[NSButton alloc] initWithFrame:NSMakeRect(220, y, 80, 30)];
-    self.cancelButton.title = @"Cancel";
-    self.cancelButton.bezelStyle = NSBezelStyleRounded;
-    self.cancelButton.target = self;
-    self.cancelButton.action = @selector(cancelClicked:);
-    [contentView addSubview:self.cancelButton];
-
+    // Done button (positioned at right)
     self.doneButton = [[NSButton alloc] initWithFrame:NSMakeRect(310, y, 80, 30)];
     self.doneButton.title = @"Done";
     self.doneButton.bezelStyle = NSBezelStyleRounded;
@@ -216,6 +221,36 @@
     self.doneButton.target = self;
     self.doneButton.action = @selector(doneClicked:);
     [contentView addSubview:self.doneButton];
+
+    // Hidden button for ESC key to close
+    self.cancelButton = [[NSButton alloc] initWithFrame:NSZeroRect];
+    self.cancelButton.keyEquivalent = @"\e"; // Escape key
+    self.cancelButton.target = self;
+    self.cancelButton.action = @selector(cancelClicked:);
+    [contentView addSubview:self.cancelButton];
+
+    // Warning label for committed state (hidden by default)
+    self.committedWarningLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(padding + 90, y + 5, 210, 20)];
+    self.committedWarningLabel.stringValue = @"Locked - cannot delete bundle or remove entries";
+    self.committedWarningLabel.font = [NSFont systemFontOfSize:11];
+    self.committedWarningLabel.textColor = [NSColor systemRedColor];
+    self.committedWarningLabel.bezeled = NO;
+    self.committedWarningLabel.editable = NO;
+    self.committedWarningLabel.drawsBackground = NO;
+    self.committedWarningLabel.hidden = YES;
+    [contentView addSubview:self.committedWarningLabel];
+}
+
+- (void)updateButtonStatesForCommittedState {
+    if (self.isCommitted) {
+        // Grey out destructive actions in committed state
+        self.deleteButton.enabled = NO;
+        self.removeEntryButton.enabled = NO;
+        // Show warning label
+        self.committedWarningLabel.hidden = NO;
+    } else {
+        self.committedWarningLabel.hidden = YES;
+    }
 }
 
 - (BOOL)colorsEqual:(NSColor *)c1 and:(NSColor *)c2 {
@@ -297,6 +332,26 @@
 }
 
 - (void)removeEntryClicked:(id)sender {
+    // Block removal in committed state
+    if (self.isCommitted) {
+        NSInteger row = self.entriesTableView.selectedRow;
+        NSString *itemType = @"entry";
+        if (row >= 0 && row < (NSInteger)self.workingBundle.entries.count) {
+            NSString *entry = self.workingBundle.entries[row];
+            itemType = [entry hasPrefix:@"app:"] ? @"app" : @"website";
+        }
+
+        NSAlert *alert = [[NSAlert alloc] init];
+        alert.messageText = @"Cannot Remove in Committed State";
+        alert.informativeText = [NSString stringWithFormat:
+            @"Cannot remove %@ in committed state. Please wait until the end of the week, "
+            @"or use an emergency reset if absolutely critical.", itemType];
+        alert.alertStyle = NSAlertStyleWarning;
+        [alert addButtonWithTitle:@"OK"];
+        [alert beginSheetModalForWindow:self.window completionHandler:nil];
+        return;
+    }
+
     NSInteger row = self.entriesTableView.selectedRow;
     if (row >= 0 && row < (NSInteger)self.workingBundle.entries.count) {
         [self.workingBundle.entries removeObjectAtIndex:row];
@@ -305,6 +360,18 @@
 }
 
 - (void)deleteClicked:(id)sender {
+    // Block deletion in committed state
+    if (self.isCommitted) {
+        NSAlert *alert = [[NSAlert alloc] init];
+        alert.messageText = @"Cannot Delete Bundle in Committed State";
+        alert.informativeText = @"Cannot remove bundle in committed state. Please wait until the end of the week, "
+            @"or use an emergency reset if absolutely critical.";
+        alert.alertStyle = NSAlertStyleWarning;
+        [alert addButtonWithTitle:@"OK"];
+        [alert beginSheetModalForWindow:self.window completionHandler:nil];
+        return;
+    }
+
     NSAlert *alert = [[NSAlert alloc] init];
     alert.messageText = @"Delete Bundle?";
     alert.informativeText = [NSString stringWithFormat:@"Are you sure you want to delete \"%@\"? This cannot be undone.", self.workingBundle.name];
@@ -335,13 +402,99 @@
 
     self.workingBundle.name = name;
 
+    // Check if entries were added in committed state - show confirmation
+    BOOL entriesWereAdded = self.workingBundle.entries.count > self.originalEntryCount;
+    if (self.isCommitted && entriesWereAdded) {
+        NSAlert *alert = [[NSAlert alloc] init];
+        alert.messageText = @"Confirm Additions";
+        alert.informativeText = @"NOTE: You are in a committed state. Additions will be effective immediately. "
+            @"You will not be able to undo this until the end of the week.";
+        alert.alertStyle = NSAlertStyleWarning;
+        [alert addButtonWithTitle:@"Confirm"];
+        [alert addButtonWithTitle:@"Cancel"];
+
+        [alert beginSheetModalForWindow:self.window completionHandler:^(NSModalResponse returnCode) {
+            if (returnCode == NSAlertFirstButtonReturn) {
+                [self removeClickOutsideMonitor];
+                [self.delegate bundleEditor:self didSaveBundle:self.workingBundle];
+                [self.window.sheetParent endSheet:self.window returnCode:NSModalResponseOK];
+            }
+        }];
+        return;
+    }
+
+    [self removeClickOutsideMonitor];
     [self.delegate bundleEditor:self didSaveBundle:self.workingBundle];
     [self.window.sheetParent endSheet:self.window returnCode:NSModalResponseOK];
 }
 
 - (void)cancelClicked:(id)sender {
+    [self closeEditor];
+}
+
+- (void)closeEditor {
+    [self removeClickOutsideMonitor];
     [self.delegate bundleEditorDidCancel:self];
     [self.window.sheetParent endSheet:self.window returnCode:NSModalResponseCancel];
+}
+
+#pragma mark - NSWindowDelegate
+
+- (BOOL)windowShouldClose:(NSWindow *)sender {
+    [self closeEditor];
+    return NO; // We handle closing via endSheet
+}
+
+#pragma mark - Click Outside Handling
+
+- (void)setupClickOutsideMonitor {
+    __weak typeof(self) weakSelf = self;
+    self.clickOutsideMonitor = [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskLeftMouseDown
+                                                                     handler:^NSEvent *(NSEvent *event) {
+        typeof(self) strongSelf = weakSelf;
+        if (!strongSelf) return event;
+
+        NSWindow *eventWindow = event.window;
+
+        // Don't close if click is in our window
+        if (eventWindow == strongSelf.window) {
+            return event;
+        }
+
+        // Don't close if click is in a panel (file picker, alert, etc.)
+        if ([eventWindow isKindOfClass:[NSPanel class]]) {
+            return event;
+        }
+
+        // Don't close if click is in an attached sheet (like our own alerts)
+        if (eventWindow.sheetParent != nil) {
+            return event;
+        }
+
+        // Don't close if there's no window (menu click, etc.)
+        if (eventWindow == nil) {
+            return event;
+        }
+
+        // Click was in the parent window - close the editor
+        if (eventWindow == strongSelf.window.sheetParent) {
+            [strongSelf closeEditor];
+            return nil; // Consume the event
+        }
+
+        return event;
+    }];
+}
+
+- (void)removeClickOutsideMonitor {
+    if (self.clickOutsideMonitor) {
+        [NSEvent removeMonitor:self.clickOutsideMonitor];
+        self.clickOutsideMonitor = nil;
+    }
+}
+
+- (void)dealloc {
+    [self removeClickOutsideMonitor];
 }
 
 #pragma mark - NSTableViewDataSource
@@ -372,14 +525,30 @@
 #pragma mark - NSTableViewDelegate
 
 - (void)tableViewSelectionDidChange:(NSNotification *)notification {
-    self.removeEntryButton.enabled = (self.entriesTableView.selectedRow >= 0);
+    // Keep Remove disabled in committed state, otherwise enable based on selection
+    if (self.isCommitted) {
+        self.removeEntryButton.enabled = NO;
+    } else {
+        self.removeEntryButton.enabled = (self.entriesTableView.selectedRow >= 0);
+    }
 }
 
 #pragma mark - Sheet Presentation
 
 - (void)beginSheetModalForWindow:(NSWindow *)parentWindow
                completionHandler:(void (^)(NSModalResponse))handler {
-    [parentWindow beginSheet:self.window completionHandler:handler];
+    // Update button states based on committed state
+    [self updateButtonStatesForCommittedState];
+
+    // Set up click-outside-to-close monitor
+    [self setupClickOutsideMonitor];
+
+    [parentWindow beginSheet:self.window completionHandler:^(NSModalResponse response) {
+        [self removeClickOutsideMonitor];
+        if (handler) {
+            handler(response);
+        }
+    }];
 }
 
 @end

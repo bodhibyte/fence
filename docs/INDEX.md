@@ -7,6 +7,8 @@
 | Architecture | [SYSTEM_ARCHITECTURE.md](../SYSTEM_ARCHITECTURE.md) | - |
 | Blocking | [BLOCKING_MECHANISM.md](BLOCKING_MECHANISM.md) | BlockManager.m, PacketFilter.m, HostFileBlocker.m |
 | App blocking | [BLOCKING_MECHANISM.md#app-blocking](BLOCKING_MECHANISM.md#app-blocking-implementation) | AppBlocker.m, SCBlockEntry.m |
+| Scheduling | [dictionary.md](dictionary.md) | SCScheduleManager.m, SCScheduleLaunchdBridge.m |
+| Terminology | [dictionary.md](dictionary.md) | See dictionary/ folder for full entries |
 | Debug features | [SYSTEM_ARCHITECTURE.md#6-debug-features](../SYSTEM_ARCHITECTURE.md#6-debug-features) | SCStartupSafetyCheck.m, SCVersionTracker.m |
 | UI | - | AppController.m, *.xib |
 | XPC | - | SCDaemonProtocol.h, SCDaemonXPC.m, SCXPCClient.m |
@@ -45,6 +47,13 @@ graph TB
 - PacketFilter.m: PF rules
 - AppBlocker.m: Process killer
 - SCBlockEntry.m: Entry model
+
+**Scheduling Layer (Block Management/):**
+- SCScheduleManager.m: Bundle/schedule orchestrator
+- SCScheduleLaunchdBridge.m: launchd job creation, segmentation
+- SCBlockBundle.m: Bundle data model
+- SCWeeklySchedule.m: Per-bundle weekly schedule
+- SCTimeRange.m: Allowed window data model
 
 **Common Layer (Common/):**
 - SCSettings.m: Settings
@@ -98,4 +107,6 @@ sudo launchctl list | grep selfcontrol
 
 ## Glossary
 
-PF=Packet Filter, pfctl=PF CLI, XPC=IPC mechanism, SMJobBless=privileged helper install, Anchor=PF sub-ruleset, Checkup=periodic block verification
+**System terms:** PF=Packet Filter, pfctl=PF CLI, XPC=IPC mechanism, SMJobBless=privileged helper install, Anchor=PF sub-ruleset, Checkup=periodic block verification
+
+**Scheduling terms:** See [dictionary.md](dictionary.md) for full definitions of: Editor, Allowed Window, Block Window, Segment, Merged Blocklist, Committed State, Pre-Authorized Schedule, Bundle, Entry, Week Offset
