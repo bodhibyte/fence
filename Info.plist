@@ -55,6 +55,8 @@
 	<string>MainMenu</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<key>LSUIElement</key>
+	<true/>
 	<key>SMPrivilegedExecutables</key>
 	<dict>
 		<key>org.eyebeam.selfcontrold</key>
