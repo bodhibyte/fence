@@ -24,6 +24,7 @@ dscacheutil -flushcache
 killall -HUP mDNSResponder 2>/dev/null || true
 
 # 5. Clear settings plist
+# (only non app specific step - this should be fine since explicitly chosen to be /usr/local/etc seperate from other app plists)
 echo "Clearing settings plist..."
 rm /usr/local/etc/.*.plist 2>/dev/null || echo "No settings plist found"
 
