@@ -75,6 +75,13 @@
 		[domainListTableView_ reloadData];
 	}
 
+	// In readOnly mode, hide editing UI and show header
+	if (self.readOnly) {
+		[self setupReadOnlyAppearance];
+	} else {
+		[self setupEditableAppearance];
+	}
+
 	[[self window] makeKeyAndOrderFront: self];
 
 	if ([domainList_ count] == 0 && !self.readOnly) {
@@ -185,9 +192,7 @@
   willDisplayCell:(id)cell
    forTableColumn:(NSTableColumn *)tableColumn
 			  row:(int)row {
-	// this method is really inefficient. rewrite/optimize later.
-
-	// Initialize the cell's text color to black
+	// Initialize the cell's text color
 	[cell setTextColor: NSColor.textColor];
 	NSString* str = [[cell title] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
 	if([str isEqual: @""]) return;
@@ -434,6 +439,27 @@
 
     // Force shadow recalculation
     [window invalidateShadow];
+}
+
+- (void)setupReadOnlyAppearance {
+    // Hide editing UI (radio buttons and "can't be edited" message)
+    allowlistRadioMatrix_.hidden = YES;
+
+    // Find and hide the "can't be edited" label
+    for (NSView* subview in self.window.contentView.subviews) {
+        if ([subview isKindOfClass:[NSTextField class]]) {
+            NSTextField* textField = (NSTextField*)subview;
+            if ([textField.stringValue containsString:@"can't be edited"]) {
+                textField.hidden = YES;
+                break;
+            }
+        }
+    }
+}
+
+- (void)setupEditableAppearance {
+    // Show editing UI
+    allowlistRadioMatrix_.hidden = NO;
 }
 
 @end
