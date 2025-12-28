@@ -282,6 +282,15 @@
 
     SCScheduleManager *manager = [SCScheduleManager sharedManager];
 
+    // Only show blocking status when committed
+    if (![manager isCommittedForWeekOffset:0]) {
+        NSTextField *uncommittedLabel = [NSTextField labelWithString:@"No active schedule - do you have the courage to commit?"];
+        uncommittedLabel.font = [NSFont systemFontOfSize:12];
+        uncommittedLabel.textColor = [NSColor secondaryLabelColor];
+        [self.statusStackView addArrangedSubview:uncommittedLabel];
+        return;
+    }
+
     if (manager.bundles.count == 0) {
         NSTextField *emptyLabel = [NSTextField labelWithString:@"No bundles configured. Add a bundle to get started."];
         emptyLabel.font = [NSFont systemFontOfSize:12];
@@ -327,8 +336,9 @@
         nameLabel.font = [NSFont systemFontOfSize:11 weight:NSFontWeightMedium];
         nameLabel.textColor = [NSColor labelColor];
 
-        // Status text
-        NSString *statusText = allowed ? statusStr : @"blocked";
+        // Status text (e.g., "blocked till 5pm" or "allowed till 8pm")
+        NSString *statusWord = allowed ? @"allowed" : @"blocked";
+        NSString *statusText = [NSString stringWithFormat:@"%@ %@", statusWord, statusStr];
         NSTextField *statusLabel = [NSTextField labelWithString:statusText];
         statusLabel.font = [NSFont systemFontOfSize:11];
         statusLabel.textColor = allowed ? [NSColor systemGreenColor] : [NSColor systemRedColor];

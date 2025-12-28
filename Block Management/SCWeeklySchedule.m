@@ -256,25 +256,21 @@
 }
 
 - (NSString *)currentStatusString {
-    BOOL allowed = [self isAllowedNow];
+    // Returns just the "till X" part - caller adds "blocked"/"allowed"
+    NSDate *nextChange = [self nextStateChangeDate];
+    if (nextChange) {
+        NSDateFormatter *formatter = [[NSDateFormatter alloc] init];
 
-    if (allowed) {
-        NSDate *endDate = [self nextStateChangeDate];
-        if (endDate) {
-            NSDateFormatter *formatter = [[NSDateFormatter alloc] init];
-            formatter.dateFormat = @"h:mma";
-            return [NSString stringWithFormat:@"Allowed until %@", [formatter stringFromDate:endDate]];
+        // Check if next change is today - if so, just show time; otherwise include day
+        NSCalendar *calendar = [NSCalendar currentCalendar];
+        if ([calendar isDateInToday:nextChange]) {
+            formatter.dateFormat = @"h:mma";  // Just time: "5:00pm"
+        } else {
+            formatter.dateFormat = @"EEE h:mma";  // Day + time: "Mon 5:00pm"
         }
-        return @"Allowed";
-    } else {
-        NSDate *startDate = [self nextStateChangeDate];
-        if (startDate) {
-            NSDateFormatter *formatter = [[NSDateFormatter alloc] init];
-            formatter.dateFormat = @"h:mma";
-            return [NSString stringWithFormat:@"Blocked until %@", [formatter stringFromDate:startDate]];
-        }
-        return @"Blocked";
+        return [NSString stringWithFormat:@"till %@", [formatter stringFromDate:nextChange]];
     }
+    return @"";  // Empty - manager will add commitment end date
 }
 
 - (NSInteger)totalAllowedMinutesForDay:(SCDayOfWeek)day {

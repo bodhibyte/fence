@@ -906,9 +906,30 @@ static const NSInteger kDefaultEmergencyUnlockCredits = 5;
         schedule = [self scheduleForBundleID:bundleID];
     }
     if (!schedule) {
-        return @"No schedule";
+        // No schedule - use commitment end date directly
+        NSDate *commitmentEnd = [self commitmentEndDateForWeekOffset:0];
+        if (commitmentEnd) {
+            NSDateFormatter *formatter = [[NSDateFormatter alloc] init];
+            formatter.dateFormat = @"EEE h:mma";  // "Sun 12:00am"
+            return [NSString stringWithFormat:@"till %@", [formatter stringFromDate:commitmentEnd]];
+        }
+        return @"";
     }
-    return [schedule currentStatusString];
+
+    NSString *baseStatus = [schedule currentStatusString];
+
+    // If no next state change (empty string), use commitment end date
+    // This happens when bundle is blocked all week with no allowed windows
+    if (baseStatus.length == 0) {
+        NSDate *commitmentEnd = [self commitmentEndDateForWeekOffset:0];
+        if (commitmentEnd) {
+            NSDateFormatter *formatter = [[NSDateFormatter alloc] init];
+            formatter.dateFormat = @"EEE h:mma";  // "Sun 12:00am"
+            return [NSString stringWithFormat:@"till %@", [formatter stringFromDate:commitmentEnd]];
+        }
+        return @"";  // Fallback
+    }
+    return baseStatus;
 }
 
 - (BOOL)wouldBundleBeAllowed:(NSString *)bundleID {
