@@ -3,7 +3,7 @@
 //  SelfControl
 //
 //  Window controller for the startup safety check UI.
-//  DEBUG builds only - creates UI programmatically.
+//  Creates UI programmatically (no XIB needed).
 //
 
 #import "SCSafetyCheckWindowController.h"
@@ -31,7 +31,7 @@
 
 - (instancetype)init {
     // Create window programmatically
-    NSRect frame = NSMakeRect(0, 0, 420, 340);
+    NSRect frame = NSMakeRect(0, 0, 420, 365);
     NSWindow* window = [[NSWindow alloc] initWithContentRect:frame
                                                    styleMask:(NSWindowStyleMaskTitled | NSWindowStyleMaskClosable)
                                                      backing:NSBackingStoreBuffered
@@ -105,7 +105,8 @@
         @"App blocking (Calculator)",
         @"Hosts file cleanup",
         @"Packet filter cleanup",
-        @"App unblocking"
+        @"App unblocking",
+        @"Emergency script (emergency.sh)"
     ];
 
     NSMutableArray* labels = [NSMutableArray array];
@@ -164,6 +165,9 @@
 - (void)showWindow:(id)sender {
     [super showWindow:sender];
     [self.window center];
+    [self.window makeKeyAndOrderFront:nil];
+    [self.window setLevel:NSFloatingWindowLevel];
+    [NSApp activateIgnoringOtherApps:YES];
 }
 
 - (void)runSafetyCheck {
@@ -243,7 +247,8 @@
             result.appBlockWorked,
             result.hostsUnblockWorked,
             result.pfUnblockWorked,
-            result.appUnblockWorked
+            result.appUnblockWorked,
+            result.emergencyScriptWorked
         };
 
         NSArray* names = @[
@@ -252,10 +257,11 @@
             @"App blocking (Calculator)",
             @"Hosts file cleanup",
             @"Packet filter cleanup",
-            @"App unblocking"
+            @"App unblocking",
+            @"Emergency script (emergency.sh)"
         ];
 
-        for (NSUInteger i = 0; i < self.resultLabels.count && i < 6; i++) {
+        for (NSUInteger i = 0; i < self.resultLabels.count && i < 7; i++) {
             NSTextField* label = self.resultLabels[i];
             BOOL passed = results[i];
 

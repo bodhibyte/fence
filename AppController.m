@@ -37,10 +37,8 @@
 #import "SCScheduleManager.h"
 #import "SCBlockBundle.h"
 #import "SCMenuBarController.h"
-#ifdef DEBUG
 #import "SCStartupSafetyCheck.h"
 #import "SCSafetyCheckWindowController.h"
-#endif
 
 @interface AppController () {}
 
@@ -483,6 +481,7 @@
     // Set up debug menu (only in DEBUG builds)
     [self setupDebugMenu];
     [self updateDebugIndicator];
+#endif
 
     // Check if safety test is needed (version changed since last test)
     if ([SCStartupSafetyCheck safetyCheckNeeded]) {
@@ -491,14 +490,12 @@
             [self showSafetyCheckPrompt];
         });
     }
-#endif
 }
 
 - (void)applicationWillTerminate:(NSNotification *)notification {
     [settings_ synchronizeSettings];
 }
 
-#ifdef DEBUG
 - (void)showSafetyCheckPrompt {
     NSAlert* alert = [[NSAlert alloc] init];
     [alert setMessageText:@"Safety Check Recommended"];
@@ -524,7 +521,6 @@
     [self.safetyCheckWindowController showWindow:self];
     [self.safetyCheckWindowController runSafetyCheck];
 }
-#endif
 
 - (void)reinstallDaemon {
     NSLog(@"Attempting to reinstall daemon...");

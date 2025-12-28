@@ -3,7 +3,7 @@
 //  SelfControl
 //
 //  Window controller for the startup safety check UI.
-//  DEBUG builds only - creates UI programmatically (no XIB needed).
+//  Creates UI programmatically (no XIB needed).
 //
 
 #import <Cocoa/Cocoa.h>

@@ -3,7 +3,7 @@
 //  SelfControl
 //
 //  Orchestrates startup safety check to verify blocking/unblocking works.
-//  DEBUG builds only.
+//  Runs on version change (macOS or app version).
 //
 
 #import "SCStartupSafetyCheck.h"
@@ -17,8 +17,9 @@
 // Test constants
 static NSString* const kTestWebsite = @"example.com";
 static NSString* const kTestAppBundleID = @"com.apple.calculator";
+static NSString* const kTestAppPath = @"/System/Applications/Calculator.app";
 static const NSTimeInterval kTestBlockDurationSeconds = 30.0;
-static const NSTimeInterval kVerificationPollInterval = 2.0;
+static const NSTimeInterval kEmergencyTestBlockDurationSeconds = 300.0; // 5 min - long enough to test emergency.sh
 
 #pragma mark - SCSafetyCheckResult
 
@@ -30,6 +31,7 @@ static const NSTimeInterval kVerificationPollInterval = 2.0;
                       hostsUnblock:(BOOL)hostsUnblock
                         pfUnblock:(BOOL)pfUnblock
                        appUnblock:(BOOL)appUnblock
+                   emergencyScript:(BOOL)emergencyScript
                      errorMessage:(nullable NSString*)error {
     if (self = [super init]) {
         _hostsBlockWorked = hostsBlock;
@@ -38,12 +40,13 @@ static const NSTimeInterval kVerificationPollInterval = 2.0;
         _hostsUnblockWorked = hostsUnblock;
         _pfUnblockWorked = pfUnblock;
         _appUnblockWorked = appUnblock;
+        _emergencyScriptWorked = emergencyScript;
         _errorMessage = error;
 
-        // Overall pass requires all checks to work (or error message is nil for partial results)
+        // Overall pass requires all checks to work
         _passed = hostsBlock && pfBlock && appBlock &&
                   hostsUnblock && pfUnblock && appUnblock &&
-                  (error == nil);
+                  emergencyScript && (error == nil);
     }
     return self;
 }
@@ -57,6 +60,7 @@ static const NSTimeInterval kVerificationPollInterval = 2.0;
     if (!_hostsUnblockWorked) [issues addObject:@"Hosts file unblocking failed"];
     if (!_pfUnblockWorked) [issues addObject:@"Packet filter unblocking failed"];
     if (!_appUnblockWorked) [issues addObject:@"App unblocking failed (Calculator killed after unblock)"];
+    if (!_emergencyScriptWorked) [issues addObject:@"Emergency script (emergency.sh) failed to clear block"];
     if (_errorMessage) [issues addObject:_errorMessage];
 
     return issues;
@@ -73,16 +77,15 @@ static const NSTimeInterval kVerificationPollInterval = 2.0;
 @property (nonatomic, copy) SCSafetyCheckProgressHandler progressHandler;
 @property (nonatomic, copy) SCSafetyCheckCompletionHandler completionHandler;
 
+// Store Phase 1 results for final combined result
+@property (nonatomic, strong) NSDictionary* phase1Results;
+
 @end
 
 @implementation SCStartupSafetyCheck
 
 + (BOOL)safetyCheckNeeded {
-#ifdef DEBUG
     return [SCVersionTracker anyVersionChanged];
-#else
-    return NO; // Safety check only in DEBUG builds
-#endif
 }
 
 + (void)skipSafetyCheck {
@@ -113,16 +116,6 @@ static const NSTimeInterval kVerificationPollInterval = 2.0;
 
 - (void)runWithProgressHandler:(SCSafetyCheckProgressHandler)progressHandler
              completionHandler:(SCSafetyCheckCompletionHandler)completionHandler {
-#ifndef DEBUG
-    // Safety check only runs in DEBUG builds
-    SCSafetyCheckResult* result = [[SCSafetyCheckResult alloc]
-        initWithHostsBlock:YES pfBlock:YES appBlock:YES
-        hostsUnblock:YES pfUnblock:YES appUnblock:YES
-        errorMessage:@"Safety check skipped (not a DEBUG build)"];
-    completionHandler(result);
-    return;
-#endif
-
     self.progressHandler = progressHandler;
     self.completionHandler = completionHandler;
     self.cancelled = NO;
@@ -357,46 +350,217 @@ static const NSTimeInterval kVerificationPollInterval = 2.0;
         return;
     }
 
-    [self reportProgress:@"Verifying hosts file cleaned..." progress:0.82];
+    [self reportProgress:@"Verifying hosts file cleaned..." progress:0.55];
 
     // Check hosts file is clean
     BOOL hostsClean = ![self verifyHostsContainsTestWebsite];
     NSLog(@"SCStartupSafetyCheck: Hosts unblock check: %@", hostsClean ? @"PASS" : @"FAIL");
 
-    [self reportProgress:@"Checking packet filter removed..." progress:0.86];
+    [self reportProgress:@"Checking packet filter removed..." progress:0.58];
 
     // Check PF is clean
     BOOL pfClean = ![PacketFilter blockFoundInPF];
     NSLog(@"SCStartupSafetyCheck: PF unblock check: %@", pfClean ? @"PASS" : @"FAIL");
 
-    [self reportProgress:@"Testing app can launch..." progress:0.90];
+    [self reportProgress:@"Testing app can launch..." progress:0.60];
 
     // Test that Calculator can now launch and stay running
     [self verifyAppCanLaunchWithCompletion:^(BOOL canLaunch) {
         NSLog(@"SCStartupSafetyCheck: App unblock check: %@", canLaunch ? @"PASS" : @"FAIL");
 
-        [self reportProgress:@"Completing safety check..." progress:0.95];
-
-        // Build final result
-        SCSafetyCheckResult* result = [[SCSafetyCheckResult alloc]
-            initWithHostsBlock:[blockingResults[@"hostsBlocked"] boolValue]
-                       pfBlock:[blockingResults[@"pfBlocked"] boolValue]
-                      appBlock:[blockingResults[@"appBlocked"] boolValue]
-                  hostsUnblock:hostsClean
-                    pfUnblock:pfClean
-                   appUnblock:canLaunch
-                 errorMessage:nil];
-
-        // Clean up - kill Calculator if still running
+        // Clean up Calculator
         [self killCalculatorIfRunning];
 
-        // Mark versions as tested if passed
-        if (result.passed) {
-            [SCVersionTracker updateLastTestedVersions];
+        // Store Phase 1 results
+        self.phase1Results = @{
+            @"hostsBlocked": blockingResults[@"hostsBlocked"],
+            @"pfBlocked": blockingResults[@"pfBlocked"],
+            @"appBlocked": blockingResults[@"appBlocked"],
+            @"hostsUnblocked": @(hostsClean),
+            @"pfUnblocked": @(pfClean),
+            @"appUnblocked": @(canLaunch)
+        };
+
+        // Check if Phase 1 passed before continuing to Phase 2
+        BOOL phase1Passed = [blockingResults[@"hostsBlocked"] boolValue] &&
+                            [blockingResults[@"pfBlocked"] boolValue] &&
+                            [blockingResults[@"appBlocked"] boolValue] &&
+                            hostsClean && pfClean && canLaunch;
+
+        if (!phase1Passed) {
+            NSLog(@"SCStartupSafetyCheck: Phase 1 failed, skipping Phase 2");
+            [self finishWithPhase1OnlyResult];
+            return;
         }
 
-        [self finishWithResult:result];
+        // Phase 1 passed - continue to Phase 2 (emergency.sh test)
+        NSLog(@"SCStartupSafetyCheck: Phase 1 passed, starting Phase 2 (emergency.sh test)");
+        [self startPhase2EmergencyTest];
     }];
+}
+
+#pragma mark - Phase 2: Emergency Script Test
+
+- (void)startPhase2EmergencyTest {
+    if (self.cancelled) {
+        [self finishWithError:@"Cancelled"];
+        return;
+    }
+
+    [self reportProgress:@"Phase 2: Starting emergency.sh test..." progress:0.65];
+
+    // Start a new block with longer duration (won't expire during test)
+    NSArray* testBlocklist = @[
+        kTestWebsite,
+        [NSString stringWithFormat:@"app:%@", kTestAppBundleID]
+    ];
+
+    NSDate* endDate = [NSDate dateWithTimeIntervalSinceNow:kEmergencyTestBlockDurationSeconds];
+
+    NSDictionary* blockSettings = @{
+        @"ClearCaches": @NO,
+        @"AllowLocalNetworks": @YES,
+        @"EvaluateCommonSubdomains": @NO,
+        @"IncludeLinkedDomains": @NO,
+        @"BlockSoundShouldPlay": @NO,
+        @"EnableErrorReporting": @NO
+    };
+
+    [self.xpc startBlockWithControllingUID:getuid()
+                                 blocklist:testBlocklist
+                               isAllowlist:NO
+                                   endDate:endDate
+                             blockSettings:blockSettings
+                                     reply:^(NSError* error) {
+        if (error) {
+            NSLog(@"SCStartupSafetyCheck: Phase 2 - Failed to start block: %@", error);
+            [self finishWithEmergencyScriptResult:NO];
+            return;
+        }
+
+        NSLog(@"SCStartupSafetyCheck: Phase 2 - Block started, verifying before emergency.sh...");
+        [self reportProgress:@"Verifying block active..." progress:0.70];
+
+        // Wait for block to take effect
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            [self verifyPhase2BlockingThenRunEmergency];
+        });
+    }];
+}
+
+- (void)verifyPhase2BlockingThenRunEmergency {
+    if (self.cancelled) {
+        [self finishWithError:@"Cancelled"];
+        return;
+    }
+
+    // Quick verify blocking is active
+    BOOL hostsBlocked = [self verifyHostsContainsTestWebsite];
+    BOOL pfBlocked = [PacketFilter blockFoundInPF];
+
+    NSLog(@"SCStartupSafetyCheck: Phase 2 - Pre-emergency check: hosts=%@, pf=%@",
+          hostsBlocked ? @"blocked" : @"NOT blocked",
+          pfBlocked ? @"active" : @"NOT active");
+
+    if (!hostsBlocked || !pfBlocked) {
+        NSLog(@"SCStartupSafetyCheck: Phase 2 - Block not active, emergency test invalid");
+        [self finishWithEmergencyScriptResult:NO];
+        return;
+    }
+
+    [self reportProgress:@"Running emergency.sh..." progress:0.75];
+    [self runEmergencyScript];
+}
+
+- (void)runEmergencyScript {
+    // Find emergency.sh in app bundle
+    NSString* emergencyPath = [[NSBundle mainBundle] pathForResource:@"emergency" ofType:@"sh"];
+
+    if (!emergencyPath) {
+        NSLog(@"SCStartupSafetyCheck: Phase 2 - emergency.sh not found in bundle");
+        [self finishWithEmergencyScriptResult:NO];
+        return;
+    }
+
+    NSLog(@"SCStartupSafetyCheck: Phase 2 - Running emergency.sh at: %@", emergencyPath);
+
+    // Run emergency.sh with sudo via AppleScript (will prompt for password)
+    NSString* script = [NSString stringWithFormat:
+        @"do shell script \"%@\" with administrator privileges", emergencyPath];
+
+    NSAppleScript* appleScript = [[NSAppleScript alloc] initWithSource:script];
+    NSDictionary* errorDict = nil;
+    [appleScript executeAndReturnError:&errorDict];
+
+    if (errorDict) {
+        NSLog(@"SCStartupSafetyCheck: Phase 2 - emergency.sh failed: %@", errorDict);
+        [self finishWithEmergencyScriptResult:NO];
+        return;
+    }
+
+    NSLog(@"SCStartupSafetyCheck: Phase 2 - emergency.sh completed");
+    [self reportProgress:@"Verifying emergency cleanup..." progress:0.85];
+
+    // Wait for cleanup to take effect
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        [self verifyEmergencyCleanup];
+    });
+}
+
+- (void)verifyEmergencyCleanup {
+    if (self.cancelled) {
+        [self finishWithError:@"Cancelled"];
+        return;
+    }
+
+    // Verify hosts file is clean
+    BOOL hostsClean = ![self verifyHostsContainsTestWebsite];
+    NSLog(@"SCStartupSafetyCheck: Phase 2 - Emergency hosts cleanup: %@", hostsClean ? @"PASS" : @"FAIL");
+
+    // Verify PF is clean
+    BOOL pfClean = ![PacketFilter blockFoundInPF];
+    NSLog(@"SCStartupSafetyCheck: Phase 2 - Emergency PF cleanup: %@", pfClean ? @"PASS" : @"FAIL");
+
+    BOOL emergencyWorked = hostsClean && pfClean;
+    NSLog(@"SCStartupSafetyCheck: Phase 2 - Emergency script test: %@", emergencyWorked ? @"PASS" : @"FAIL");
+
+    [self finishWithEmergencyScriptResult:emergencyWorked];
+}
+
+- (void)finishWithPhase1OnlyResult {
+    SCSafetyCheckResult* result = [[SCSafetyCheckResult alloc]
+        initWithHostsBlock:[self.phase1Results[@"hostsBlocked"] boolValue]
+                   pfBlock:[self.phase1Results[@"pfBlocked"] boolValue]
+                  appBlock:[self.phase1Results[@"appBlocked"] boolValue]
+              hostsUnblock:[self.phase1Results[@"hostsUnblocked"] boolValue]
+                pfUnblock:[self.phase1Results[@"pfUnblocked"] boolValue]
+               appUnblock:[self.phase1Results[@"appUnblocked"] boolValue]
+           emergencyScript:NO  // Not tested
+             errorMessage:@"Phase 1 failed, emergency.sh test skipped"];
+
+    [self finishWithResult:result];
+}
+
+- (void)finishWithEmergencyScriptResult:(BOOL)emergencyWorked {
+    SCSafetyCheckResult* result = [[SCSafetyCheckResult alloc]
+        initWithHostsBlock:[self.phase1Results[@"hostsBlocked"] boolValue]
+                   pfBlock:[self.phase1Results[@"pfBlocked"] boolValue]
+                  appBlock:[self.phase1Results[@"appBlocked"] boolValue]
+              hostsUnblock:[self.phase1Results[@"hostsUnblocked"] boolValue]
+                pfUnblock:[self.phase1Results[@"pfUnblocked"] boolValue]
+               appUnblock:[self.phase1Results[@"appUnblocked"] boolValue]
+           emergencyScript:emergencyWorked
+             errorMessage:nil];
+
+    // Clean up Calculator if still running
+    [self killCalculatorIfRunning];
+
+    // Mark versions as tested if passed
+    if (result.passed) {
+        [SCVersionTracker updateLastTestedVersions];
+    }
+
+    [self finishWithResult:result];
 }
 
 - (void)verifyAppCanLaunchWithCompletion:(void(^)(BOOL canLaunch))completion {
@@ -436,6 +600,7 @@ static const NSTimeInterval kVerificationPollInterval = 2.0;
     SCSafetyCheckResult* result = [[SCSafetyCheckResult alloc]
         initWithHostsBlock:NO pfBlock:NO appBlock:NO
         hostsUnblock:NO pfUnblock:NO appUnblock:NO
+        emergencyScript:NO
         errorMessage:errorMessage];
     [self finishWithResult:result];
 }
