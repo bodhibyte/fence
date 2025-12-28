@@ -25,11 +25,65 @@
 ├── 📁 docs/
 │   ├── 📄 INDEX.md                ← Quick navigation & module map
 │   ├── 📄 BLOCKING_MECHANISM.md   ← How blocking works + app blocking design
-│   └── (future docs go here)
+│   ├── 📄 dictionary.md           ← Domain terminology index
+│   └── 📁 dictionary/             ← Full term definitions
 │
 └── 📁 .claude/
     └── 📄 CLAUDE.md               ← You are here
 ```
+
+---
+
+## Shared Vocabulary Protocol
+
+### Dictionary Location
+- **Index:** `docs/dictionary.md` — Load this at session start
+- **Full entries:** `docs/dictionary/[term].md` — Search on-demand
+
+### Key Terms (Quick Reference)
+
+| Term | Definition |
+|------|------------|
+| **Editor** | UI sheet for defining allowed windows per bundle/day |
+| **Allowed Window** | User-defined time range when bundle is NOT blocked |
+| **Block Window** | Computed inverse - when blocking IS active |
+| **Segment** | Time slice with consistent set of active bundles |
+| **Merged Blocklist** | Combined entries from all active bundles in a segment |
+| **Committed State** | Schedule locked after user confirms |
+| **Pre-Authorized Schedule** | Segment registered with daemon (password-free execution) |
+| **Bundle** | Named group of websites/apps |
+| **Entry** | Single blocked item (domain or app bundle ID) |
+
+### How to Reference
+
+1. Load `docs/dictionary.md` (the index) at session start
+2. When you encounter a term from the index, read its full entry in `docs/dictionary/`
+3. Use the dictionary definition—NOT your general knowledge
+4. If a term is missing, flag it and ask for clarification
+
+**Example workflow:**
+```
+User: "When the user is in a committed state, disable the editor"
+
+Agent thinks:
+- "committed state" → read docs/dictionary/committed-state.md
+- "editor" → read docs/dictionary/editor.md
+- Now I understand: disable SCDayScheduleEditorController when isCommitted=YES
+```
+
+### When Modifying Code
+
+If your changes affect files listed in any dictionary term's "Code Locations":
+1. Re-read that term's full entry
+2. Verify your changes align with the defined behavior
+3. Update the dictionary entry if behavior has changed
+
+### When You Encounter an Undefined Term
+
+If a term seems domain-specific but isn't in the dictionary:
+1. Flag it in your response: "⚠️ Term '[X]' not found in dictionary"
+2. Ask the user for a definition
+3. Suggest adding it to the dictionary using `/define-terms`
 
 ---
 
