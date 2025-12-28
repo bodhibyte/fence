@@ -206,8 +206,11 @@
     NSInteger siteCount = 0;
     NSInteger appCount = 0;
 
-    // Count entries across all bundles
+    // Count entries from bundles currently blocking (not in allowed window)
     for (SCBlockBundle *bundle in manager.bundles) {
+        if ([manager wouldBundleBeAllowed:bundle.bundleID]) {
+            continue; // Skip bundles in allowed window
+        }
         for (id entry in bundle.entries) {
             if ([entry isKindOfClass:[NSString class]]) {
                 NSString *entryStr = (NSString *)entry;

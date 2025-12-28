@@ -39,6 +39,10 @@
 
 @property (getter=isReadOnly) BOOL readOnly;
 
+/// Entries to display when in readOnly mode (from active bundles).
+/// When set, overrides the default NSUserDefaults reading.
+@property (nonatomic, copy) NSArray<NSString *> *displayEntries;
+
 - (void)refreshDomainList;
 
 // Called when the add button is clicked.  Adds a new empty string to the domain

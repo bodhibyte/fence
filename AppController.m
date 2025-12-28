@@ -35,6 +35,7 @@
 #import "SCDebugUtilities.h"
 #import "SCWeekScheduleWindowController.h"
 #import "SCScheduleManager.h"
+#import "SCBlockBundle.h"
 #import "SCMenuBarController.h"
 #ifdef DEBUG
 #import "SCStartupSafetyCheck.h"
@@ -550,7 +551,25 @@
 	if(domainListWindowController_ == nil) {
         [[NSBundle mainBundle] loadNibNamed: @"DomainList" owner: self topLevelObjects: nil];
 	}
-    domainListWindowController_.readOnly = [SCUIUtilities blockIsRunning];
+
+    BOOL blockRunning = [SCUIUtilities blockIsRunning];
+    domainListWindowController_.readOnly = blockRunning;
+
+    // When block is running, gather entries from bundles currently blocking (not in allowed window)
+    if (blockRunning) {
+        SCScheduleManager *manager = [SCScheduleManager sharedManager];
+        NSMutableArray<NSString *> *allEntries = [NSMutableArray array];
+        for (SCBlockBundle *bundle in manager.bundles) {
+            // Only include entries from bundles that are currently blocking
+            if (![manager wouldBundleBeAllowed:bundle.bundleID]) {
+                [allEntries addObjectsFromArray:bundle.entries];
+            }
+        }
+        domainListWindowController_.displayEntries = allEntries;
+    } else {
+        domainListWindowController_.displayEntries = nil;
+    }
+
     [domainListWindowController_ showWindow: self];
 
     // Activate app to bring window to front (required for LSUIElement apps)

@@ -68,6 +68,13 @@
 }
 
 - (void)showWindow:(id)sender {
+	// If displayEntries was provided (e.g., from menu bar during active block),
+	// use those instead of NSUserDefaults
+	if (self.displayEntries) {
+		domainList_ = [self.displayEntries mutableCopy];
+		[domainListTableView_ reloadData];
+	}
+
 	[[self window] makeKeyAndOrderFront: self];
 
 	if ([domainList_ count] == 0 && !self.readOnly) {
