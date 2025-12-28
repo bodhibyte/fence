@@ -22,6 +22,7 @@
 | **Emergency Unlock** | Escape hatch to break out of committed state using credits | [→ Full Entry](dictionary/emergency-unlock.md) |
 | **Emergency Credits** | Limited currency (5 lifetime) for emergency unlocks | [→ Full Entry](dictionary/emergency-credits.md) |
 | **Status Pill** | Colored badge showing bundle's blocking state and time till change | [→ Full Entry](dictionary/status-pill.md) |
+| **Menu Bar** | macOS status item UI showing bundle status and quick actions | [→ Full Entry](dictionary/menu-bar.md) |
 
 ---
 

@@ -31,8 +31,10 @@ graph TB
 ## Module Map
 
 **App Layer:**
-- AppController.m: Main UI
-- TimerWindowController.m: Timer display
+- AppController.m: Main UI coordinator
+- SCMenuBarController.m: Menu bar status item (primary UI when committed)
+- SCWeekScheduleWindowController.m: Week schedule grid and bundle management
+- TimerWindowController.m: Legacy timer display (blocklist viewer)
 - DomainListWindowController.m: Blocklist editor
 - SCSafetyCheckWindowController.m: DEBUG startup test UI
 
