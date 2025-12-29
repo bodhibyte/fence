@@ -205,12 +205,6 @@
 				[weakSelf showDomainList:weakSelf];
 			};
 
-			// Show week schedule only if not committed (if committed, menu bar is sufficient)
-			SCScheduleManager *manager = [SCScheduleManager sharedManager];
-			if (![manager isCommitted]) {
-				[self showWeekSchedule:self];
-			}
-
             // apparently, a block is running, so make sure FirstBlockStarted is true
             [defaults_ setBool: YES forKey: @"FirstBlockStarted"];
 		}
@@ -234,6 +228,13 @@
             [userNoteCenter deliverNotification: endedNote];
 
 			[self closeTimerWindow];
+
+            // Show Week Schedule on app launch or when block ends
+            // (if committed, menu bar is sufficient - user chose their schedule)
+            SCScheduleManager *manager = [SCScheduleManager sharedManager];
+            if (![manager isCommitted]) {
+                [self showWeekSchedule:self];
+            }
 		}
 
 		[self updateTimeSliderDisplay: blockDurationSlider_];
