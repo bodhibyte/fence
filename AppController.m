@@ -221,13 +221,6 @@
 			// Makes sure the domain list will refresh when it comes back
 			[self closeDomainList];
 
-			NSWindow* mainWindow = [NSApp mainWindow];
-			// We don't necessarily want the initial window to be key and front,
-			// but no other message seems to show it properly.
-			[initialWindow_ makeKeyAndOrderFront: self];
-			// So we work around it and make key and front whatever was the main window
-			[mainWindow makeKeyAndOrderFront: self];
-            
             // make sure the dock badge is cleared
             [[NSApp dockTile] setBadgeLabel: nil];
 
