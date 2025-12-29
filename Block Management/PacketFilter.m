@@ -18,10 +18,35 @@ NSString* const kPFAnchorCommand = @"anchor \"org.eyebeam\"";
 NSFileHandle* appendFileHandle;
 
 + (BOOL)blockFoundInPF {
-    // last try if we can't find a block anywhere: check the host file, and see if a block is in there
-    NSString* pfConfContents = [NSString stringWithContentsOfFile: kPFConfPath encoding: NSUTF8StringEncoding error: NULL];
-    if(pfConfContents != nil && [pfConfContents rangeOfString: kPFAnchorCommand].location != NSNotFound) {
-        return YES;
+    // Check if actual PF rules are loaded in our anchor (not just config file presence)
+    // Run: pfctl -a org.eyebeam -sr 2>/dev/null
+    // If there's any output, rules are active
+    NSTask* task = [[NSTask alloc] init];
+    task.launchPath = kPfctlExecutablePath;
+    task.arguments = @[@"-a", @"org.eyebeam", @"-sr"];
+
+    NSPipe* outputPipe = [NSPipe pipe];
+    NSPipe* errorPipe = [NSPipe pipe];
+    task.standardOutput = outputPipe;
+    task.standardError = errorPipe;
+
+    @try {
+        [task launch];
+        [task waitUntilExit];
+
+        NSData* outputData = [[outputPipe fileHandleForReading] readDataToEndOfFile];
+        NSString* output = [[NSString alloc] initWithData:outputData encoding:NSUTF8StringEncoding];
+
+        // If there's any non-whitespace output, rules are loaded
+        if (output && [[output stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]] length] > 0) {
+            return YES;
+        }
+    } @catch (NSException* exception) {
+        // If pfctl fails, fall back to config file check
+        NSString* pfConfContents = [NSString stringWithContentsOfFile: kPFConfPath encoding: NSUTF8StringEncoding error: NULL];
+        if(pfConfContents != nil && [pfConfContents rangeOfString: kPFAnchorCommand].location != NSNotFound) {
+            return YES;
+        }
     }
 
     return NO;
@@ -231,6 +256,12 @@ NSFileHandle* appendFileHandle;
 	NSString* token = [self readPFToken: &err];
 
 	[@"" writeToFile: @"/etc/pf.anchors/org.eyebeam" atomically: true encoding: NSUTF8StringEncoding error: nil];
+
+	// Flush anchor rules from kernel memory
+	NSTask* flushTask = [NSTask launchedTaskWithLaunchPath: kPfctlExecutablePath
+	                                             arguments: @[@"-a", @"org.eyebeam", @"-F", @"all"]];
+	[flushTask waitUntilExit];
+
 	NSString* mainConf = [NSString stringWithContentsOfFile: @"/etc/pf.conf" encoding: NSUTF8StringEncoding error: nil];
 	NSArray* lines = [mainConf componentsSeparatedByString: @"\n"];
 	NSMutableString* newConf = [NSMutableString stringWithCapacity: [mainConf length]];

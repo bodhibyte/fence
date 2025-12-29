@@ -216,27 +216,28 @@ static const NSTimeInterval kEmergencyTestBlockDurationSeconds = 300.0; // 5 min
 
     [self reportProgress:@"Checking packet filter..." progress:0.30];
 
-    // Check packet filter
-    BOOL pfBlocked = [PacketFilter blockFoundInPF];
-    NSLog(@"SCStartupSafetyCheck: Packet filter check: %@", pfBlocked ? @"PASS" : @"FAIL");
+    // Check packet filter via XPC (daemon runs as root)
+    [self checkPFBlockActiveWithCompletion:^(BOOL pfBlocked) {
+        NSLog(@"SCStartupSafetyCheck: Packet filter check: %@", pfBlocked ? @"PASS" : @"FAIL");
 
-    [self reportProgress:@"Testing app blocking..." progress:0.35];
+        [self reportProgress:@"Testing app blocking..." progress:0.35];
 
-    // Test app blocking by launching Calculator and checking if it gets killed
-    [self verifyAppBlockingWithCompletion:^(BOOL appBlocked) {
-        NSLog(@"SCStartupSafetyCheck: App blocking check: %@", appBlocked ? @"PASS" : @"FAIL");
+        // Test app blocking by launching Calculator and checking if it gets killed
+        [self verifyAppBlockingWithCompletion:^(BOOL appBlocked) {
+            NSLog(@"SCStartupSafetyCheck: App blocking check: %@", appBlocked ? @"PASS" : @"FAIL");
 
-        [self reportProgress:@"Waiting for block to expire..." progress:0.40];
+            [self reportProgress:@"Waiting for block to expire..." progress:0.40];
 
-        // Store blocking results
-        NSDictionary* blockingResults = @{
-            @"hostsBlocked": @(hostsBlocked),
-            @"pfBlocked": @(pfBlocked),
-            @"appBlocked": @(appBlocked)
-        };
+            // Store blocking results
+            NSDictionary* blockingResults = @{
+                @"hostsBlocked": @(hostsBlocked),
+                @"pfBlocked": @(pfBlocked),
+                @"appBlocked": @(appBlocked)
+            };
 
-        // Wait for block to expire
-        [self waitForBlockExpiryWithBlockingResults:blockingResults];
+            // Wait for block to expire
+            [self waitForBlockExpiryWithBlockingResults:blockingResults];
+        }];
     }];
 }
 
@@ -252,6 +253,26 @@ static const NSTimeInterval kEmergencyTestBlockDurationSeconds = 300.0; // 5 min
 
     // Check if our test website is blocked
     return [hostsContent containsString:kTestWebsite];
+}
+
+- (void)checkPFBlockActiveWithCompletion:(void(^)(BOOL active))completion {
+    // Use XPC to query daemon (which runs as root and can run pfctl)
+    [self.xpc isPFBlockActive:^(BOOL active, NSError* error) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (error) {
+                NSLog(@"SCStartupSafetyCheck: PF check via XPC failed: %@, falling back to file check", error);
+                // On XPC error, fall back to checking anchor file directly
+                NSString* anchorContents = [NSString stringWithContentsOfFile:@"/etc/pf.anchors/org.eyebeam"
+                                                                     encoding:NSUTF8StringEncoding
+                                                                        error:NULL];
+                BOOL hasContent = anchorContents && [[anchorContents stringByTrimmingCharactersInSet:
+                                   [NSCharacterSet whitespaceAndNewlineCharacterSet]] length] > 0;
+                completion(hasContent);
+                return;
+            }
+            completion(active);
+        });
+    }];
 }
 
 - (void)verifyAppBlockingWithCompletion:(void(^)(BOOL appBlocked))completion {
@@ -358,44 +379,46 @@ static const NSTimeInterval kEmergencyTestBlockDurationSeconds = 300.0; // 5 min
 
     [self reportProgress:@"Checking packet filter removed..." progress:0.58];
 
-    // Check PF is clean
-    BOOL pfClean = ![PacketFilter blockFoundInPF];
-    NSLog(@"SCStartupSafetyCheck: PF unblock check: %@", pfClean ? @"PASS" : @"FAIL");
+    // Check PF is clean via XPC (daemon runs as root)
+    [self checkPFBlockActiveWithCompletion:^(BOOL pfActive) {
+        BOOL pfClean = !pfActive;
+        NSLog(@"SCStartupSafetyCheck: PF unblock check: %@", pfClean ? @"PASS" : @"FAIL");
 
-    [self reportProgress:@"Testing app can launch..." progress:0.60];
+        [self reportProgress:@"Testing app can launch..." progress:0.60];
 
-    // Test that Calculator can now launch and stay running
-    [self verifyAppCanLaunchWithCompletion:^(BOOL canLaunch) {
-        NSLog(@"SCStartupSafetyCheck: App unblock check: %@", canLaunch ? @"PASS" : @"FAIL");
+        // Test that Calculator can now launch and stay running
+        [self verifyAppCanLaunchWithCompletion:^(BOOL canLaunch) {
+            NSLog(@"SCStartupSafetyCheck: App unblock check: %@", canLaunch ? @"PASS" : @"FAIL");
 
-        // Clean up Calculator
-        [self killCalculatorIfRunning];
+            // Clean up Calculator
+            [self killCalculatorIfRunning];
 
-        // Store Phase 1 results
-        self.phase1Results = @{
-            @"hostsBlocked": blockingResults[@"hostsBlocked"],
-            @"pfBlocked": blockingResults[@"pfBlocked"],
-            @"appBlocked": blockingResults[@"appBlocked"],
-            @"hostsUnblocked": @(hostsClean),
-            @"pfUnblocked": @(pfClean),
-            @"appUnblocked": @(canLaunch)
-        };
+            // Store Phase 1 results
+            self.phase1Results = @{
+                @"hostsBlocked": blockingResults[@"hostsBlocked"],
+                @"pfBlocked": blockingResults[@"pfBlocked"],
+                @"appBlocked": blockingResults[@"appBlocked"],
+                @"hostsUnblocked": @(hostsClean),
+                @"pfUnblocked": @(pfClean),
+                @"appUnblocked": @(canLaunch)
+            };
 
-        // Check if Phase 1 passed before continuing to Phase 2
-        BOOL phase1Passed = [blockingResults[@"hostsBlocked"] boolValue] &&
-                            [blockingResults[@"pfBlocked"] boolValue] &&
-                            [blockingResults[@"appBlocked"] boolValue] &&
-                            hostsClean && pfClean && canLaunch;
+            // Check if Phase 1 passed before continuing to Phase 2
+            BOOL phase1Passed = [blockingResults[@"hostsBlocked"] boolValue] &&
+                                [blockingResults[@"pfBlocked"] boolValue] &&
+                                [blockingResults[@"appBlocked"] boolValue] &&
+                                hostsClean && pfClean && canLaunch;
 
-        if (!phase1Passed) {
-            NSLog(@"SCStartupSafetyCheck: Phase 1 failed, skipping Phase 2");
-            [self finishWithPhase1OnlyResult];
-            return;
-        }
+            if (!phase1Passed) {
+                NSLog(@"SCStartupSafetyCheck: Phase 1 failed, skipping Phase 2");
+                [self finishWithPhase1OnlyResult];
+                return;
+            }
 
-        // Phase 1 passed - continue to Phase 2 (emergency.sh test)
-        NSLog(@"SCStartupSafetyCheck: Phase 1 passed, starting Phase 2 (emergency.sh test)");
-        [self startPhase2EmergencyTest];
+            // Phase 1 passed - continue to Phase 2 (emergency.sh test)
+            NSLog(@"SCStartupSafetyCheck: Phase 1 passed, starting Phase 2 (emergency.sh test)");
+            [self startPhase2EmergencyTest];
+        }];
     }];
 }
 
@@ -456,20 +479,22 @@ static const NSTimeInterval kEmergencyTestBlockDurationSeconds = 300.0; // 5 min
 
     // Quick verify blocking is active
     BOOL hostsBlocked = [self verifyHostsContainsTestWebsite];
-    BOOL pfBlocked = [PacketFilter blockFoundInPF];
 
-    NSLog(@"SCStartupSafetyCheck: Phase 2 - Pre-emergency check: hosts=%@, pf=%@",
-          hostsBlocked ? @"blocked" : @"NOT blocked",
-          pfBlocked ? @"active" : @"NOT active");
+    // Check PF via XPC (daemon runs as root)
+    [self checkPFBlockActiveWithCompletion:^(BOOL pfBlocked) {
+        NSLog(@"SCStartupSafetyCheck: Phase 2 - Pre-emergency check: hosts=%@, pf=%@",
+              hostsBlocked ? @"blocked" : @"NOT blocked",
+              pfBlocked ? @"active" : @"NOT active");
 
-    if (!hostsBlocked || !pfBlocked) {
-        NSLog(@"SCStartupSafetyCheck: Phase 2 - Block not active, emergency test invalid");
-        [self finishWithEmergencyScriptResult:NO];
-        return;
-    }
+        if (!hostsBlocked || !pfBlocked) {
+            NSLog(@"SCStartupSafetyCheck: Phase 2 - Block not active, emergency test invalid");
+            [self finishWithEmergencyScriptResult:NO];
+            return;
+        }
 
-    [self reportProgress:@"Running emergency.sh..." progress:0.75];
-    [self runEmergencyScript];
+        [self reportProgress:@"Running emergency.sh..." progress:0.75];
+        [self runEmergencyScript];
+    }];
 }
 
 - (void)runEmergencyScript {
@@ -517,14 +542,16 @@ static const NSTimeInterval kEmergencyTestBlockDurationSeconds = 300.0; // 5 min
     BOOL hostsClean = ![self verifyHostsContainsTestWebsite];
     NSLog(@"SCStartupSafetyCheck: Phase 2 - Emergency hosts cleanup: %@", hostsClean ? @"PASS" : @"FAIL");
 
-    // Verify PF is clean
-    BOOL pfClean = ![PacketFilter blockFoundInPF];
-    NSLog(@"SCStartupSafetyCheck: Phase 2 - Emergency PF cleanup: %@", pfClean ? @"PASS" : @"FAIL");
+    // Verify PF is clean via XPC (daemon runs as root)
+    [self checkPFBlockActiveWithCompletion:^(BOOL pfActive) {
+        BOOL pfClean = !pfActive;
+        NSLog(@"SCStartupSafetyCheck: Phase 2 - Emergency PF cleanup: %@", pfClean ? @"PASS" : @"FAIL");
 
-    BOOL emergencyWorked = hostsClean && pfClean;
-    NSLog(@"SCStartupSafetyCheck: Phase 2 - Emergency script test: %@", emergencyWorked ? @"PASS" : @"FAIL");
+        BOOL emergencyWorked = hostsClean && pfClean;
+        NSLog(@"SCStartupSafetyCheck: Phase 2 - Emergency script test: %@", emergencyWorked ? @"PASS" : @"FAIL");
 
-    [self finishWithEmergencyScriptResult:emergencyWorked];
+        [self finishWithEmergencyScriptResult:emergencyWorked];
+    }];
 }
 
 - (void)finishWithPhase1OnlyResult {

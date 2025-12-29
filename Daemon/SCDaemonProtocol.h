@@ -50,6 +50,9 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)clearBlockForDebugWithAuthorization:(NSData *)authData
                                       reply:(void(^)(NSError* error))reply;
 
+// XPC method to check if PF block is active (runs as root, can query pfctl)
+- (void)isPFBlockActiveWithReply:(void(^)(BOOL active))reply;
+
 @end
 
 NS_ASSUME_NONNULL_END

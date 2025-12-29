@@ -227,4 +227,10 @@
 #endif
 }
 
+- (void)isPFBlockActiveWithReply:(void(^)(BOOL active))reply {
+    // No authorization needed - this is a read-only query
+    // Delegate to SCDaemonBlockMethods which has access to PacketFilter
+    [[SCDaemonBlockMethods new] isPFBlockActiveWithReply:reply];
+}
+
 @end

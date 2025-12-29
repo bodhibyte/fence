@@ -425,8 +425,14 @@ NSTimeInterval CHECKUP_LOCK_TIMEOUT = 0.5; // use a shorter lock timeout for che
         [SCSentry addBreadcrumb: @"Daemon found compromised block integrity and re-added rules" category: @"daemon"];
         NSLog(@"INFO: Integrity check ran; readded block rules.");
     } else NSLog(@"INFO: Integrity check ran; no action needed.");
-    
+
     [self.daemonMethodLock unlock];
+}
+
+- (void)isPFBlockActiveWithReply:(void(^)(BOOL active))reply {
+    // This runs in the daemon (as root), so pfctl queries work
+    BOOL active = [PacketFilter blockFoundInPF];
+    reply(active);
 }
 
 @end

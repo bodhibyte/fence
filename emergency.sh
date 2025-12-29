@@ -12,7 +12,17 @@ launchctl bootout system/org.eyebeam.selfcontrold 2>/dev/null || echo "Daemon no
 
 # 2. Clear firewall rules
 echo "Clearing firewall rules..."
+# Flush rules from anchor
 pfctl -a org.eyebeam -F all 2>/dev/null || echo "No pf rules to clear"
+# Empty the anchor file
+: > /etc/pf.anchors/org.eyebeam 2>/dev/null || true
+# Remove org.eyebeam references from pf.conf
+if [ -f /etc/pf.conf ]; then
+    sed -i '' '/org\.eyebeam/d' /etc/pf.conf
+    echo "Cleaned pf.conf"
+fi
+# Reload pf config
+pfctl -f /etc/pf.conf 2>/dev/null || true
 
 # 3. Clear hosts file
 echo "Clearing hosts file..."

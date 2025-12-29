@@ -498,6 +498,22 @@
     }];
 }
 
+- (void)isPFBlockActive:(void(^)(BOOL active, NSError* _Nullable error))reply {
+    [self connectAndExecuteCommandBlock:^(NSError * connectError) {
+        if (connectError != nil) {
+            NSLog(@"isPFBlockActive failed with connection error: %@", connectError);
+            reply(NO, connectError);
+        } else {
+            [[self.daemonConnection remoteObjectProxyWithErrorHandler:^(NSError * proxyError) {
+                NSLog(@"isPFBlockActive failed with remote object proxy error: %@", proxyError);
+                reply(NO, proxyError);
+            }] isPFBlockActiveWithReply:^(BOOL active) {
+                reply(active, nil);
+            }];
+        }
+    }];
+}
+
 - (NSString*)selfControlHelperToolPath {
     static NSString* path;
 
