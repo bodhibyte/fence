@@ -5,18 +5,18 @@
 **Aliases:** Safety Check, Startup Safety Check
 
 **Brief Definition:**
-A DEBUG-only automated test that verifies blocking and unblocking work correctly after a macOS or app version change.
+An automated test that verifies blocking and unblocking work correctly after a macOS or app version change. Runs in both DEBUG and Release builds.
 
 **Detailed Definition:**
 The Safety Test is an automated verification routine that runs when either macOS or SelfControl's version changes. It executes a 30-second test block targeting `example.com` (website) and Calculator (app), then verifies:
 1. **Blocking phase:** hosts file, packet filter, and app termination all work
 2. **Unblocking phase:** hosts file cleaned, PF rules removed, app can launch and stay running
 
-This ensures the blocking mechanisms are working before the user relies on them for productivity. Only available in DEBUG builds.
+This ensures the blocking mechanisms are working before the user relies on them for productivity.
 
 **Context/Trigger:**
-- Automatically prompts on app launch if `SCVersionTracker.anyVersionChanged` returns YES
-- User can manually trigger via Debug menu: "Run Safety Check..."
+- Automatically prompts on app launch if `SCVersionTracker.anyVersionChanged` returns YES (all builds)
+- User can manually trigger via Debug menu: "Run Safety Check..." (DEBUG builds only)
 - User can skip (marks versions as tested) or defer (prompts again next launch)
 
 **Test Targets:**
@@ -100,7 +100,6 @@ graph TD
 **Related Terms:** Entry, Bundle, Debug Mode
 
 **Anti-definitions (What this is NOT):**
-- ❌ NOT available in release builds (compiled out with `#ifdef DEBUG`)
 - ❌ NOT a user-facing block (uses internal XPC call, not commit flow)
 - ❌ NOT testing schedule functionality (just raw blocking mechanisms)
 - ❌ NOT run on every launch (only when version changes)
