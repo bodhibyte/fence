@@ -477,14 +477,17 @@ static const NSTimeInterval kEmergencyTestBlockDurationSeconds = 300.0; // 5 min
         return;
     }
 
-    // Quick verify blocking is active
+    [self reportProgress:@"Phase 2: Checking hosts file..." progress:0.68];
+
+    // Verify blocking is active (same checks as Phase 1)
     BOOL hostsBlocked = [self verifyHostsContainsTestWebsite];
+    NSLog(@"SCStartupSafetyCheck: Phase 2 - Hosts check: %@", hostsBlocked ? @"PASS" : @"FAIL");
+
+    [self reportProgress:@"Phase 2: Checking packet filter..." progress:0.70];
 
     // Check PF via XPC (daemon runs as root)
     [self checkPFBlockActiveWithCompletion:^(BOOL pfBlocked) {
-        NSLog(@"SCStartupSafetyCheck: Phase 2 - Pre-emergency check: hosts=%@, pf=%@",
-              hostsBlocked ? @"blocked" : @"NOT blocked",
-              pfBlocked ? @"active" : @"NOT active");
+        NSLog(@"SCStartupSafetyCheck: Phase 2 - PF check: %@", pfBlocked ? @"PASS" : @"FAIL");
 
         if (!hostsBlocked || !pfBlocked) {
             NSLog(@"SCStartupSafetyCheck: Phase 2 - Block not active, emergency test invalid");
@@ -492,8 +495,21 @@ static const NSTimeInterval kEmergencyTestBlockDurationSeconds = 300.0; // 5 min
             return;
         }
 
-        [self reportProgress:@"Running emergency.sh..." progress:0.75];
-        [self runEmergencyScript];
+        [self reportProgress:@"Phase 2: Testing app blocking..." progress:0.72];
+
+        // Verify app blocking (launch Calculator, check if killed)
+        [self verifyAppBlockingWithCompletion:^(BOOL appBlocked) {
+            NSLog(@"SCStartupSafetyCheck: Phase 2 - App blocking check: %@", appBlocked ? @"PASS" : @"FAIL");
+
+            if (!appBlocked) {
+                NSLog(@"SCStartupSafetyCheck: Phase 2 - App blocking failed, emergency test invalid");
+                [self finishWithEmergencyScriptResult:NO];
+                return;
+            }
+
+            [self reportProgress:@"Running emergency.sh..." progress:0.75];
+            [self runEmergencyScript];
+        }];
     }];
 }
 
@@ -538,19 +554,39 @@ static const NSTimeInterval kEmergencyTestBlockDurationSeconds = 300.0; // 5 min
         return;
     }
 
+    [self reportProgress:@"Phase 2: Verifying hosts cleaned..." progress:0.85];
+
     // Verify hosts file is clean
     BOOL hostsClean = ![self verifyHostsContainsTestWebsite];
     NSLog(@"SCStartupSafetyCheck: Phase 2 - Emergency hosts cleanup: %@", hostsClean ? @"PASS" : @"FAIL");
+
+    [self reportProgress:@"Phase 2: Verifying PF removed..." progress:0.88];
 
     // Verify PF is clean via XPC (daemon runs as root)
     [self checkPFBlockActiveWithCompletion:^(BOOL pfActive) {
         BOOL pfClean = !pfActive;
         NSLog(@"SCStartupSafetyCheck: Phase 2 - Emergency PF cleanup: %@", pfClean ? @"PASS" : @"FAIL");
 
-        BOOL emergencyWorked = hostsClean && pfClean;
-        NSLog(@"SCStartupSafetyCheck: Phase 2 - Emergency script test: %@", emergencyWorked ? @"PASS" : @"FAIL");
+        if (!hostsClean || !pfClean) {
+            NSLog(@"SCStartupSafetyCheck: Phase 2 - Emergency cleanup failed");
+            [self finishWithEmergencyScriptResult:NO];
+            return;
+        }
 
-        [self finishWithEmergencyScriptResult:emergencyWorked];
+        [self reportProgress:@"Phase 2: Verifying app can launch..." progress:0.92];
+
+        // Verify app blocking is disabled (Calculator can stay running)
+        [self verifyAppCanLaunchWithCompletion:^(BOOL canLaunch) {
+            NSLog(@"SCStartupSafetyCheck: Phase 2 - Emergency app cleanup: %@", canLaunch ? @"PASS" : @"FAIL");
+
+            // Clean up Calculator
+            [self killCalculatorIfRunning];
+
+            BOOL emergencyWorked = hostsClean && pfClean && canLaunch;
+            NSLog(@"SCStartupSafetyCheck: Phase 2 - Emergency script test: %@", emergencyWorked ? @"PASS" : @"FAIL");
+
+            [self finishWithEmergencyScriptResult:emergencyWorked];
+        }];
     }];
 }
 
