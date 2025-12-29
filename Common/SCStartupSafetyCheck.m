@@ -147,8 +147,28 @@ static const NSTimeInterval kEmergencyTestBlockDurationSeconds = 300.0; // 5 min
                 // Give daemon time to fully initialize XPC listener
                 dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)),
                                dispatch_get_main_queue(), ^{
-                    [self reportProgress:@"Starting test block..." progress:0.10];
-                    [self startTestBlock];
+
+                    [self reportProgress:@"Ensuring clean state..." progress:0.09];
+
+                    // Clear any stale block state before starting tests.
+                    // This handles: previous Phase 2 leftovers, emergency.sh not clearing
+                    // in-memory SCSettings cache (rm deletes file but doesn't notify cfprefsd),
+                    // crashes, force-quits, etc.
+                    [self.xpc clearBlockForDebug:^(NSError* error) {
+                        // Ignore errors (e.g. "no block active") - goal is clean slate
+
+                        // CRITICAL: Clear app's in-memory cache too!
+                        // emergency.sh deletes plist but app's SCSettings cache retains old BlockEndDate.
+                        // This caused "Waiting for block to expire" on second safety check runs.
+                        SCSettings* settings = [SCSettings sharedSettings];
+                        [settings setValue:nil forKey:@"BlockEndDate"];
+                        [settings setValue:@NO forKey:@"BlockIsRunning"];
+                        [settings setValue:nil forKey:@"ActiveBlocklist"];
+                        [settings setValue:nil forKey:@"ActiveBlockAsWhitelist"];
+
+                        [self reportProgress:@"Starting test block..." progress:0.10];
+                        [self startTestBlock];
+                    }];
                 });
             }];
         }];
