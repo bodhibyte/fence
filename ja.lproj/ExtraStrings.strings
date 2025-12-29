@@ -16,9 +16,9 @@
 
 "Could not delete old helper binary." = "古いヘルパーバイナリを削除できませんでした。";
 
-"Could not copy SelfControl's helper binary to PrivilegedHelperTools directory." = "SelfControl のヘルパーバイナリをディレクトリ「PrivilegedHelperTools」へコピーできませんでした。";
+"Could not copy Fence's helper binary to PrivilegedHelperTools directory." = "Fence のヘルパーバイナリをディレクトリ「PrivilegedHelperTools」へコピーできませんでした。";
 
-"Could not change permissions on SelfControl's helper binary." = "SelfControl のヘルパーバイナリのアクセス権を変更できませんでした。";
+"Could not change permissions on Fence's helper binary." = "Fence のヘルパーバイナリのアクセス権を変更できませんでした。";
 
 "Insufficient block information found." = "不完全なブロック情報が見つかりました。";
 
@@ -32,9 +32,9 @@
 
 "Could not write lock file." = "ロックファイルの書き込みに失敗しました。";
 
-"Could not remove SelfControl lock file." = "SelfControl のロックファイルを削除できませんでした。";
+"Could not remove Fence lock file." = "Fence のロックファイルを削除できませんでした。";
 
-"SelfControl lock file already exists. Please try your block again." = "SelfControl のロックファイルはすでに存在します。ブロックを再度実行してください。";
+"Fence lock file already exists. Please try your block again." = "Fence のロックファイルはすでに存在します。ブロックを再度実行してください。";
 
 "Helper tool failed with unknown error code: %d" = "ヘルパーツールが不明なエラーコード: %d によって正常動作しませんでした。";
 

@@ -2,8 +2,8 @@
 /* Class = "NSMenuItem"; title = "Customize Toolbar…"; ObjectID = "1UK-8n-QPP"; */
 "1UK-8n-QPP.title" = "Customize Toolbar…";
 
-/* Class = "NSMenuItem"; title = "SelfControl Killer"; ObjectID = "1Xt-HY-uBw"; */
-"1Xt-HY-uBw.title" = "SelfControl Killer";
+/* Class = "NSMenuItem"; title = "Fence Killer"; ObjectID = "1Xt-HY-uBw"; */
+"1Xt-HY-uBw.title" = "Fence Killer";
 
 /* Class = "NSMenu"; title = "Find"; ObjectID = "1b7-l0-nxx"; */
 "1b7-l0-nxx.title" = "Find";
@@ -32,8 +32,8 @@
 /* Class = "NSMenuItem"; title = "Find"; ObjectID = "4EN-yA-p0u"; */
 "4EN-yA-p0u.title" = "Find";
 
-/* Class = "NSMenuItem"; title = "Quit SelfControl Killer"; ObjectID = "4sb-4s-VLi"; */
-"4sb-4s-VLi.title" = "Quit SelfControl Killer";
+/* Class = "NSMenuItem"; title = "Quit Fence Killer"; ObjectID = "4sb-4s-VLi"; */
+"4sb-4s-VLi.title" = "Quit Fence Killer";
 
 /* Class = "NSMenuItem"; title = "Edit"; ObjectID = "5QF-Oa-p0T"; */
 "5QF-Oa-p0T.title" = "Edit";
@@ -41,8 +41,8 @@
 /* Class = "NSMenuItem"; title = "Copy Style"; ObjectID = "5Vv-lz-BsD"; */
 "5Vv-lz-BsD.title" = "Copy Style";
 
-/* Class = "NSMenuItem"; title = "About SelfControl Killer"; ObjectID = "5kV-Vb-QxS"; */
-"5kV-Vb-QxS.title" = "About SelfControl Killer";
+/* Class = "NSMenuItem"; title = "About Fence Killer"; ObjectID = "5kV-Vb-QxS"; */
+"5kV-Vb-QxS.title" = "About Fence Killer";
 
 /* Class = "NSMenuItem"; title = "Redo"; ObjectID = "6dh-zS-Vam"; */
 "6dh-zS-Vam.title" = "Redo";
@@ -80,8 +80,8 @@
 /* Class = "NSMenu"; title = "Help"; ObjectID = "F2S-fz-NVQ"; */
 "F2S-fz-NVQ.title" = "Help";
 
-/* Class = "NSMenuItem"; title = "SelfControl Killer Help"; ObjectID = "FKE-Sm-Kum"; */
-"FKE-Sm-Kum.title" = "SelfControl Killer Help";
+/* Class = "NSMenuItem"; title = "Fence Killer Help"; ObjectID = "FKE-Sm-Kum"; */
+"FKE-Sm-Kum.title" = "Fence Killer Help";
 
 /* Class = "NSMenuItem"; title = "Text"; ObjectID = "Fal-I4-PZk"; */
 "Fal-I4-PZk.title" = "Text";
@@ -158,8 +158,8 @@
 /* Class = "NSMenuItem"; title = "Baseline"; ObjectID = "OaQ-X3-Vso"; */
 "OaQ-X3-Vso.title" = "Baseline";
 
-/* Class = "NSMenuItem"; title = "Hide SelfControl Killer"; ObjectID = "Olw-nP-bQN"; */
-"Olw-nP-bQN.title" = "Hide SelfControl Killer";
+/* Class = "NSMenuItem"; title = "Hide Fence Killer"; ObjectID = "Olw-nP-bQN"; */
+"Olw-nP-bQN.title" = "Hide Fence Killer";
 
 /* Class = "NSMenuItem"; title = "Find Previous"; ObjectID = "OwM-mh-QMV"; */
 "OwM-mh-QMV.title" = "Find Previous";
@@ -173,11 +173,11 @@
 /* Class = "NSMenuItem"; title = "Show Fonts"; ObjectID = "Q5e-8K-NDq"; */
 "Q5e-8K-NDq.title" = "Show Fonts";
 
-/* Class = "NSButtonCell"; title = "Kill My SelfControl!"; ObjectID = "QIf-nv-UZL"; */
-"QIf-nv-UZL.title" = "Kill My SelfControl!";
+/* Class = "NSButtonCell"; title = "Kill My Fence!"; ObjectID = "QIf-nv-UZL"; */
+"QIf-nv-UZL.title" = "Kill My Fence!";
 
-/* Class = "NSWindow"; title = "SelfControl Killer"; ObjectID = "QvC-M9-y7g"; */
-"QvC-M9-y7g.title" = "SelfControl Killer";
+/* Class = "NSWindow"; title = "Fence Killer"; ObjectID = "QvC-M9-y7g"; */
+"QvC-M9-y7g.title" = "Fence Killer";
 
 /* Class = "NSMenuItem"; title = "Zoom"; ObjectID = "R4o-n2-Eq4"; */
 "R4o-n2-Eq4.title" = "Zoom";
@@ -356,8 +356,8 @@
 /* Class = "NSMenu"; title = "Kern"; ObjectID = "tlD-Oa-oAM"; */
 "tlD-Oa-oAM.title" = "Kern";
 
-/* Class = "NSMenu"; title = "SelfControl Killer"; ObjectID = "uQy-DD-JDr"; */
-"uQy-DD-JDr.title" = "SelfControl Killer";
+/* Class = "NSMenu"; title = "Fence Killer"; ObjectID = "uQy-DD-JDr"; */
+"uQy-DD-JDr.title" = "Fence Killer";
 
 /* Class = "NSMenuItem"; title = "Cut"; ObjectID = "uRl-iY-unG"; */
 "uRl-iY-unG.title" = "Cut";

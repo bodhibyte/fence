@@ -8,7 +8,7 @@
 An automated test that verifies blocking and unblocking work correctly after a macOS or app version change. Runs in both DEBUG and Release builds.
 
 **Detailed Definition:**
-The Safety Test is an automated verification routine that runs when either macOS or SelfControl's version changes. It executes a 30-second test block targeting `example.com` (website) and Calculator (app), then verifies:
+The Safety Test is an automated verification routine that runs when either macOS or Fence's version changes. It executes a 30-second test block targeting `example.com` (website) and Calculator (app), then verifies:
 1. **Blocking phase:** hosts file, packet filter, and app termination all work
 2. **Unblocking phase:** hosts file cleaned, PF rules removed, app can launch and stay running
 

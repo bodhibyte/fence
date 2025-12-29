@@ -229,7 +229,7 @@
             // (but we can't send it from the selfcontrold process, because it's running as root)
             NSUserNotificationCenter* userNoteCenter = [NSUserNotificationCenter defaultUserNotificationCenter];
             NSUserNotification* endedNote = [NSUserNotification new];
-            endedNote.title = @"Your SelfControl block has ended!";
+            endedNote.title = @"Your Fence block has ended!";
             endedNote.informativeText = @"All sites are now accessible.";
             [userNoteCenter deliverNotification: endedNote];
 
@@ -383,6 +383,10 @@
                                              selector:@selector(resetEmergencyCredits:)
                                                  name:@"SCDebugResetCreditsRequested"
                                                object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(triggerSafetyCheck:)
+                                                 name:@"SCDebugTriggerSafetyCheckRequested"
+                                               object:nil];
 #endif
 
     settings_ = [SCSettings sharedSettings];
@@ -492,7 +496,7 @@
 - (void)showSafetyCheckPrompt {
     NSAlert* alert = [[NSAlert alloc] init];
     [alert setMessageText:@"Safety Check Recommended"];
-    [alert setInformativeText:@"Your macOS or SelfControl version has changed since the last safety check. Would you like to run a 30-second test to verify blocking works correctly?"];
+    [alert setInformativeText:@"Your macOS or Fence version has changed since the last safety check. Would you like to run a 30-second test to verify blocking works correctly?"];
     [alert addButtonWithTitle:@"Run Test"];
     [alert addButtonWithTitle:@"Skip"];
     [alert addButtonWithTitle:@"Remind Me Later"];
@@ -1098,9 +1102,9 @@
 - (void)updateDebugIndicator {
     if ([SCDebugUtilities isDebugBlockingDisabled]) {
         // Show visual indicator - change window title
-        [initialWindow_ setTitle:@"SelfControl [DEBUG - BLOCKING DISABLED]"];
+        [initialWindow_ setTitle:@"Fence [DEBUG - BLOCKING DISABLED]"];
     } else {
-        [initialWindow_ setTitle:@"SelfControl"];
+        [initialWindow_ setTitle:@"Fence"];
     }
 }
 
@@ -1155,6 +1159,10 @@
         return YES;
     }
     return YES;
+}
+
+- (IBAction)triggerSafetyCheck:(id)sender {
+    [self runSafetyCheck];
 }
 
 #endif

@@ -187,6 +187,12 @@
     resetCreditsItem.target = self;
     [debugMenu addItem:resetCreditsItem];
 
+    NSMenuItem *triggerSafetyCheckItem = [[NSMenuItem alloc] initWithTitle:@"Trigger Safety Check"
+                                                                    action:@selector(debugTriggerSafetyCheck:)
+                                                             keyEquivalent:@""];
+    triggerSafetyCheckItem.target = self;
+    [debugMenu addItem:triggerSafetyCheckItem];
+
     debugItem.submenu = debugMenu;
     [self.statusMenu addItem:debugItem];
 #endif
@@ -316,6 +322,10 @@
 
 - (void)debugResetCredits:(id)sender {
     [[NSNotificationCenter defaultCenter] postNotificationName:@"SCDebugResetCreditsRequested" object:nil];
+}
+
+- (void)debugTriggerSafetyCheck:(id)sender {
+    [[NSNotificationCenter defaultCenter] postNotificationName:@"SCDebugTriggerSafetyCheckRequested" object:nil];
 }
 #endif
 

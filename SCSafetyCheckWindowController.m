@@ -36,7 +36,7 @@
                                                    styleMask:(NSWindowStyleMaskTitled | NSWindowStyleMaskClosable)
                                                      backing:NSBackingStoreBuffered
                                                        defer:NO];
-    window.title = @"SelfControl Safety Check";
+    window.title = @"Fence Safety Check";
 
     self = [super initWithWindow:window];
     if (self) {

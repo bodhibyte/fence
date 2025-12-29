@@ -14,14 +14,14 @@
 /* Class = "NSMenu"; title = "AMainMenu"; ObjectID = "29"; */
 "29.title" = "AMainMenu";
 
-/* Class = "NSMenuItem"; title = "SelfControl"; ObjectID = "56"; */
-"56.title" = "SelfControl";
+/* Class = "NSMenuItem"; title = "Fence"; ObjectID = "56"; */
+"56.title" = "Fence";
 
-/* Class = "NSMenu"; title = "SelfControl"; ObjectID = "57"; */
-"57.title" = "SelfControl";
+/* Class = "NSMenu"; title = "Fence"; ObjectID = "57"; */
+"57.title" = "Fence";
 
-/* Class = "NSMenuItem"; title = "Informazioni su SelfControl"; ObjectID = "58"; */
-"58.title" = "Informazioni su SelfControl";
+/* Class = "NSMenuItem"; title = "Informazioni su Fence"; ObjectID = "58"; */
+"58.title" = "Informazioni su Fence";
 
 /* Class = "NSMenu"; title = "Servizi"; ObjectID = "130"; */
 "130.title" = "Servizi";
@@ -29,11 +29,11 @@
 /* Class = "NSMenuItem"; title = "Servizi"; ObjectID = "131"; */
 "131.title" = "Servizi";
 
-/* Class = "NSMenuItem"; title = "Nascondi SelfControl"; ObjectID = "134"; */
-"134.title" = "Nascondi SelfControl";
+/* Class = "NSMenuItem"; title = "Nascondi Fence"; ObjectID = "134"; */
+"134.title" = "Nascondi Fence";
 
-/* Class = "NSMenuItem"; title = "Esci da SelfControl"; ObjectID = "136"; */
-"136.title" = "Esci da SelfControl";
+/* Class = "NSMenuItem"; title = "Esci da Fence"; ObjectID = "136"; */
+"136.title" = "Esci da Fence";
 
 /* Class = "NSMenuItem"; title = "Nascondi altre"; ObjectID = "145"; */
 "145.title" = "Nascondi altre";
@@ -41,8 +41,8 @@
 /* Class = "NSMenuItem"; title = "Mostra tutte"; ObjectID = "150"; */
 "150.title" = "Mostra tutte";
 
-/* Class = "NSWindow"; title = "SelfControl"; ObjectID = "371"; */
-"371.title" = "SelfControl";
+/* Class = "NSWindow"; title = "Fence"; ObjectID = "371"; */
+"371.title" = "Fence";
 
 /* Class = "NSTextFieldCell"; title = "30 minuti"; ObjectID = "479"; */
 "479.title" = "30 minuti";
@@ -140,8 +140,8 @@
 /* Class = "NSMenu"; title = "Aiuto"; ObjectID = "900"; */
 "900.title" = "Aiuto";
 
-/* Class = "NSMenuItem"; title = "FAQ su SelfControl"; ObjectID = "901"; */
-"901.title" = "FAQ su SelfControl";
+/* Class = "NSMenuItem"; title = "FAQ su Fence"; ObjectID = "901"; */
+"901.title" = "FAQ su Fence";
 
 /* Class = "NSMenuItem"; title = "Get Started"; ObjectID = "905"; */
 "905.title" = "Get Started";

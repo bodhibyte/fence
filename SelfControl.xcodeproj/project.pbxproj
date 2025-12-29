@@ -627,7 +627,7 @@
 		8BF3973D41997900DF147B24 /* libPods-org.eyebeam.selfcontrold.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-org.eyebeam.selfcontrold.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		8BFF51A1C4A177184F1D9ACF /* SCVersionTracker.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = SCVersionTracker.m; path = Common/Utility/SCVersionTracker.m; sourceTree = "<group>"; };
 		8D1107310486CEB800E47090 /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		8D1107320486CEB800E47090 /* SelfControl.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SelfControl.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		8D1107320486CEB800E47090 /* Fence.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Fence.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		949F9F8815B32EC6007B8B42 /* zh-Hans */ = {isa = PBXFileReference; fileEncoding = 10; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/Localizable.strings"; sourceTree = "<group>"; };
 		949F9F8D15B333A1007B8B42 /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/InfoPlist.strings"; sourceTree = "<group>"; };
 		AA5F3568C5F305D28DF0F7AC /* MenuBarFence@2x.png */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = image.png; path = "MenuBarFence@2x.png"; sourceTree = "<group>"; };
@@ -1659,7 +1659,7 @@
 			isa = PBXGroup;
 			children = (
 				224577B92F0198C80050F2F4 /* emergency.sh */,
-				8D1107320486CEB800E47090 /* SelfControl.app */,
+				8D1107320486CEB800E47090 /* Fence.app */,
 				CBA2AFD20F39EC12005AFEBE /* selfcontrol-cli */,
 				CB9C80F719CFB79700CDCAE1 /* SelfControl Killer.app */,
 				CB9C811B19CFBA8500CDCAE1 /* SCKillerHelper */,
@@ -3047,7 +3047,7 @@
 			name = SelfControl;
 			productInstallPath = "$(HOME)/Applications";
 			productName = SelfControl;
-			productReference = 8D1107320486CEB800E47090 /* SelfControl.app */;
+			productReference = 8D1107320486CEB800E47090 /* Fence.app */;
 			productType = "com.apple.product-type.application";
 		};
 		CB0EEF5C20FD8CE00024D27B /* SelfControlTests */ = {
@@ -4334,7 +4334,7 @@
 				INSTALL_PATH = "$(HOME)/Applications";
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
 				PRODUCT_BUNDLE_IDENTIFIER = "org.eyebeam.${PRODUCT_NAME:identifier}";
-				PRODUCT_NAME = SelfControl;
+				PRODUCT_NAME = Fence;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SDKROOT = macosx;
 				SWIFT_OBJC_BRIDGING_HEADER = "SelfControl-Bridging-Header.h";
@@ -4368,7 +4368,7 @@
 				INSTALL_PATH = "$(HOME)/Applications";
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
 				PRODUCT_BUNDLE_IDENTIFIER = "org.eyebeam.${PRODUCT_NAME:identifier}";
-				PRODUCT_NAME = SelfControl;
+				PRODUCT_NAME = Fence;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SDKROOT = macosx;
 				SWIFT_OBJC_BRIDGING_HEADER = "SelfControl-Bridging-Header.h";

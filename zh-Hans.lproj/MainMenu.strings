@@ -41,8 +41,8 @@
 /* Class = "NSMenuItem"; title = "显示全部"; ObjectID = "150"; */
 "150.title" = "显示全部";
 
-/* Class = "NSWindow"; title = "SelfControl"; ObjectID = "371"; */
-"371.title" = "SelfControl";
+/* Class = "NSWindow"; title = "Fence"; ObjectID = "371"; */
+"371.title" = "Fence";
 
 /* Class = "NSTextFieldCell"; title = "30 minutes"; ObjectID = "479"; */
 "479.title" = "30 minutes";
@@ -140,8 +140,8 @@
 /* Class = "NSMenu"; title = "帮助"; ObjectID = "900"; */
 "900.title" = "帮助";
 
-/* Class = "NSMenuItem"; title = "SelfControl FAQ"; ObjectID = "901"; */
-"901.title" = "SelfControl FAQ";
+/* Class = "NSMenuItem"; title = "Fence FAQ"; ObjectID = "901"; */
+"901.title" = "Fence FAQ";
 
 /* Class = "NSMenuItem"; title = "Get Started"; ObjectID = "905"; */
 "905.title" = "Get Started";

@@ -16,9 +16,9 @@
 
 "Could not delete old helper binary." = "No se pudo borrar el binario antigüo de ayuda.";
 
-"Could not copy SelfControl's helper binary to PrivilegedHelperTools directory." = "No se pudo copiar el binario de ayuda de SelfControl al directorio PrivilegedHelperTools.";
+"Could not copy Fence's helper binary to PrivilegedHelperTools directory." = "No se pudo copiar el binario de ayuda de Fence al directorio PrivilegedHelperTools.";
 
-"Could not change permissions on SelfControl's helper binary." = "No se pudieron cambiar los permisos en el binario de ayuda de SelfControl.";
+"Could not change permissions on Fence's helper binary." = "No se pudieron cambiar los permisos en el binario de ayuda de Fence.";
 
 "Insufficient block information found." = "No se encontró suficiente información de bloqueo.";
 
@@ -32,9 +32,9 @@
 
 "Could not write lock file." = "No se pudo escribir el archivo candado.";
 
-"Could not remove SelfControl lock file." = "No se pudo borrar el archivo lock (cerrardura) de SelfControl.";
+"Could not remove Fence lock file." = "No se pudo borrar el archivo lock (cerrardura) de Fence.";
 
-"SelfControl lock file already exists. Please try your block again." = "Archivo lock (cerradura) SelfControl ya existe, Por favor intente su bloqueo de nuevo.";
+"Fence lock file already exists. Please try your block again." = "Archivo lock (cerradura) Fence ya existe, Por favor intente su bloqueo de nuevo.";
 
 "Helper tool failed with unknown error code: %d" = "Herramienta de ayuda fracasó sin ningún código de error conocido: %d";
 

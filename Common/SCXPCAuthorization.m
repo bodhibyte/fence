@@ -95,7 +95,7 @@ static NSDictionary* kAuthorizationRuleAuthenticateAsAdmin2MinTimeout;
             kCommandKeyAuthRightName    : @"org.eyebeam.SelfControl.startBlock",
             kCommandKeyAuthRightDefault : kAuthorizationRuleAuthenticateAsAdmin2MinTimeout,
             kCommandKeyAuthRightDesc    : NSLocalizedString(
-                @"SelfControl needs your username and password to start the block.",
+                @"Fence needs your username and password to start the block.",
                 @"prompt shown when user is required to authorize to start block"
             )
         };
@@ -103,7 +103,7 @@ static NSDictionary* kAuthorizationRuleAuthenticateAsAdmin2MinTimeout;
             kCommandKeyAuthRightName    : @"org.eyebeam.SelfControl.modifyBlock",
             kCommandKeyAuthRightDefault : kAuthorizationRuleAuthenticateAsAdmin2MinTimeout,
             kCommandKeyAuthRightDesc    : NSLocalizedString(
-                @"SelfControl needs your username and password to modify the block",
+                @"Fence needs your username and password to modify the block",
                 @"prompt shown when user is required to authorize to modify their block"
             )
         };

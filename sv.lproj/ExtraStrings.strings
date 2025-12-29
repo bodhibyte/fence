@@ -16,9 +16,9 @@
 
 "Could not delete old helper binary." = "Kunde inte ta bort den gamla hjälpbinärfilen.";
 
-"Could not copy SelfControl's helper binary to PrivilegedHelperTools directory." = "Kunde inte kopiera SelfControls hjälpbinärfil till mappen PrivilegedHelperTools.";
+"Could not copy Fence's helper binary to PrivilegedHelperTools directory." = "Kunde inte kopiera Fences hjälpbinärfil till mappen PrivilegedHelperTools.";
 
-"Could not change permissions on SelfControl's helper binary." = "Kunde inte ändra rättigheterna för SelfControls hjälpbinärfil.";
+"Could not change permissions on Fence's helper binary." = "Kunde inte ändra rättigheterna för Fences hjälpbinärfil.";
 
 "Insufficient block information found." = "Kunde inte hitta tillräcklig blockeringsinformation.";
 
@@ -32,9 +32,9 @@
 
 "Could not write lock file." = "Kunde inte skriva låsfil.";
 
-"Could not remove SelfControl lock file." = "Kunde inte ta bort SelfControls låsfil.";
+"Could not remove Fence lock file." = "Kunde inte ta bort Fences låsfil.";
 
-"SelfControl lock file already exists. Please try your block again." = "SelfControl låsfil existerar redan. Var god försök att blockera igen.";
+"Fence lock file already exists. Please try your block again." = "Fence låsfil existerar redan. Var god försök att blockera igen.";
 
 "Helper tool failed with unknown error code: %d" = "Hjälpverktyget misslyckades med okänd felkod: %d";
 

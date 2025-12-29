@@ -54,7 +54,7 @@
                                                              NSWindowStyleMaskFullSizeContentView)
                                                      backing:NSBackingStoreBuffered
                                                        defer:NO];
-    window.title = @"SelfControl - Week Schedule";
+    window.title = @"Fence - Week Schedule";
     window.minSize = NSMakeSize(600, 500);
     window.collectionBehavior = NSWindowCollectionBehaviorFullScreenPrimary;
 
@@ -90,7 +90,7 @@
     // Title
     y -= 30;
     self.titleLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(padding, y, 200, 24)];
-    self.titleLabel.stringValue = @"SelfControl";
+    self.titleLabel.stringValue = @"Fence";
     self.titleLabel.font = [NSFont systemFontOfSize:20 weight:NSFontWeightBold];
     self.titleLabel.bezeled = NO;
     self.titleLabel.editable = NO;

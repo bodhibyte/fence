@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>English</string>
 	<key>CFBundleDisplayName</key>
-	<string>SelfControl</string>
+	<string>Fence</string>
 	<key>CFBundleDocumentTypes</key>
 	<array>
 		<dict>
@@ -38,9 +38,9 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>4.0.2</string>
+	<string>1.0.0</string>
 	<key>CFBundleVersion</key>
-	<string>410</string>
+	<string>500</string>
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.productivity</string>
 	<key>LSHasLocalizedDisplayName</key>
@@ -67,7 +67,7 @@
 	<key>SUEnableJavaScript</key>
 	<true/>
 	<key>SUFeedURL</key>
-	<string>https://selfcontrolapp.com/appcast.xml</string>
+	<string>https://usefence.app/appcast.xml</string>
 	<key>SUPublicDSAKeyFile</key>
 	<string>dsa_pub.pem</string>
 	<key>SUEnableSystemProfiling</key>

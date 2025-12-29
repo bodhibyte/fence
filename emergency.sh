@@ -1,10 +1,10 @@
 #!/bin/bash
-# SelfControl Emergency Wipe Script
+# Fence Emergency Wipe Script
 # Run with: sudo ./emergency.sh
 
 set -e
 
-echo "=== SelfControl Emergency Wipe ==="
+echo "=== Fence Emergency Wipe ==="
 
 # 1. Stop daemon
 echo "Stopping daemon..."
@@ -41,13 +41,13 @@ rm /usr/local/etc/.*.plist 2>/dev/null || echo "No settings plist found"
 # 6. Clear schedule/commitment data from user defaults (run as actual user, not root)
 echo "Clearing user defaults..."
 CONSOLE_USER=$(stat -f "%Su" /dev/console)
-sudo -u "$CONSOLE_USER" defaults delete org.eyebeam.SelfControl SCIsCommitted 2>/dev/null || true
-sudo -u "$CONSOLE_USER" defaults delete org.eyebeam.SelfControl SCWeeklySchedules 2>/dev/null || true
+sudo -u "$CONSOLE_USER" defaults delete org.eyebeam.Fence SCIsCommitted 2>/dev/null || true
+sudo -u "$CONSOLE_USER" defaults delete org.eyebeam.Fence SCWeeklySchedules 2>/dev/null || true
 
 # Clear week-specific keys (check for any SCWeekSchedules_* or SCWeekCommitment_*)
-for key in $(sudo -u "$CONSOLE_USER" defaults read org.eyebeam.SelfControl 2>/dev/null | grep -oE "SCWeek(Schedules|Commitment)_[0-9-]+" | sort -u); do
+for key in $(sudo -u "$CONSOLE_USER" defaults read org.eyebeam.Fence 2>/dev/null | grep -oE "SCWeek(Schedules|Commitment)_[0-9-]+" | sort -u); do
     echo "  Deleting $key..."
-    sudo -u "$CONSOLE_USER" defaults delete org.eyebeam.SelfControl "$key" 2>/dev/null || true
+    sudo -u "$CONSOLE_USER" defaults delete org.eyebeam.Fence "$key" 2>/dev/null || true
 done
 
 echo ""

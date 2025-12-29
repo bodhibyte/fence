@@ -14,14 +14,14 @@
 /* Class = "NSMenu"; title = "AMainMenu"; ObjectID = "29"; */
 "29.title" = "AMainMenu";
 
-/* Class = "NSMenuItem"; title = "SelfControl"; ObjectID = "56"; */
-"56.title" = "SelfControl";
+/* Class = "NSMenuItem"; title = "Fence"; ObjectID = "56"; */
+"56.title" = "Fence";
 
-/* Class = "NSMenu"; title = "SelfControl"; ObjectID = "57"; */
-"57.title" = "SelfControl";
+/* Class = "NSMenu"; title = "Fence"; ObjectID = "57"; */
+"57.title" = "Fence";
 
-/* Class = "NSMenuItem"; title = "Om SelfControl"; ObjectID = "58"; */
-"58.title" = "Om SelfControl";
+/* Class = "NSMenuItem"; title = "Om Fence"; ObjectID = "58"; */
+"58.title" = "Om Fence";
 
 /* Class = "NSMenu"; title = "Tjänster"; ObjectID = "130"; */
 "130.title" = "Tjänster";
@@ -29,11 +29,11 @@
 /* Class = "NSMenuItem"; title = "Tjänster"; ObjectID = "131"; */
 "131.title" = "Tjänster";
 
-/* Class = "NSMenuItem"; title = "Göm SelfControl"; ObjectID = "134"; */
-"134.title" = "Göm SelfControl";
+/* Class = "NSMenuItem"; title = "Göm Fence"; ObjectID = "134"; */
+"134.title" = "Göm Fence";
 
-/* Class = "NSMenuItem"; title = "Avsluta SelfControl"; ObjectID = "136"; */
-"136.title" = "Avsluta SelfControl";
+/* Class = "NSMenuItem"; title = "Avsluta Fence"; ObjectID = "136"; */
+"136.title" = "Avsluta Fence";
 
 /* Class = "NSMenuItem"; title = "Göm Övriga"; ObjectID = "145"; */
 "145.title" = "Göm Övriga";
@@ -41,8 +41,8 @@
 /* Class = "NSMenuItem"; title = "Visa Alla"; ObjectID = "150"; */
 "150.title" = "Visa Alla";
 
-/* Class = "NSWindow"; title = "SelfControl"; ObjectID = "371"; */
-"371.title" = "SelfControl";
+/* Class = "NSWindow"; title = "Fence"; ObjectID = "371"; */
+"371.title" = "Fence";
 
 /* Class = "NSTextFieldCell"; title = "30 minuter"; ObjectID = "479"; */
 "479.title" = "30 minuter";
@@ -140,8 +140,8 @@
 /* Class = "NSMenu"; title = "Help"; ObjectID = "902"; */
 "902.title" = "Help";
 
-/* Class = "NSMenuItem"; title = "SelfControl FAQ"; ObjectID = "903"; */
-"903.title" = "SelfControl FAQ";
+/* Class = "NSMenuItem"; title = "Fence FAQ"; ObjectID = "903"; */
+"903.title" = "Fence FAQ";
 
 /* Class = "NSMenuItem"; title = "Get Started"; ObjectID = "907"; */
 "907.title" = "Get Started";

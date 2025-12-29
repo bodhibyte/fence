@@ -14,14 +14,14 @@
 /* Class = "NSMenu"; title = "AMainMenu"; ObjectID = "29"; */
 "29.title" = "AMainMenu";
 
-/* Class = "NSMenuItem"; title = "SelfControl"; ObjectID = "56"; */
-"56.title" = "SelfControl";
+/* Class = "NSMenuItem"; title = "Fence"; ObjectID = "56"; */
+"56.title" = "Fence";
 
-/* Class = "NSMenu"; title = "SelfControl"; ObjectID = "57"; */
-"57.title" = "SelfControl";
+/* Class = "NSMenu"; title = "Fence"; ObjectID = "57"; */
+"57.title" = "Fence";
 
-/* Class = "NSMenuItem"; title = "SelfControl hakkında"; ObjectID = "58"; */
-"58.title" = "SelfControl hakkında";
+/* Class = "NSMenuItem"; title = "Fence hakkında"; ObjectID = "58"; */
+"58.title" = "Fence hakkında";
 
 /* Class = "NSMenu"; title = "Servisler"; ObjectID = "130"; */
 "130.title" = "Servisler";
@@ -29,11 +29,11 @@
 /* Class = "NSMenuItem"; title = "Servisler"; ObjectID = "131"; */
 "131.title" = "Servisler";
 
-/* Class = "NSMenuItem"; title = "SelfControl'ü gizle"; ObjectID = "134"; */
-"134.title" = "SelfControl'ü gizle";
+/* Class = "NSMenuItem"; title = "Fence'ü gizle"; ObjectID = "134"; */
+"134.title" = "Fence'ü gizle";
 
-/* Class = "NSMenuItem"; title = "SelfControl'ü kapat"; ObjectID = "136"; */
-"136.title" = "SelfControl'ü kapat";
+/* Class = "NSMenuItem"; title = "Fence'ü kapat"; ObjectID = "136"; */
+"136.title" = "Fence'ü kapat";
 
 /* Class = "NSMenuItem"; title = "Diğer uygulamaları gizle"; ObjectID = "145"; */
 "145.title" = "Diğer uygulamaları gizle";
@@ -41,8 +41,8 @@
 /* Class = "NSMenuItem"; title = "Bütün uygulamaları göster"; ObjectID = "150"; */
 "150.title" = "Bütün uygulamaları göster";
 
-/* Class = "NSWindow"; title = "SelfControl"; ObjectID = "371"; */
-"371.title" = "SelfControl";
+/* Class = "NSWindow"; title = "Fence"; ObjectID = "371"; */
+"371.title" = "Fence";
 
 /* Class = "NSTextFieldCell"; title = "30 dakika"; ObjectID = "479"; */
 "479.title" = "30 dakika";

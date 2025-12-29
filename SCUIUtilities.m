@@ -179,7 +179,7 @@
 
     NSAlert* alert = [[NSAlert alloc] init];
     [alert setMessageText: NSLocalizedString(@"Restart Firefox", "FireFox browser restart prompt")];
-    [alert setInformativeText:NSLocalizedString(@"SelfControl's block may not work properly in Firefox until you restart the browser. Do you want to quit Firefox now?", @"Message explaining Firefox restart requirement")];
+    [alert setInformativeText:NSLocalizedString(@"Fence's block may not work properly in Firefox until you restart the browser. Do you want to quit Firefox now?", @"Message explaining Firefox restart requirement")];
     [alert addButtonWithTitle: NSLocalizedString(@"Quit Firefox", @"Button to quit Firefox")];
     [alert addButtonWithTitle: NSLocalizedString(@"Continue Without Restart", "Button to decline restarting Firefox")];
     alert.showsSuppressionButton = YES;
