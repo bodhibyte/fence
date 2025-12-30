@@ -12,6 +12,8 @@
 #import "Block Management/SCScheduleManager.h"
 #import "Block Management/SCBlockBundle.h"
 #import "Block Management/SCWeeklySchedule.h"
+#import "Common/SCLicenseManager.h"
+#import "SCLicenseWindowController.h"
 
 @interface SCWeekScheduleWindowController () <SCWeekGridViewDelegate,
                                                SCDayScheduleEditorDelegate,
@@ -39,6 +41,7 @@
 // Child controllers
 @property (nonatomic, strong, nullable) SCDayScheduleEditorController *dayEditorController;
 @property (nonatomic, strong, nullable) SCBundleEditorController *bundleEditorController;
+@property (nonatomic, strong, nullable) SCLicenseWindowController *licenseWindowController;
 
 @end
 
@@ -494,7 +497,22 @@
         return;
     }
 
-    // Confirmation
+    // Check license FIRST, before showing confirmation dialog
+    if (![[SCLicenseManager sharedManager] canCommit]) {
+        [self showLicenseModalWithCompletion:^{
+            // License now valid, show the confirmation dialog
+            [self showCommitConfirmationDialog];
+        }];
+        return;
+    }
+
+    // Trial still valid or license valid - show confirmation dialog
+    [self showCommitConfirmationDialog];
+}
+
+- (void)showCommitConfirmationDialog {
+    SCScheduleManager *manager = [SCScheduleManager sharedManager];
+
     NSAlert *alert = [[NSAlert alloc] init];
     NSString *weekName = (self.currentWeekOffset == 0) ? @"This Week" : @"Next Week";
     alert.messageText = [NSString stringWithFormat:@"Commit to %@?", weekName];
@@ -517,9 +535,27 @@
     [alert beginSheetModalForWindow:self.window completionHandler:^(NSModalResponse returnCode) {
         if (returnCode == NSAlertFirstButtonReturn) {
             [manager commitToWeekWithOffset:weekOffset];
+            [[SCLicenseManager sharedManager] recordCommit];
             [self reloadData];
         }
     }];
+}
+
+#pragma mark - License
+
+- (void)showLicenseModalWithCompletion:(void(^)(void))completion {
+    self.licenseWindowController = [[SCLicenseWindowController alloc] init];
+    self.licenseWindowController.onLicenseActivated = ^{
+        self.licenseWindowController = nil;
+        if (completion) {
+            completion();
+        }
+    };
+    self.licenseWindowController.onCancel = ^{
+        self.licenseWindowController = nil;
+        // User cancelled - they can't proceed without a license
+    };
+    [self.licenseWindowController beginSheetModalForWindow:self.window completionHandler:nil];
 }
 
 - (void)emergencyUnlockClicked:(id)sender {

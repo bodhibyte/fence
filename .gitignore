@@ -31,3 +31,6 @@ xcuserdata/**/*
 !xcuserdata/**/xcschemes/*
 
 *.moved-aside
+
+# Secret configuration (license key)
+Secrets.xcconfig

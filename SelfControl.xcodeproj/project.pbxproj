@@ -15,6 +15,9 @@
 		1FEB91F11AD92FF528C0B287 /* SCStartupSafetyCheck.m in Sources */ = {isa = PBXBuildFile; fileRef = 3F481A9B3BB13815269D74D1 /* SCStartupSafetyCheck.m */; };
 		224577BA2F0198C80050F2F4 /* emergency.sh in Resources */ = {isa = PBXBuildFile; fileRef = 224577B92F0198C80050F2F4 /* emergency.sh */; };
 		224DFCA02F0409E600D97A1C /* SCLogger.m in Sources */ = {isa = PBXBuildFile; fileRef = 224DFC9F2F0409E600D97A1C /* SCLogger.m */; };
+		224DFCF72F0417F700D97A1C /* SCLicenseManager.m in Sources */ = {isa = PBXBuildFile; fileRef = 224DFCF62F0417F700D97A1C /* SCLicenseManager.m */; };
+		224DFCFA2F04180C00D97A1C /* SCLicenseWindowController.m in Sources */ = {isa = PBXBuildFile; fileRef = 224DFCF92F04180C00D97A1C /* SCLicenseWindowController.m */; };
+		224DFCFC2F041AF300D97A1C /* Secrets.xcconfig in Resources */ = {isa = PBXBuildFile; fileRef = 224DFCFB2F041AF300D97A1C /* Secrets.xcconfig */; };
 		228354F82EFB7BCB00E77469 /* SCTimeRange.m in Sources */ = {isa = PBXBuildFile; fileRef = 228354F72EFB7BCB00E77469 /* SCTimeRange.m */; };
 		228354F92EFB7BCB00E77469 /* SCTimeRange.h in Headers */ = {isa = PBXBuildFile; fileRef = 228354F62EFB7BCB00E77469 /* SCTimeRange.h */; };
 		228354FA2EFB7BCB00E77469 /* SCTimeRange.m in Sources */ = {isa = PBXBuildFile; fileRef = 228354F72EFB7BCB00E77469 /* SCTimeRange.m */; };
@@ -585,6 +588,11 @@
 		224577B92F0198C80050F2F4 /* emergency.sh */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; path = emergency.sh; sourceTree = "<group>"; };
 		224DFC9E2F0409E600D97A1C /* SCLogger.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SCLogger.h; sourceTree = "<group>"; };
 		224DFC9F2F0409E600D97A1C /* SCLogger.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = SCLogger.m; sourceTree = "<group>"; };
+		224DFCF52F0417F700D97A1C /* SCLicenseManager.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SCLicenseManager.h; sourceTree = "<group>"; };
+		224DFCF62F0417F700D97A1C /* SCLicenseManager.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = SCLicenseManager.m; sourceTree = "<group>"; };
+		224DFCF82F04180C00D97A1C /* SCLicenseWindowController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SCLicenseWindowController.h; sourceTree = "<group>"; };
+		224DFCF92F04180C00D97A1C /* SCLicenseWindowController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = SCLicenseWindowController.m; sourceTree = "<group>"; };
+		224DFCFB2F041AF300D97A1C /* Secrets.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Secrets.xcconfig; sourceTree = "<group>"; };
 		228354F62EFB7BCB00E77469 /* SCTimeRange.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SCTimeRange.h; sourceTree = "<group>"; };
 		228354F72EFB7BCB00E77469 /* SCTimeRange.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = SCTimeRange.m; sourceTree = "<group>"; };
 		228354FF2EFB7C0100E77469 /* SCBlockBundle.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SCBlockBundle.h; sourceTree = "<group>"; };
@@ -1675,6 +1683,8 @@
 		29B97314FDCFA39411CA2CEA /* SelfControl */ = {
 			isa = PBXGroup;
 			children = (
+				224DFCF82F04180C00D97A1C /* SCLicenseWindowController.h */,
+				224DFCF92F04180C00D97A1C /* SCLicenseWindowController.m */,
 				CBDFFF4B24A07DB300622CEE /* SelfControl.entitlements */,
 				CB20C5D7245699D700B9D749 /* version-header.h */,
 				CBD4848519D7611F0020F949 /* Podfile */,
@@ -1703,6 +1713,7 @@
 				5AA687B207D9494C0056038B /* SCSafetyCheckWindowController.m */,
 				28BCD291A785AB33E7343087 /* MenuBarFence.png */,
 				AA5F3568C5F305D28DF0F7AC /* MenuBarFence@2x.png */,
+				224DFCFB2F041AF300D97A1C /* Secrets.xcconfig */,
 			);
 			name = SelfControl;
 			sourceTree = "<group>";
@@ -1765,6 +1776,8 @@
 		CB1CA64C25ABA5990084A551 /* Common */ = {
 			isa = PBXGroup;
 			children = (
+				224DFCF52F0417F700D97A1C /* SCLicenseManager.h */,
+				224DFCF62F0417F700D97A1C /* SCLicenseManager.m */,
 				224DFC9E2F0409E600D97A1C /* SCLogger.h */,
 				224DFC9F2F0409E600D97A1C /* SCLogger.m */,
 				CB81A9E325B7C2B9006956F7 /* Utility */,
@@ -3524,6 +3537,7 @@
 				CBBF4EE515830D7300E364D9 /* TimerWindow.xib in Resources */,
 				CBDFFF4924A0711800622CEE /* org.eyebeam.selfcontrold.plist in Resources */,
 				CB0385E219D77051004614B6 /* PreferencesGeneralViewController.xib in Resources */,
+				224DFCFC2F041AF300D97A1C /* Secrets.xcconfig in Resources */,
 				CB40A8680FBC7DE700167727 /* SelfControlBlocklist.icns in Resources */,
 				CBBF4E7F1582F7A200E364D9 /* DomainList.xib in Resources */,
 				CBBF4E801582F7A200E364D9 /* MainMenu.xib in Resources */,
@@ -3910,6 +3924,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				CBC1F4B526070358008E3FA8 /* SCFileWatcher.m in Sources */,
+				224DFCF72F0417F700D97A1C /* SCLicenseManager.m in Sources */,
 				CBADC27E25B22BC7000EE5BB /* SCSentry.m in Sources */,
 				228354FE2EFB7BCB00E77469 /* SCTimeRange.m in Sources */,
 				8D11072D0486CEB800E47090 /* main.m in Sources */,
@@ -3917,6 +3932,7 @@
 				CB1CA66525ABA6240084A551 /* SCXPCAuthorization.m in Sources */,
 				CB529BBF0F32B7ED00564FB8 /* AppController.m in Sources */,
 				CB81A94925B7B5B5006956F7 /* SCMigrationUtilities.m in Sources */,
+				224DFCFA2F04180C00D97A1C /* SCLicenseWindowController.m in Sources */,
 				CB81A9F325B7C5F7006956F7 /* SCBlockFileReaderWriter.m in Sources */,
 				CB5888DC25F60DC300B5C64D /* HostFileBlockerSet.m in Sources */,
 				CB1465B825B027E700130D2E /* SCErr.m in Sources */,
@@ -4335,6 +4351,7 @@
 				GCC_PREPROCESSOR_DEFINITIONS = (
 					"DEBUG=1",
 					"$(inherited)",
+					"LICENSE_SECRET_KEY=$(LICENSE_SECRET_KEY)",
 				);
 				INFOPLIST_FILE = Info.plist;
 				INSTALL_PATH = "$(HOME)/Applications";
@@ -4370,6 +4387,11 @@
 				GCC_MODEL_TUNING = G5;
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
 				GCC_PREFIX_HEADER = SelfControl_Prefix.pch;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"COCOAPODS=1",
+					"LICENSE_SECRET_KEY=$(LICENSE_SECRET_KEY)",
+				);
 				INFOPLIST_FILE = Info.plist;
 				INSTALL_PATH = "$(HOME)/Applications";
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
@@ -4384,6 +4406,7 @@
 		};
 		C01FCF4F08A954540054247B /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 224DFCFB2F041AF300D97A1C /* Secrets.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED = YES;
@@ -4434,6 +4457,7 @@
 		};
 		C01FCF5008A954540054247B /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 224DFCFB2F041AF300D97A1C /* Secrets.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED = YES;

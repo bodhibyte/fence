@@ -8,12 +8,15 @@
 #import "Block Management/SCBlockBundle.h"
 #import "Block Management/SCWeeklySchedule.h"
 #import "SCLogger.h"
+#import "Common/SCLicenseManager.h"
+#import "SCLicenseWindowController.h"
 
 @interface SCMenuBarController ()
 
 @property (nonatomic, strong) NSStatusItem *statusItem;
 @property (nonatomic, strong) NSMenu *statusMenu;
 @property (nonatomic, strong) NSTimer *updateTimer;
+@property (nonatomic, strong, nullable) SCLicenseWindowController *licenseWindowController;
 
 @end
 
@@ -141,11 +144,37 @@
         commitItem.enabled = NO;
         [self.statusMenu addItem:commitItem];
     } else {
+        // "No active commitment" - always show when not committed
         NSMenuItem *noCommitItem = [[NSMenuItem alloc] initWithTitle:@"No active commitment"
                                                               action:nil
                                                        keyEquivalent:@""];
         noCommitItem.enabled = NO;
         [self.statusMenu addItem:noCommitItem];
+    }
+
+    // Show license/trial status (separate line, only when not licensed)
+    SCLicenseStatus licenseStatus = [[SCLicenseManager sharedManager] currentStatus];
+    if (licenseStatus != SCLicenseStatusValid) {
+        NSString *trialText;
+        NSColor *trialColor = nil;
+        if (licenseStatus == SCLicenseStatusTrial) {
+            NSInteger remaining = 2 - [[SCLicenseManager sharedManager] commitCount];
+            trialText = [NSString stringWithFormat:@"Free Trial (%ld commit%@ left)", (long)remaining, remaining == 1 ? @"" : @"s"];
+        } else {
+            trialText = @"Trial Expired";
+            trialColor = [NSColor systemRedColor];
+        }
+
+        NSMenuItem *trialItem = [[NSMenuItem alloc] initWithTitle:trialText
+                                                           action:nil
+                                                    keyEquivalent:@""];
+        if (trialColor) {
+            NSMutableAttributedString *attrTitle = [[NSMutableAttributedString alloc] initWithString:trialText];
+            [attrTitle addAttribute:NSForegroundColorAttributeName value:trialColor range:NSMakeRange(0, trialText.length)];
+            trialItem.attributedTitle = attrTitle;
+        }
+        trialItem.enabled = NO;
+        [self.statusMenu addItem:trialItem];
     }
 
     [self.statusMenu addItem:[NSMenuItem separatorItem]];
@@ -156,6 +185,25 @@
                                                    keyEquivalent:@""];
     scheduleItem.target = self;
     [self.statusMenu addItem:scheduleItem];
+
+    // License options (reuse licenseStatus from above)
+    if (licenseStatus != SCLicenseStatusValid) {
+        [self.statusMenu addItem:[NSMenuItem separatorItem]];
+
+        // Purchase License (only show in trial or expired)
+        NSMenuItem *purchaseItem = [[NSMenuItem alloc] initWithTitle:@"Purchase License..."
+                                                              action:@selector(purchaseLicenseClicked:)
+                                                       keyEquivalent:@""];
+        purchaseItem.target = self;
+        [self.statusMenu addItem:purchaseItem];
+
+        // Enter License Key
+        NSMenuItem *enterLicenseItem = [[NSMenuItem alloc] initWithTitle:@"Enter License Key..."
+                                                                  action:@selector(enterLicenseClicked:)
+                                                           keyEquivalent:@""];
+        enterLicenseItem.target = self;
+        [self.statusMenu addItem:enterLicenseItem];
+    }
 
     // View Blocklist - only when committed
     if (manager.isCommitted) {
@@ -342,5 +390,58 @@
     [[NSNotificationCenter defaultCenter] postNotificationName:@"SCDebugTriggerSafetyCheckRequested" object:nil];
 }
 #endif
+
+#pragma mark - License Actions
+
+- (void)purchaseLicenseClicked:(id)sender {
+    [[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:@"https://usefence.app/#pricing"]];
+}
+
+- (void)enterLicenseClicked:(id)sender {
+    // Get a window to present the sheet - use the schedule window if available
+    NSWindow *parentWindow = nil;
+    for (NSWindow *window in [NSApp windows]) {
+        if (window.isVisible && window.canBecomeKeyWindow) {
+            parentWindow = window;
+            break;
+        }
+    }
+
+    if (!parentWindow) {
+        // No window available, open the app first
+        [self.delegate menuBarControllerDidRequestOpenApp:self];
+        // Delay slightly to let window appear
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.3 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            [self showLicenseWindow];
+        });
+    } else {
+        [self showLicenseWindowWithParent:parentWindow];
+    }
+}
+
+- (void)showLicenseWindow {
+    NSWindow *parentWindow = nil;
+    for (NSWindow *window in [NSApp windows]) {
+        if (window.isVisible && window.canBecomeKeyWindow) {
+            parentWindow = window;
+            break;
+        }
+    }
+    if (parentWindow) {
+        [self showLicenseWindowWithParent:parentWindow];
+    }
+}
+
+- (void)showLicenseWindowWithParent:(NSWindow *)parentWindow {
+    self.licenseWindowController = [[SCLicenseWindowController alloc] init];
+    self.licenseWindowController.onLicenseActivated = ^{
+        self.licenseWindowController = nil;
+        [self updateStatus];  // Refresh menu to hide license options
+    };
+    self.licenseWindowController.onCancel = ^{
+        self.licenseWindowController = nil;
+    };
+    [self.licenseWindowController beginSheetModalForWindow:parentWindow completionHandler:nil];
+}
 
 @end

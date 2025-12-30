@@ -40,11 +40,14 @@
 #import "SCStartupSafetyCheck.h"
 #import "SCSafetyCheckWindowController.h"
 #import "SCLogger.h"
+#import "Common/SCLicenseManager.h"
+#import "SCLicenseWindowController.h"
 
 @interface AppController () {}
 
 @property (atomic, strong, readwrite) SCXPCClient* xpc;
 @property (nonatomic, strong) SCWeekScheduleWindowController* weekScheduleWindowController;
+@property (nonatomic, strong, nullable) SCLicenseWindowController* licenseWindowController;
 
 @end
 
@@ -123,7 +126,35 @@
 
 	[timerWindowController_ resetStrikes];
 
+    // Check license before allowing block
+    if (![[SCLicenseManager sharedManager] canCommit]) {
+        [self showLicenseModalWithCompletion:^{
+            [[SCLicenseManager sharedManager] recordCommit];
+            [NSThread detachNewThreadSelector:@selector(installBlock) toTarget:self withObject:nil];
+        }];
+        return;
+    }
+
+    // Trial still valid or license valid - proceed with block
+    [[SCLicenseManager sharedManager] recordCommit];
 	[NSThread detachNewThreadSelector: @selector(installBlock) toTarget: self withObject: nil];
+}
+
+#pragma mark - License
+
+- (void)showLicenseModalWithCompletion:(void(^)(void))completion {
+    self.licenseWindowController = [[SCLicenseWindowController alloc] init];
+    self.licenseWindowController.onLicenseActivated = ^{
+        self.licenseWindowController = nil;
+        if (completion) {
+            completion();
+        }
+    };
+    self.licenseWindowController.onCancel = ^{
+        self.licenseWindowController = nil;
+        // User cancelled - they can't proceed without a license
+    };
+    [self.licenseWindowController beginSheetModalForWindow:initialWindow_ completionHandler:nil];
 }
 
 // returns YES if we should continue with the block, NO if we should cancel it
