@@ -675,7 +675,7 @@ AppController.m (or wherever commit is triggered)
 
 ### Environment Variables (Cloudflare)
 ```
-RESEND_API_KEY=re_Hje6jJp1_K2dvGkbNcosHXJLLZ3uf7G4Y
+RESEND_API_KEY=[your-resend-api-key]
 LICENSE_SECRET_KEY=[generate with: openssl rand -hex 32]
 STRIPE_WEBHOOK_SECRET=[from Stripe dashboard]
 ```
