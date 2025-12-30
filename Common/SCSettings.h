@@ -21,6 +21,7 @@ NS_ASSUME_NONNULL_BEGIN
 + (instancetype)sharedSettings;
 
 - (void)reloadSettings;
+- (void)forceReloadFromDisk;  // Ignores version numbers, always reloads from disk
 - (void)writeSettingsWithCompletion:(nullable void(^)(NSError* _Nullable))completionBlock;
 - (void)writeSettings;
 - (void)synchronizeSettingsWithCompletion:(nullable void(^)(NSError* _Nullable))completionBlock;

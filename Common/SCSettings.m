@@ -221,6 +221,25 @@ NSString* const SETTINGS_FILE_DIR = @"/usr/local/etc/";
         }
     }
 }
+
+- (void)forceReloadFromDisk {
+    // Bypasses version number checking - always reloads from disk.
+    // Use this when you KNOW the disk has authoritative data (e.g., after clearBlockForDebug).
+    @synchronized (self) {
+        NSDictionary* settingsFromDisk = [NSDictionary dictionaryWithContentsOfFile: SCSettings.securedSettingsFilePath];
+        if (settingsFromDisk != nil) {
+            _settingsDict = [settingsFromDisk mutableCopy];
+            NSLog(@"SCSettings: Force-reloaded from disk (version %d)", [settingsFromDisk[@"SettingsVersionNumber"] intValue]);
+        } else {
+            // File doesn't exist or is corrupted - reinitialize with defaults
+            _settingsDict = nil;
+            [self initializeSettingsDict];
+            NSLog(@"SCSettings: Force-reload found no file, reinitialized with defaults");
+        }
+        self.lastSynchronizedWithDisk = [NSDate date];
+    }
+}
+
 - (void)writeSettingsWithCompletion:(nullable void(^)(NSError* _Nullable))completionBlock {
     @synchronized (self) {
         if (self.readOnly) {
