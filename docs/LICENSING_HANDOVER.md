@@ -1,43 +1,99 @@
-# Licensing System - WIP Handover
+# Licensing System - Handover for Next Agent
 
-> **Status:** Work in progress. Core implementation done, some bugs remain.
+> **Last updated:** December 30, 2024
+> **Status:** Ready for online licensing implementation
 
 ---
 
-## What Was Implemented
+## Next Major Task: Online License Activation
 
-### New Files Created
+**Full plan available at:** `~/.claude/plans/tender-crunching-crystal.md`
+
+### Goals
+1. **Device-limited licenses** - Each key activates on max 3 devices
+2. **Server-side trial tracking** - Prevent trial reset by reinstalling
+3. **Offline fallback** - App still works without internet
+
+### Infrastructure Needed
+- Railway or Cloudflare Workers for API
+- PostgreSQL or Cloudflare D1 for database
+- New endpoints: `/api/activate`, `/api/trial/register`, `/api/trial/status`
+
+### Key Changes Required
+- New `SCDeviceIdentifier.h/m` for hardware UUID
+- Modify `SCLicenseManager.m` for online activation
+- Update `SCLicenseWindowController.m` for device limit UI
+- New server endpoints for activation + trial tracking
+
+---
+
+## Previous Issue (Resolved)
+
+**License keys were not being accepted.** Debug logging was added to diagnose.
+
+### Debug Logging Added
+Just added debug logging to `SCLicenseManager.m` in `validateLicenseCode:` method:
+- Line ~174: Logs when validation starts
+- Line ~263-265: Logs provided signature, computed signature, and first 8 chars of secret key
+- Line ~268: Logs signature mismatch
+- Line ~277: Logs success
+
+**To diagnose:** Rebuild, try to activate a key, then check logs at `~/.fence/logs/` for `[SCLicenseManager]` entries.
+
+### Likely Root Cause
+The secret key may not be loading correctly from build settings. Check:
+1. `Secrets.xcconfig` exists and contains `LICENSE_SECRET_KEY = <hex string>`
+2. Xcode project references `Secrets.xcconfig` in build settings
+3. The `STRINGIFY_VALUE(LICENSE_SECRET_KEY)` macro at line ~259 is producing the actual key, not the literal string "PLACEHOLDER_KEY_FOR_DEVELOPMENT"
+
+### Generate Test Key
+```bash
+node generate-test-license.js
+```
+This reads the key from `Secrets.xcconfig` and generates a valid FENCE- license.
+
+---
+
+## What Was Just Completed
+
+### Date-Based Trial System (commit `a73c470`)
+Replaced commit-based trial (2 commits) with date-based trial:
+- Trial expires on **3rd Sunday from install** (~2.5 weeks guaranteed)
+- Menu shows "Free Trial (X days left)"
+- Emergency unblock no longer affects trial
+
+**Key files changed:**
+- `SCLicenseManager.m` - New methods: `calculateTrialExpiryDate`, `trialExpiryDate`, `trialDaysRemaining`
+- `SCLicenseManager.h` - Updated interface
+- `SCMenuBarController.m` - Updated display
+- Removed `recordCommit` calls from `SCWeekScheduleWindowController.m` and `AppController.m`
+
+### Previous Fixes (commit `8b42f36`)
+- Fixed Keychain save (added entitlements)
+- Consolidated menu to single "Purchase License" item
+- Made modal text generic
+- Fixed text field to single-line with horizontal scroll
+- Added debug menu options: "Reset to Fresh Trial" / "Expire Trial"
+
+---
+
+## Key Files for Licensing
 
 | File | Purpose |
 |------|---------|
-| `Common/SCLicenseManager.h` | License manager singleton header |
-| `Common/SCLicenseManager.m` | Trial tracking (UserDefaults), Keychain storage, HMAC-SHA256 validation |
-| `SCLicenseWindowController.h` | License activation modal header |
-| `SCLicenseWindowController.m` | Programmatic UI for license entry (no XIB) |
-| `web/functions/api/generate-license.js` | Server-side license code generation |
-| `web/functions/api/stripe-webhook.js` | Stripe webhook handler → emails license |
+| `Common/SCLicenseManager.h` | License manager interface |
+| `Common/SCLicenseManager.m` | Trial tracking, validation, Keychain storage |
+| `SCLicenseWindowController.m` | License activation modal UI |
+| `SCMenuBarController.m` | Menu bar trial status display |
 | `Secrets.xcconfig` | Contains `LICENSE_SECRET_KEY` (git-ignored) |
-| `docs/LICENSING_SPEC.md` | Original specification document |
-
-### Files Modified
-
-| File | Changes |
-|------|---------|
-| `SCWeekScheduleWindowController.m` | Added license check BEFORE commit confirmation dialog (lines 489-511), added `showLicenseModalWithCompletion:` helper |
-| `AppController.m` | Added license check before `installBlock` (lines 129-158), added `showLicenseModalWithCompletion:` helper |
-| `SCMenuBarController.m` | Added trial status display, "Purchase License...", "Enter License Key..." menu items |
-| `.gitignore` | Added `Secrets.xcconfig` |
+| `generate-test-license.js` | Script to generate test license keys |
+| `web/functions/api/generate-license.js` | Server-side license generation |
+| `web/functions/api/stripe-webhook.js` | Stripe payment → email license |
 
 ---
 
-## How It Works
+## License Format
 
-### Trial Logic
-- User gets **2 free commits** (stored in `UserDefaults` key `FenceCommitCount`)
-- On **3rd commit attempt** → license modal appears
-- `SCLicenseManager.canCommit` returns `YES` if trial valid OR license valid
-
-### License Code Format
 ```
 FENCE-{base64(payload.signature)}
 
@@ -45,146 +101,50 @@ Payload: {"e":"email","t":"std|stu","c":timestamp}
 Signature: HMAC-SHA256(payload, SECRET_KEY) as hex
 ```
 
-### Storage
-- **Trial count:** `UserDefaults` → `FenceCommitCount` (domain: `org.eyebeam.Fence`)
-- **License code:** Keychain → service `app.usefence.license`, account `license`, iCloud-synced
+---
 
-### Secret Key
-- Stored in `Secrets.xcconfig` (git-ignored, not in repo)
-- Generate with: `openssl rand -hex 32`
-- Accessed via preprocessor macro `LICENSE_SECRET_KEY`
-- Same key must be in app (Secrets.xcconfig) and server (Cloudflare env var)
+## Remaining Tasks
+
+1. **Implement online licensing** (see plan at `~/.claude/plans/tender-crunching-crystal.md`)
+   - Phase 1: Server setup (Railway/Cloudflare)
+   - Phase 2: Client device ID + trial sync
+   - Phase 3: Online activation flow
+   - Phase 4: Device management UI
+2. Deploy server-side functions to Cloudflare Pages
+3. Configure Stripe webhook
+4. Set environment variables on Cloudflare:
+   - `LICENSE_SECRET_KEY`
+   - `STRIPE_WEBHOOK_SECRET`
+   - `RESEND_API_KEY`
 
 ---
 
-## What's Working
+## Debug Commands
 
-✅ Trial counting logic (`commitCount`, `isTrialExpired`)
-✅ License modal appears when trial expired and user clicks "Commit to Week"
-✅ Menu bar shows "Trial Expired" in red when `FenceCommitCount >= 2`
-✅ Menu bar shows "Free Trial (X commits left)" when in trial
-✅ "Purchase License..." and "Enter License Key..." menu items
-✅ License validation (HMAC-SHA256 signature check)
-✅ Debug logging in `SCLicenseManager` for troubleshooting
-
----
-
-## What's Broken / Needs Fixing
-
-### 1. Keychain Save Failing
-**Symptom:** "Failed to save license. Please try again." error
-**Location:** `SCLicenseManager.m` → `storeLicenseInKeychain:` (line ~301)
-**Debug:** Add `NSLog` for `OSStatus` return value from `SecItemAdd`
-**Possible causes:**
-- Keychain entitlements missing
-- iCloud Keychain sync issue
-- App sandbox restrictions
-
-### 2. Menu Bar UX Simplification Needed
-**Current:** Shows both "Purchase License..." and "Enter License Key..."
-**Wanted:** Just "Purchase License..." that opens the license modal
-**Location:** `SCMenuBarController.m` → `rebuildMenu` (lines ~186-199)
-**Fix:** Remove "Enter License Key..." item, make "Purchase License..." call `enterLicenseClicked:` instead of opening URL
-
-### 3. License Modal Text Too Specific
-**Current:** "Your free trial has ended. Enter your license key to continue using Fence."
-**Wanted:** Generic text like "To use Fence forever, purchase a license."
-**Location:** `SCLicenseWindowController.m` → `setupUI` (line ~58)
-
-### 4. Text Field Placeholder Formatting
-**Symptom:** "FENCE-XXXXXXXXXXXX..." looks weird in the text field
-**Location:** `SCLicenseWindowController.m` → `setupUI` (line ~73)
-**Fix:** Change placeholder or use regular system font
-
----
-
-## How to Test
-
-### Set Trial State
 ```bash
-# Set to expired (0 commits left)
-defaults write org.eyebeam.Fence FenceCommitCount -int 2
+# Reset trial to fresh state
+defaults delete org.eyebeam.Fence FenceTrialExpiryDate
 
-# Set to fresh trial (2 commits left)
-defaults write org.eyebeam.Fence FenceCommitCount -int 0
+# Check trial expiry date
+defaults read org.eyebeam.Fence FenceTrialExpiryDate
 
-# Check current value
-defaults read org.eyebeam.Fence FenceCommitCount
-```
-
-### Clear License from Keychain
-```bash
+# Delete license from keychain
 security delete-generic-password -s "app.usefence.license" -a "license"
-```
 
-### Generate Test License Key
-Use the server-side function or create a local script with your secret key:
-```bash
-# See web/functions/api/generate-license.js for the algorithm
-# You'll need your SECRET_KEY from Secrets.xcconfig
-```
+# View license in keychain
+security find-generic-password -s "app.usefence.license" -a "license" -w
 
----
+# Generate test license
+node generate-test-license.js
 
-## Key Code Locations
-
-### License Check Flow (Week Schedule)
-```
-SCWeekScheduleWindowController.m:489 → commitClicked:
-  └── SCLicenseManager.m:109 → canCommit
-      └── SCLicenseManager.m:100 → isTrialExpired
-      └── SCLicenseManager.m:116 → currentStatus
-```
-
-### License Modal Display
-```
-SCWeekScheduleWindowController.m:546 → showLicenseModalWithCompletion:
-  └── SCLicenseWindowController.m:26 → init
-  └── SCLicenseWindowController.m:136 → beginSheetModalForWindow:
-```
-
-### License Activation
-```
-SCLicenseWindowController.m:152 → activateClicked:
-  └── SCLicenseManager.m:213 → activateLicenseCode:error:
-      └── SCLicenseManager.m:139 → validateLicenseCode:error:
-      └── SCLicenseManager.m:301 → storeLicenseInKeychain: ← FAILING
-```
-
-### Menu Bar Trial Status
-```
-SCMenuBarController.m:155 → rebuildMenu (license status section)
+# Check recent logs
+ls -t ~/.fence/logs/ | head -1 | xargs -I {} grep "SCLicenseManager" ~/.fence/logs/{}
 ```
 
 ---
 
-## Server-Side (Not Yet Deployed)
+## Architecture Docs
 
-### Cloudflare Environment Variables Needed
-```
-LICENSE_SECRET_KEY=[same key as in Secrets.xcconfig]
-STRIPE_WEBHOOK_SECRET=[from Stripe dashboard]
-RESEND_API_KEY=[existing]
-```
-
-### Stripe Webhook Setup
-1. Stripe Dashboard → Developers → Webhooks
-2. Add endpoint: `https://usefence.app/api/stripe-webhook`
-3. Select event: `checkout.session.completed`
-
----
-
-## Debug Logs
-
-Logs are in `SCLicenseManager.m`. Look for `[SCLicenseManager]` prefix:
-```
-[SCLicenseManager] commitCount = X (key: FenceCommitCount)
-[SCLicenseManager] isTrialExpired = YES/NO
-[SCLicenseManager] currentStatus = SCLicenseStatusTrial/TrialExpired/Valid/Invalid
-```
-
-To view: Use Xcode console or `Report Bug` → check `~/.fence/logs/`
-
----
-
-*Last updated: December 30, 2024*
+- `SYSTEM_ARCHITECTURE.md` - Full system architecture
+- `docs/BLOCKING_MECHANISM.md` - How blocking works
+- `docs/LICENSING_SPEC.md` - Original licensing specification
