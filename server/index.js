@@ -123,7 +123,7 @@ app.post('/api/trial/check', async (req, res) => {
       const trial = trialResult.rows[0];
       const expiresAt = new Date(trial.expires_at);
       const now = new Date();
-      const daysRemaining = Math.max(0, Math.ceil((expiresAt - now) / (1000 * 60 * 60 * 24)));
+      const daysRemaining = Math.max(0, Math.floor((expiresAt - now) / (1000 * 60 * 60 * 24)));
 
       return res.json({
         success: true,
@@ -142,7 +142,7 @@ app.post('/api/trial/check', async (req, res) => {
     );
 
     const now = new Date();
-    const daysRemaining = Math.ceil((expiresAt - now) / (1000 * 60 * 60 * 24));
+    const daysRemaining = Math.floor((expiresAt - now) / (1000 * 60 * 60 * 24));
 
     return res.json({
       success: true,

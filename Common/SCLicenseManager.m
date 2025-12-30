@@ -56,6 +56,7 @@ typedef NS_ENUM(NSInteger, SCLicenseErrorCode) {
 
 @interface SCLicenseManager ()
 @property (nonatomic, strong) NSDate *firstLaunchDate;
+@property (nonatomic, strong) NSURLSession *apiSession;
 @end
 
 @implementation SCLicenseManager
@@ -75,8 +76,20 @@ typedef NS_ENUM(NSInteger, SCLicenseErrorCode) {
     self = [super init];
     if (self) {
         [self ensureFirstLaunchDate];
+        [self setupAPISession];
     }
     return self;
+}
+
+- (void)setupAPISession {
+    // Create a session configuration that bypasses system proxy settings.
+    // This prevents timeouts caused by broken WPAD/PAC proxy auto-discovery
+    // on networks where the proxy config URL doesn't exist.
+    // Security note: Connection is still HTTPS/TLS encrypted - this only
+    // skips the proxy lookup, not the encryption.
+    NSURLSessionConfiguration *config = [NSURLSessionConfiguration defaultSessionConfiguration];
+    config.connectionProxyDictionary = @{};  // Empty dict = no proxy
+    _apiSession = [NSURLSession sessionWithConfiguration:config];
 }
 
 - (void)ensureFirstLaunchDate {
@@ -154,20 +167,23 @@ typedef NS_ENUM(NSInteger, SCLicenseErrorCode) {
 }
 
 - (SCLicenseStatus)currentStatus {
+    // Check for valid license FIRST (takes priority over trial)
+    NSString *storedCode = [self retrieveLicenseFromKeychain];
+    if (storedCode && [self validateLicenseCode:storedCode error:nil]) {
+        NSLog(@"[SCLicenseManager] currentStatus = SCLicenseStatusValid (valid license)");
+        return SCLicenseStatusValid;
+    }
+
+    // No valid license - check trial
     if (![self isTrialExpired]) {
         NSLog(@"[SCLicenseManager] currentStatus = SCLicenseStatusTrial (trial not expired)");
         return SCLicenseStatusTrial;
     }
 
-    NSString *storedCode = [self retrieveLicenseFromKeychain];
+    // Trial expired, no valid license
     if (!storedCode) {
         NSLog(@"[SCLicenseManager] currentStatus = SCLicenseStatusTrialExpired (no stored code)");
         return SCLicenseStatusTrialExpired;
-    }
-
-    if ([self validateLicenseCode:storedCode error:nil]) {
-        NSLog(@"[SCLicenseManager] currentStatus = SCLicenseStatusValid (valid license)");
-        return SCLicenseStatusValid;
     }
 
     NSLog(@"[SCLicenseManager] currentStatus = SCLicenseStatusInvalid (invalid license)");
@@ -468,7 +484,7 @@ typedef NS_ENUM(NSInteger, SCLicenseErrorCode) {
         return;
     }
 
-    NSURLSessionDataTask *task = [[NSURLSession sharedSession] dataTaskWithRequest:request
+    NSURLSessionDataTask *task = [self.apiSession dataTaskWithRequest:request
         completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
 
         // Network error - allow offline activation
@@ -508,16 +524,9 @@ typedef NS_ENUM(NSInteger, SCLicenseErrorCode) {
                 completion(NO, @"This license key has already been activated on another device");
             });
         } else if (httpResponse.statusCode == 404) {
-            // Invalid key (not in database - might be old key before DB was set up)
-            // Allow activation anyway since local validation passed
-            NSLog(@"[SCLicenseManager] Key not in DB but locally valid - allowing activation");
-            BOOL stored = [self storeLicenseInKeychain:code];
+            // Key not in database - reject
             dispatch_async(dispatch_get_main_queue(), ^{
-                if (stored) {
-                    completion(YES, nil);
-                } else {
-                    completion(NO, @"Failed to save license");
-                }
+                completion(NO, @"Invalid license key");
             });
         } else {
             // Other server error
@@ -545,7 +554,7 @@ typedef NS_ENUM(NSInteger, SCLicenseErrorCode) {
     NSDictionary *body = @{ @"deviceId": deviceId };
     request.HTTPBody = [NSJSONSerialization dataWithJSONObject:body options:0 error:nil];
 
-    NSURLSessionDataTask *task = [[NSURLSession sharedSession] dataTaskWithRequest:request
+    NSURLSessionDataTask *task = [self.apiSession dataTaskWithRequest:request
         completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
 
         if (error) {
