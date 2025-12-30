@@ -10,20 +10,24 @@
 **Full plan available at:** `~/.claude/plans/tender-crunching-crystal.md`
 
 ### Goals
-1. **Device-limited licenses** - Each key activates on max 3 devices
-2. **Server-side trial tracking** - Prevent trial reset by reinstalling
-3. **Offline fallback** - App still works without internet
+1. **One-time license keys** - Each key can only be activated once (then marked "used")
+2. **Server-side trial tracking** - Prevent trial reset by reinstalling (track by device ID)
+3. **Offline fallback** - App still works without internet (cached state)
+
+### How It Works
+- **Licenses**: User enters key → server marks as "used" → stored in iCloud Keychain → syncs to all user's devices. Key can never be reused.
+- **Trials**: Device ID sent to server → returns trial expiry. Same device = same expiry (no reset on reinstall).
 
 ### Infrastructure Needed
 - Railway or Cloudflare Workers for API
 - PostgreSQL or Cloudflare D1 for database
-- New endpoints: `/api/activate`, `/api/trial/register`, `/api/trial/status`
+- New endpoints: `POST /api/activate`, `POST /api/trial/check`
 
 ### Key Changes Required
-- New `SCDeviceIdentifier.h/m` for hardware UUID
-- Modify `SCLicenseManager.m` for online activation
-- Update `SCLicenseWindowController.m` for device limit UI
-- New server endpoints for activation + trial tracking
+- New `SCDeviceIdentifier.h/m` for hardware UUID (SHA256 hashed)
+- Modify `SCLicenseManager.m` for online activation + trial sync
+- Update `SCLicenseWindowController.m` for "key already used" error
+- New server endpoints + database tables
 
 ---
 
