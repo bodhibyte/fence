@@ -528,6 +528,17 @@
     [settings_ synchronizeSettings];
 }
 
+- (NSApplicationTerminateReply)applicationShouldTerminate:(NSApplication *)sender {
+    // Always allow quit - user should never be trapped in modal state
+    // Clean up any open sheets first
+    for (NSWindow *window in [NSApp windows]) {
+        if (window.attachedSheet) {
+            [window endSheet:window.attachedSheet];
+        }
+    }
+    return NSTerminateNow;
+}
+
 - (void)showSafetyCheckPrompt {
     NSAlert* alert = [[NSAlert alloc] init];
     [alert setMessageText:@"Safety Check Recommended"];
