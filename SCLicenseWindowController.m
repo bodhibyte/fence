@@ -60,7 +60,7 @@
     // Message
     y -= 50;
     self.messageLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(padding, y, width, 40)];
-    self.messageLabel.stringValue = @"Your free trial has ended. Enter your license key to continue using Fence, or purchase a license.";
+    self.messageLabel.stringValue = @"Enter your license key to unlock Fence, or purchase a license below.";
     self.messageLabel.font = [NSFont systemFontOfSize:13];
     self.messageLabel.bezeled = NO;
     self.messageLabel.editable = NO;
@@ -83,12 +83,16 @@
     fieldLabel.textColor = [NSColor secondaryLabelColor];
     [contentView addSubview:fieldLabel];
 
-    // License code text field
+    // License code text field (single-line with horizontal scroll)
     y -= 28;
     self.licenseCodeField = [[NSTextField alloc] initWithFrame:NSMakeRect(padding, y, width, 24)];
-    self.licenseCodeField.placeholderString = @"FENCE-XXXXXXXXXXXX...";
+    self.licenseCodeField.placeholderString = @"FENCE-XXXXXXXXXXXXXXXXXXXXXXXX";
     self.licenseCodeField.font = [NSFont monospacedSystemFontOfSize:12 weight:NSFontWeightRegular];
     self.licenseCodeField.bezelStyle = NSTextFieldRoundedBezel;
+    self.licenseCodeField.usesSingleLineMode = YES;
+    self.licenseCodeField.cell.scrollable = YES;
+    self.licenseCodeField.cell.wraps = NO;
+    self.licenseCodeField.lineBreakMode = NSLineBreakByClipping;
     [contentView addSubview:self.licenseCodeField];
 
     // Error label

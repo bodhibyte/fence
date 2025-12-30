@@ -70,8 +70,11 @@ typedef NS_ENUM(NSInteger, SCLicenseStatus) {
 /// Clears the stored license from Keychain (for testing)
 - (void)clearStoredLicense;
 
-/// Resets commit count to 0 (for testing)
+/// Resets commit count to 0 (for testing) - gives 2 commits left
 - (void)resetTrialState;
+
+/// Sets commit count to threshold (for testing) - 0 commits left, trial expired
+- (void)expireTrialState;
 
 @end
 

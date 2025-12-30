@@ -322,7 +322,10 @@ typedef NS_ENUM(NSInteger, SCLicenseErrorCode) {
     OSStatus status = SecItemAdd((__bridge CFDictionaryRef)query, NULL);
 
     if (status != errSecSuccess) {
-        NSLog(@"[SCLicenseManager] Failed to store license in Keychain: %d", (int)status);
+        CFStringRef errorMessage = SecCopyErrorMessageString(status, NULL);
+        NSLog(@"[SCLicenseManager] Failed to store license in Keychain: %d (%@)",
+              (int)status, (__bridge NSString *)errorMessage);
+        if (errorMessage) CFRelease(errorMessage);
     }
 
     return status == errSecSuccess;
@@ -384,10 +387,27 @@ typedef NS_ENUM(NSInteger, SCLicenseErrorCode) {
 }
 
 - (void)resetTrialState {
+    // Clear commit count and first launch date
     [[NSUserDefaults standardUserDefaults] removeObjectForKey:kCommitCountKey];
     [[NSUserDefaults standardUserDefaults] removeObjectForKey:kFirstLaunchDateKey];
     [[NSUserDefaults standardUserDefaults] synchronize];
     [self ensureFirstLaunchDate];
+
+    // Clear license from keychain
+    [self deleteLicenseFromKeychain];
+
+    NSLog(@"[SCLicenseManager] Trial state reset (commit count cleared, license removed)");
+}
+
+- (void)expireTrialState {
+    // Set commit count to threshold (2) to expire trial
+    [[NSUserDefaults standardUserDefaults] setInteger:2 forKey:kCommitCountKey];
+    [[NSUserDefaults standardUserDefaults] synchronize];
+
+    // Clear license from keychain
+    [self deleteLicenseFromKeychain];
+
+    NSLog(@"[SCLicenseManager] Trial expired (commit count set to 2, license removed)");
 }
 
 @end

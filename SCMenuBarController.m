@@ -186,23 +186,15 @@
     scheduleItem.target = self;
     [self.statusMenu addItem:scheduleItem];
 
-    // License options (reuse licenseStatus from above)
+    // License option (reuse licenseStatus from above)
     if (licenseStatus != SCLicenseStatusValid) {
         [self.statusMenu addItem:[NSMenuItem separatorItem]];
 
-        // Purchase License (only show in trial or expired)
-        NSMenuItem *purchaseItem = [[NSMenuItem alloc] initWithTitle:@"Purchase License..."
-                                                              action:@selector(purchaseLicenseClicked:)
-                                                       keyEquivalent:@""];
-        purchaseItem.target = self;
-        [self.statusMenu addItem:purchaseItem];
-
-        // Enter License Key
-        NSMenuItem *enterLicenseItem = [[NSMenuItem alloc] initWithTitle:@"Enter License Key..."
-                                                                  action:@selector(enterLicenseClicked:)
-                                                           keyEquivalent:@""];
-        enterLicenseItem.target = self;
-        [self.statusMenu addItem:enterLicenseItem];
+        NSMenuItem *licenseItem = [[NSMenuItem alloc] initWithTitle:@"License..."
+                                                             action:@selector(enterLicenseClicked:)
+                                                      keyEquivalent:@""];
+        licenseItem.target = self;
+        [self.statusMenu addItem:licenseItem];
     }
 
     // View Blocklist - only when committed
@@ -241,6 +233,18 @@
                                                              keyEquivalent:@""];
     triggerSafetyCheckItem.target = self;
     [debugMenu addItem:triggerSafetyCheckItem];
+
+    NSMenuItem *resetTrialItem = [[NSMenuItem alloc] initWithTitle:@"Reset to Fresh Trial"
+                                                            action:@selector(debugResetTrial:)
+                                                     keyEquivalent:@""];
+    resetTrialItem.target = self;
+    [debugMenu addItem:resetTrialItem];
+
+    NSMenuItem *expireTrialItem = [[NSMenuItem alloc] initWithTitle:@"Expire Trial"
+                                                             action:@selector(debugExpireTrial:)
+                                                      keyEquivalent:@""];
+    expireTrialItem.target = self;
+    [debugMenu addItem:expireTrialItem];
 
     debugItem.submenu = debugMenu;
     [self.statusMenu addItem:debugItem];
@@ -388,6 +392,26 @@
 
 - (void)debugTriggerSafetyCheck:(id)sender {
     [[NSNotificationCenter defaultCenter] postNotificationName:@"SCDebugTriggerSafetyCheckRequested" object:nil];
+}
+
+- (void)debugResetTrial:(id)sender {
+    // Reset commit count and clear license from keychain
+    [[SCLicenseManager sharedManager] resetTrialState];
+
+    // Rebuild menu to reflect new state
+    [self rebuildMenu];
+
+    NSLog(@"[Debug] Trial reset to fresh state (2 commits left)");
+}
+
+- (void)debugExpireTrial:(id)sender {
+    // Set commit count to threshold (expired) and clear license
+    [[SCLicenseManager sharedManager] expireTrialState];
+
+    // Rebuild menu to reflect new state
+    [self rebuildMenu];
+
+    NSLog(@"[Debug] Trial expired (0 commits left)");
 }
 #endif
 
