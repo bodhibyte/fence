@@ -7,6 +7,7 @@
 #import "Block Management/SCScheduleManager.h"
 #import "Block Management/SCBlockBundle.h"
 #import "Block Management/SCWeeklySchedule.h"
+#import "SCLogger.h"
 
 @interface SCMenuBarController ()
 
@@ -199,6 +200,15 @@
 
     [self.statusMenu addItem:[NSMenuItem separatorItem]];
 
+    // Report Bug
+    NSMenuItem *reportBugItem = [[NSMenuItem alloc] initWithTitle:@"Report Bug"
+                                                           action:@selector(reportBugClicked:)
+                                                    keyEquivalent:@""];
+    reportBugItem.target = self;
+    [self.statusMenu addItem:reportBugItem];
+
+    [self.statusMenu addItem:[NSMenuItem separatorItem]];
+
     // Quit
     NSMenuItem *quitItem = [[NSMenuItem alloc] initWithTitle:@"Quit Fence"
                                                       action:@selector(quitClicked:)
@@ -313,6 +323,10 @@
 
 - (void)quitClicked:(id)sender {
     [NSApp terminate:nil];
+}
+
+- (void)reportBugClicked:(id)sender {
+    [SCLogger exportLogsForSupport];
 }
 
 #ifdef DEBUG

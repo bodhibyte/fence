@@ -39,6 +39,7 @@
 #import "SCMenuBarController.h"
 #import "SCStartupSafetyCheck.h"
 #import "SCSafetyCheckWindowController.h"
+#import "SCLogger.h"
 
 @interface AppController () {}
 
@@ -374,6 +375,7 @@
 	[NSApplication sharedApplication].delegate = self;
 
     [SCSentry startSentry: @"org.eyebeam.SelfControl"];
+    [SCLogger ensureDirectoriesExist];
 
 #ifdef DEBUG
     // Listen for debug actions from menu bar
@@ -518,6 +520,13 @@
 }
 
 - (void)runSafetyCheck {
+    // Close existing safety check window if one is open
+    if (self.safetyCheckWindowController) {
+        [self.safetyCheckWindowController cancelCheck];
+        [self.safetyCheckWindowController.window close];
+        self.safetyCheckWindowController = nil;
+    }
+
     self.safetyCheckWindowController = [[SCSafetyCheckWindowController alloc] init];
     [self.safetyCheckWindowController showWindow:self];
     [self.safetyCheckWindowController runSafetyCheck];
@@ -908,15 +917,20 @@
 }
 
 - (IBAction)openFAQ:(id)sender {
-    [SCSentry addBreadcrumb: @"Opened SelfControl FAQ" category:@"app"];
-	NSURL *url=[NSURL URLWithString: @"https://github.com/SelfControlApp/selfcontrol/wiki/FAQ#q-selfcontrols-timer-is-at-0000-and-i-cant-start-a-new-block-and-im-freaking-out"];
+    [SCSentry addBreadcrumb: @"Opened Fence FAQ" category:@"app"];
+	NSURL *url=[NSURL URLWithString: @"https://usefence.app/faq"];
 	[[NSWorkspace sharedWorkspace] openURL: url];
 }
 
 - (IBAction)openSupportHub:(id)sender {
-    [SCSentry addBreadcrumb: @"Opened SelfControl Support Hub" category:@"app"];
-    NSURL *url=[NSURL URLWithString: @"https://selfcontrolapp.com/support"];
+    [SCSentry addBreadcrumb: @"Opened Fence Support Hub" category:@"app"];
+    NSURL *url=[NSURL URLWithString: @"https://usefence.app/support"];
     [[NSWorkspace sharedWorkspace] openURL: url];
+}
+
+- (IBAction)exportLogsForSupport:(id)sender {
+    [SCSentry addBreadcrumb: @"Exporting logs for support" category:@"app"];
+    [SCLogger exportLogsForSupport];
 }
 
 #pragma mark - Week Schedule (New UX)

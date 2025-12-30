@@ -24,6 +24,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 // Control methods
 - (void)runSafetyCheck;
+- (void)cancelCheck;
 - (void)updateProgress:(CGFloat)progress status:(NSString*)status;
 - (void)showResults:(SCSafetyCheckResult*)result;
 

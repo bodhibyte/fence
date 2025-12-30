@@ -313,9 +313,11 @@ static const NSTimeInterval kEmergencyTestBlockDurationSeconds = 300.0; // 5 min
 
     // Wait longer for daemon to fully initialize app blocking (was 0.5s, now 2s)
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        // Launch Calculator
+        // Launch Calculator without activating it (prevents focus stealing)
+        NSWorkspaceOpenConfiguration* config = [NSWorkspaceOpenConfiguration configuration];
+        config.activates = NO;
         [[NSWorkspace sharedWorkspace] openApplicationAtURL:[NSURL fileURLWithPath:appPath]
-                                              configuration:[NSWorkspaceOpenConfiguration configuration]
+                                              configuration:config
                                           completionHandler:^(NSRunningApplication* app, NSError* error) {
             if (error) {
                 NSLog(@"SCStartupSafetyCheck: Failed to launch Calculator: %@", error);
@@ -681,10 +683,12 @@ static const NSTimeInterval kEmergencyTestBlockDurationSeconds = 300.0; // 5 min
     [self killCalculatorIfRunning];
 
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        // Launch Calculator
+        // Launch Calculator without activating it (prevents focus stealing)
         NSString* appPath = @"/System/Applications/Calculator.app";
+        NSWorkspaceOpenConfiguration* config = [NSWorkspaceOpenConfiguration configuration];
+        config.activates = NO;
         [[NSWorkspace sharedWorkspace] openApplicationAtURL:[NSURL fileURLWithPath:appPath]
-                                              configuration:[NSWorkspaceOpenConfiguration configuration]
+                                              configuration:config
                                           completionHandler:^(NSRunningApplication* app, NSError* error) {
             if (error) {
                 NSLog(@"SCStartupSafetyCheck: Failed to launch Calculator for unblock test: %@", error);

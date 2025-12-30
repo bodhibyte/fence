@@ -33,7 +33,7 @@
     // Create window programmatically
     NSRect frame = NSMakeRect(0, 0, 420, 365);
     NSWindow* window = [[NSWindow alloc] initWithContentRect:frame
-                                                   styleMask:(NSWindowStyleMaskTitled | NSWindowStyleMaskClosable)
+                                                   styleMask:NSWindowStyleMaskTitled
                                                      backing:NSBackingStoreBuffered
                                                        defer:NO];
     window.title = @"Fence Safety Check";
@@ -294,6 +294,13 @@
 
 - (IBAction)okClicked:(id)sender {
     [self.window close];
+}
+
+- (void)cancelCheck {
+    if (self.checkInProgress) {
+        [self.safetyCheck cancel];
+        self.checkInProgress = NO;
+    }
 }
 
 @end

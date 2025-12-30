@@ -14,6 +14,7 @@
 		1F27973C853B40AD9E95BB1E /* SCDebugUtilities.m in Sources */ = {isa = PBXBuildFile; fileRef = 520B6A02C0CE497EBCB5CCF3 /* SCDebugUtilities.m */; };
 		1FEB91F11AD92FF528C0B287 /* SCStartupSafetyCheck.m in Sources */ = {isa = PBXBuildFile; fileRef = 3F481A9B3BB13815269D74D1 /* SCStartupSafetyCheck.m */; };
 		224577BA2F0198C80050F2F4 /* emergency.sh in Resources */ = {isa = PBXBuildFile; fileRef = 224577B92F0198C80050F2F4 /* emergency.sh */; };
+		224DFCA02F0409E600D97A1C /* SCLogger.m in Sources */ = {isa = PBXBuildFile; fileRef = 224DFC9F2F0409E600D97A1C /* SCLogger.m */; };
 		228354F82EFB7BCB00E77469 /* SCTimeRange.m in Sources */ = {isa = PBXBuildFile; fileRef = 228354F72EFB7BCB00E77469 /* SCTimeRange.m */; };
 		228354F92EFB7BCB00E77469 /* SCTimeRange.h in Headers */ = {isa = PBXBuildFile; fileRef = 228354F62EFB7BCB00E77469 /* SCTimeRange.h */; };
 		228354FA2EFB7BCB00E77469 /* SCTimeRange.m in Sources */ = {isa = PBXBuildFile; fileRef = 228354F72EFB7BCB00E77469 /* SCTimeRange.m */; };
@@ -582,6 +583,8 @@
 		1058C7A1FEA54F0111CA2CBB /* Cocoa.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Cocoa.framework; path = /System/Library/Frameworks/Cocoa.framework; sourceTree = "<absolute>"; };
 		1FF38B4CA7B04483AB6E70BB /* AppBlocker.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AppBlocker.h; sourceTree = "<group>"; };
 		224577B92F0198C80050F2F4 /* emergency.sh */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; path = emergency.sh; sourceTree = "<group>"; };
+		224DFC9E2F0409E600D97A1C /* SCLogger.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SCLogger.h; sourceTree = "<group>"; };
+		224DFC9F2F0409E600D97A1C /* SCLogger.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = SCLogger.m; sourceTree = "<group>"; };
 		228354F62EFB7BCB00E77469 /* SCTimeRange.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SCTimeRange.h; sourceTree = "<group>"; };
 		228354F72EFB7BCB00E77469 /* SCTimeRange.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = SCTimeRange.m; sourceTree = "<group>"; };
 		228354FF2EFB7C0100E77469 /* SCBlockBundle.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SCBlockBundle.h; sourceTree = "<group>"; };
@@ -1762,6 +1765,8 @@
 		CB1CA64C25ABA5990084A551 /* Common */ = {
 			isa = PBXGroup;
 			children = (
+				224DFC9E2F0409E600D97A1C /* SCLogger.h */,
+				224DFC9F2F0409E600D97A1C /* SCLogger.m */,
 				CB81A9E325B7C2B9006956F7 /* Utility */,
 				CBADC27C25B22BC7000EE5BB /* SCSentry.h */,
 				CBADC27D25B22BC7000EE5BB /* SCSentry.m */,
@@ -3942,6 +3947,7 @@
 				228355072EFB7C0100E77469 /* SCBlockBundle.m in Sources */,
 				CB25806616C237F10059C99A /* NSString+IPAddress.m in Sources */,
 				540B226FDF11861FAE35D654 /* SCVersionTracker.m in Sources */,
+				224DFCA02F0409E600D97A1C /* SCLogger.m in Sources */,
 				2283551C2EFB7C5100E77469 /* SCWeekScheduleWindowController.m in Sources */,
 				1FEB91F11AD92FF528C0B287 /* SCStartupSafetyCheck.m in Sources */,
 				B53EE81BF3FB170B3676BB71 /* SCSafetyCheckWindowController.m in Sources */,
