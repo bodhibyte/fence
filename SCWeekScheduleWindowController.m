@@ -535,7 +535,6 @@
     [alert beginSheetModalForWindow:self.window completionHandler:^(NSModalResponse returnCode) {
         if (returnCode == NSAlertFirstButtonReturn) {
             [manager commitToWeekWithOffset:weekOffset];
-            [[SCLicenseManager sharedManager] recordCommit];
             [self reloadData];
         }
     }];

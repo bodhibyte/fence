@@ -129,14 +129,12 @@
     // Check license before allowing block
     if (![[SCLicenseManager sharedManager] canCommit]) {
         [self showLicenseModalWithCompletion:^{
-            [[SCLicenseManager sharedManager] recordCommit];
             [NSThread detachNewThreadSelector:@selector(installBlock) toTarget:self withObject:nil];
         }];
         return;
     }
 
     // Trial still valid or license valid - proceed with block
-    [[SCLicenseManager sharedManager] recordCommit];
 	[NSThread detachNewThreadSelector: @selector(installBlock) toTarget: self withObject: nil];
 }
 

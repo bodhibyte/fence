@@ -10,7 +10,7 @@
 NS_ASSUME_NONNULL_BEGIN
 
 typedef NS_ENUM(NSInteger, SCLicenseStatus) {
-    SCLicenseStatusTrial,           // Still in trial period (< 2 commits)
+    SCLicenseStatusTrial,           // Still in trial period (before expiry date)
     SCLicenseStatusTrialExpired,    // Trial over, no valid license
     SCLicenseStatusValid,           // Valid license stored in Keychain
     SCLicenseStatusInvalid          // License present but invalid signature
@@ -22,18 +22,19 @@ typedef NS_ENUM(NSInteger, SCLicenseStatus) {
 
 + (instancetype)sharedManager;
 
-#pragma mark - Trial Tracking
+#pragma mark - Trial Tracking (Date-Based)
 
-/// Number of commits made so far (stored in UserDefaults)
-- (NSInteger)commitCount;
+/// Returns the trial expiry date (3rd Sunday from first launch)
+/// Calculates and stores on first access
+- (NSDate *)trialExpiryDate;
 
-/// Call after a successful commit to increment the counter
-- (void)recordCommit;
+/// Returns the number of days remaining in trial (0 if expired)
+- (NSInteger)trialDaysRemaining;
 
-/// Returns YES if commitCount >= 2 (trial exhausted)
+/// Returns YES if current date >= expiry date
 - (BOOL)isTrialExpired;
 
-/// Date of first app launch (for reference, not used in trial logic)
+/// Date of first app launch
 @property (nonatomic, readonly, nullable) NSDate *firstLaunchDate;
 
 #pragma mark - License Status
@@ -70,10 +71,10 @@ typedef NS_ENUM(NSInteger, SCLicenseStatus) {
 /// Clears the stored license from Keychain (for testing)
 - (void)clearStoredLicense;
 
-/// Resets commit count to 0 (for testing) - gives 2 commits left
+/// Resets trial to fresh state (recalculates 3rd Sunday from today)
 - (void)resetTrialState;
 
-/// Sets commit count to threshold (for testing) - 0 commits left, trial expired
+/// Expires trial immediately (sets expiry to today)
 - (void)expireTrialState;
 
 @end

@@ -158,8 +158,9 @@
         NSString *trialText;
         NSColor *trialColor = nil;
         if (licenseStatus == SCLicenseStatusTrial) {
-            NSInteger remaining = 2 - [[SCLicenseManager sharedManager] commitCount];
-            trialText = [NSString stringWithFormat:@"Free Trial (%ld commit%@ left)", (long)remaining, remaining == 1 ? @"" : @"s"];
+            NSInteger days = [[SCLicenseManager sharedManager] trialDaysRemaining];
+            NSString *dayWord = (days == 1) ? @"day" : @"days";
+            trialText = [NSString stringWithFormat:@"Free Trial (%ld %@ left)", (long)days, dayWord];
         } else {
             trialText = @"Trial Expired";
             trialColor = [NSColor systemRedColor];
@@ -190,7 +191,7 @@
     if (licenseStatus != SCLicenseStatusValid) {
         [self.statusMenu addItem:[NSMenuItem separatorItem]];
 
-        NSMenuItem *licenseItem = [[NSMenuItem alloc] initWithTitle:@"License..."
+        NSMenuItem *licenseItem = [[NSMenuItem alloc] initWithTitle:@"Purchase License"
                                                              action:@selector(enterLicenseClicked:)
                                                       keyEquivalent:@""];
         licenseItem.target = self;
@@ -401,17 +402,17 @@
     // Rebuild menu to reflect new state
     [self rebuildMenu];
 
-    NSLog(@"[Debug] Trial reset to fresh state (2 commits left)");
+    NSLog(@"[Debug] Trial reset to fresh state");
 }
 
 - (void)debugExpireTrial:(id)sender {
-    // Set commit count to threshold (expired) and clear license
+    // Set expiry to today (expired) and clear license
     [[SCLicenseManager sharedManager] expireTrialState];
 
     // Rebuild menu to reflect new state
     [self rebuildMenu];
 
-    NSLog(@"[Debug] Trial expired (0 commits left)");
+    NSLog(@"[Debug] Trial expired");
 }
 #endif
 

@@ -12,7 +12,7 @@
 #pragma mark - UserDefaults Keys
 
 static NSString * const kFirstLaunchDateKey = @"FenceFirstLaunchDate";
-static NSString * const kCommitCountKey = @"FenceCommitCount";
+static NSString * const kTrialExpiryDateKey = @"FenceTrialExpiryDate";
 
 #pragma mark - Keychain Constants
 
@@ -83,25 +83,59 @@ typedef NS_ENUM(NSInteger, SCLicenseErrorCode) {
     _firstLaunchDate = storedDate;
 }
 
-#pragma mark - Trial Tracking
+#pragma mark - Trial Tracking (Date-Based)
 
-- (NSInteger)commitCount {
-    NSInteger count = [[NSUserDefaults standardUserDefaults] integerForKey:kCommitCountKey];
-    NSLog(@"[SCLicenseManager] commitCount = %ld (key: %@)", (long)count, kCommitCountKey);
-    return count;
+- (NSDate *)calculateTrialExpiryDate {
+    NSCalendar *calendar = [NSCalendar currentCalendar];
+    NSDate *today = [NSDate date];
+
+    // Get the weekday component (Sunday=1, Monday=2, ... Saturday=7)
+    NSDateComponents *comps = [calendar components:NSCalendarUnitWeekday fromDate:today];
+
+    // Calculate days until the next Sunday
+    // If today is Sunday (1), we want the next Sunday (7 days away)
+    NSInteger daysUntilSunday = (8 - comps.weekday) % 7;
+    if (daysUntilSunday == 0) {
+        daysUntilSunday = 7;
+    }
+
+    // "3rd Sunday" = Next Sunday + 2 weeks (14 days)
+    NSInteger totalDays = daysUntilSunday + 14;
+
+    NSDate *expiry = [calendar dateByAddingUnit:NSCalendarUnitDay value:totalDays toDate:today options:0];
+
+    // Set to end of day (23:59:59) so user gets the full Sunday
+    return [calendar dateBySettingHour:23 minute:59 second:59 ofDate:expiry options:0];
 }
 
-- (void)recordCommit {
-    NSInteger count = [self commitCount];
-    [[NSUserDefaults standardUserDefaults] setInteger:count + 1 forKey:kCommitCountKey];
-    [[NSUserDefaults standardUserDefaults] synchronize];
+- (NSDate *)trialExpiryDate {
+    NSDate *date = [[NSUserDefaults standardUserDefaults] objectForKey:kTrialExpiryDateKey];
+    if (!date) {
+        date = [self calculateTrialExpiryDate];
+        [[NSUserDefaults standardUserDefaults] setObject:date forKey:kTrialExpiryDateKey];
+        [[NSUserDefaults standardUserDefaults] synchronize];
+        NSLog(@"[SCLicenseManager] Trial expiry date set to: %@", date);
+    }
+    return date;
 }
 
 - (BOOL)isTrialExpired {
-    NSInteger count = [self commitCount];
-    BOOL expired = count >= 2;
-    NSLog(@"[SCLicenseManager] isTrialExpired = %@ (count=%ld, threshold=2)", expired ? @"YES" : @"NO", (long)count);
+    NSDate *expiry = [self trialExpiryDate];
+    // Returns YES if current date >= expiry date (not before expiry)
+    BOOL expired = [[NSDate date] compare:expiry] != NSOrderedAscending;
+    NSLog(@"[SCLicenseManager] isTrialExpired = %@ (expiry: %@)", expired ? @"YES" : @"NO", expiry);
     return expired;
+}
+
+- (NSInteger)trialDaysRemaining {
+    if ([self isTrialExpired]) return 0;
+
+    NSCalendar *calendar = [NSCalendar currentCalendar];
+    NSDateComponents *diff = [calendar components:NSCalendarUnitDay
+                                         fromDate:[NSDate date]
+                                           toDate:[self trialExpiryDate]
+                                          options:0];
+    return MAX(0, diff.day);
 }
 
 #pragma mark - License Status
@@ -387,27 +421,32 @@ typedef NS_ENUM(NSInteger, SCLicenseErrorCode) {
 }
 
 - (void)resetTrialState {
-    // Clear commit count and first launch date
-    [[NSUserDefaults standardUserDefaults] removeObjectForKey:kCommitCountKey];
+    // Clear expiry date (will be recalculated on next access)
+    [[NSUserDefaults standardUserDefaults] removeObjectForKey:kTrialExpiryDateKey];
     [[NSUserDefaults standardUserDefaults] removeObjectForKey:kFirstLaunchDateKey];
     [[NSUserDefaults standardUserDefaults] synchronize];
     [self ensureFirstLaunchDate];
 
+    // Force recalculation of expiry date
+    NSDate *newExpiry = [self trialExpiryDate];
+
     // Clear license from keychain
     [self deleteLicenseFromKeychain];
 
-    NSLog(@"[SCLicenseManager] Trial state reset (commit count cleared, license removed)");
+    NSLog(@"[SCLicenseManager] Trial reset (new expiry: %@, license removed)", newExpiry);
 }
 
 - (void)expireTrialState {
-    // Set commit count to threshold (2) to expire trial
-    [[NSUserDefaults standardUserDefaults] setInteger:2 forKey:kCommitCountKey];
+    // Set expiry date to start of today (trial immediately expired)
+    NSCalendar *calendar = [NSCalendar currentCalendar];
+    NSDate *startOfToday = [calendar startOfDayForDate:[NSDate date]];
+    [[NSUserDefaults standardUserDefaults] setObject:startOfToday forKey:kTrialExpiryDateKey];
     [[NSUserDefaults standardUserDefaults] synchronize];
 
     // Clear license from keychain
     [self deleteLicenseFromKeychain];
 
-    NSLog(@"[SCLicenseManager] Trial expired (commit count set to 2, license removed)");
+    NSLog(@"[SCLicenseManager] Trial expired (expiry set to: %@, license removed)", startOfToday);
 }
 
 @end

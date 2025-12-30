@@ -130,7 +130,7 @@
     // Purchase button (middle)
     CGFloat purchaseX = (contentView.bounds.size.width - buttonWidth) / 2;
     self.purchaseButton = [[NSButton alloc] initWithFrame:NSMakeRect(purchaseX, y, buttonWidth, buttonHeight)];
-    self.purchaseButton.title = @"Purchase...";
+    self.purchaseButton.title = @"Purchase";
     self.purchaseButton.bezelStyle = NSBezelStyleRounded;
     self.purchaseButton.target = self;
     self.purchaseButton.action = @selector(purchaseClicked:);
