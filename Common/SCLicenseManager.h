@@ -66,6 +66,21 @@ typedef NS_ENUM(NSInteger, SCLicenseStatus) {
 /// Returns the stored license code from Keychain (if any)
 - (nullable NSString *)storedLicenseCode;
 
+#pragma mark - Online Activation (Server-Side Validation)
+
+/// Activates a license online - validates with server and marks key as used.
+/// @param code The license code to activate
+/// @param completion Called with success status and optional error message
+- (void)activateLicenseOnline:(NSString *)code
+                   completion:(void(^)(BOOL success, NSString *_Nullable errorMessage))completion;
+
+#pragma mark - Trial Sync (Server-Side Tracking)
+
+/// Syncs trial status with server on app launch.
+/// This prevents trial reset by reinstalling the app.
+/// @param completion Called with days remaining (-1 if offline/error, uses cached)
+- (void)syncTrialStatusWithCompletion:(void(^)(NSInteger daysRemaining))completion;
+
 #pragma mark - Debug/Testing
 
 /// Clears the stored license from Keychain (for testing)

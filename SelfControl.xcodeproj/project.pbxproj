@@ -13,6 +13,7 @@
 		1BD67B4BD6AD4D2390C3C1ED /* SCDebugUtilities.m in Sources */ = {isa = PBXBuildFile; fileRef = 520B6A02C0CE497EBCB5CCF3 /* SCDebugUtilities.m */; };
 		1F27973C853B40AD9E95BB1E /* SCDebugUtilities.m in Sources */ = {isa = PBXBuildFile; fileRef = 520B6A02C0CE497EBCB5CCF3 /* SCDebugUtilities.m */; };
 		1FEB91F11AD92FF528C0B287 /* SCStartupSafetyCheck.m in Sources */ = {isa = PBXBuildFile; fileRef = 3F481A9B3BB13815269D74D1 /* SCStartupSafetyCheck.m */; };
+		2200E8E92F0474350025985E /* SCDeviceIdentifier.m in Sources */ = {isa = PBXBuildFile; fileRef = 2200E8E82F0474350025985E /* SCDeviceIdentifier.m */; };
 		224577BA2F0198C80050F2F4 /* emergency.sh in Resources */ = {isa = PBXBuildFile; fileRef = 224577B92F0198C80050F2F4 /* emergency.sh */; };
 		224DFCA02F0409E600D97A1C /* SCLogger.m in Sources */ = {isa = PBXBuildFile; fileRef = 224DFC9F2F0409E600D97A1C /* SCLogger.m */; };
 		224DFCF72F0417F700D97A1C /* SCLicenseManager.m in Sources */ = {isa = PBXBuildFile; fileRef = 224DFCF62F0417F700D97A1C /* SCLicenseManager.m */; };
@@ -585,6 +586,8 @@
 		0534B42090794A569FD6AAA4 /* SCDebugUtilities.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = SCDebugUtilities.h; path = Common/SCDebugUtilities.h; sourceTree = SOURCE_ROOT; };
 		1058C7A1FEA54F0111CA2CBB /* Cocoa.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Cocoa.framework; path = /System/Library/Frameworks/Cocoa.framework; sourceTree = "<absolute>"; };
 		1FF38B4CA7B04483AB6E70BB /* AppBlocker.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AppBlocker.h; sourceTree = "<group>"; };
+		2200E8E72F0474350025985E /* SCDeviceIdentifier.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SCDeviceIdentifier.h; sourceTree = "<group>"; };
+		2200E8E82F0474350025985E /* SCDeviceIdentifier.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = SCDeviceIdentifier.m; sourceTree = "<group>"; };
 		224577B92F0198C80050F2F4 /* emergency.sh */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; path = emergency.sh; sourceTree = "<group>"; };
 		224DFC9E2F0409E600D97A1C /* SCLogger.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SCLogger.h; sourceTree = "<group>"; };
 		224DFC9F2F0409E600D97A1C /* SCLogger.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = SCLogger.m; sourceTree = "<group>"; };
@@ -1776,6 +1779,8 @@
 		CB1CA64C25ABA5990084A551 /* Common */ = {
 			isa = PBXGroup;
 			children = (
+				2200E8E72F0474350025985E /* SCDeviceIdentifier.h */,
+				2200E8E82F0474350025985E /* SCDeviceIdentifier.m */,
 				224DFCF52F0417F700D97A1C /* SCLicenseManager.h */,
 				224DFCF62F0417F700D97A1C /* SCLicenseManager.m */,
 				224DFC9E2F0409E600D97A1C /* SCLogger.h */,
@@ -3953,6 +3958,7 @@
 				CB5DFCB72251DD1F0084CEC2 /* SCConstants.m in Sources */,
 				CBE4401B0F4BE0670062A1FE /* ThunderbirdPreferenceParser.m in Sources */,
 				2283551F2EFB7C6300E77469 /* SCWeekGridView.m in Sources */,
+				2200E8E92F0474350025985E /* SCDeviceIdentifier.m in Sources */,
 				228355182EFB7C1900E77469 /* SCScheduleManager.m in Sources */,
 				CBE5C40B0F4D4531003DB900 /* ButtonWithPopupMenu.m in Sources */,
 				CBD4848F19D768C90020F949 /* PreferencesAdvancedViewController.m in Sources */,
@@ -4331,6 +4337,7 @@
 			buildSettings = {
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
+				CODE_SIGN_ENTITLEMENTS = SelfControl.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
@@ -4372,6 +4379,7 @@
 			buildSettings = {
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
+				CODE_SIGN_ENTITLEMENTS = SelfControl.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;

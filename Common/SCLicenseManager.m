@@ -6,6 +6,7 @@
 //
 
 #import "SCLicenseManager.h"
+#import "SCDeviceIdentifier.h"
 #import <Security/Security.h>
 #import <CommonCrypto/CommonHMAC.h>
 
@@ -13,6 +14,11 @@
 
 static NSString * const kFirstLaunchDateKey = @"FenceFirstLaunchDate";
 static NSString * const kTrialExpiryDateKey = @"FenceTrialExpiryDate";
+static NSString * const kCachedTrialExpiryKey = @"FenceCachedServerTrialExpiry";
+
+#pragma mark - API Configuration
+
+static NSString * const kLicenseAPIBaseURL = @"https://fence-api-cli-production.up.railway.app";
 
 #pragma mark - Keychain Constants
 
@@ -171,8 +177,11 @@ typedef NS_ENUM(NSInteger, SCLicenseErrorCode) {
 #pragma mark - License Validation
 
 - (BOOL)validateLicenseCode:(NSString *)code error:(NSError **)error {
+    NSLog(@"[SCLicenseManager] validateLicenseCode called with code length: %lu", (unsigned long)code.length);
+
     // Must start with "FENCE-"
     if (![code hasPrefix:kLicensePrefix]) {
+        NSLog(@"[SCLicenseManager] Validation failed: code doesn't start with FENCE-");
         if (error) {
             *error = [NSError errorWithDomain:SCLicenseErrorDomain
                                          code:SCLicenseErrorInvalidFormat
@@ -257,7 +266,14 @@ typedef NS_ENUM(NSInteger, SCLicenseErrorCode) {
     NSString *computedSignature = [self hmacSHA256:payloadStr withKey:secretKey];
 
     // Compare signatures (case-insensitive hex comparison)
+#ifdef DEBUG
+    NSLog(@"[SCLicenseManager] Provided signature: %@", providedSignature);
+    NSLog(@"[SCLicenseManager] Computed signature: %@", computedSignature);
+    NSLog(@"[SCLicenseManager] Secret key first 8 chars: %.8s...", STRINGIFY_VALUE(LICENSE_SECRET_KEY).UTF8String);
+#endif
+
     if (![computedSignature.lowercaseString isEqualToString:providedSignature.lowercaseString]) {
+        NSLog(@"[SCLicenseManager] Validation failed: signature mismatch");
         if (error) {
             *error = [NSError errorWithDomain:SCLicenseErrorDomain
                                          code:SCLicenseErrorInvalidSignature
@@ -266,6 +282,7 @@ typedef NS_ENUM(NSInteger, SCLicenseErrorCode) {
         return NO;
     }
 
+    NSLog(@"[SCLicenseManager] Validation successful!");
     return YES;
 }
 
@@ -412,6 +429,173 @@ typedef NS_ENUM(NSInteger, SCLicenseErrorCode) {
     }
 
     return result;
+}
+
+#pragma mark - Online Activation
+
+- (void)activateLicenseOnline:(NSString *)code
+                   completion:(void(^)(BOOL success, NSString *errorMessage))completion {
+
+    // First validate locally (signature check)
+    NSError *localError = nil;
+    if (![self validateLicenseCode:code error:&localError]) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            completion(NO, localError.localizedDescription ?: @"Invalid license code");
+        });
+        return;
+    }
+
+    // Build request to server
+    NSString *deviceId = [SCDeviceIdentifier deviceIdentifier];
+    NSURL *url = [NSURL URLWithString:[NSString stringWithFormat:@"%@/api/activate", kLicenseAPIBaseURL]];
+
+    NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:url];
+    request.HTTPMethod = @"POST";
+    [request setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
+    request.timeoutInterval = 15.0;
+
+    NSDictionary *body = @{
+        @"licenseCode": code,
+        @"deviceId": deviceId
+    };
+
+    NSError *jsonError = nil;
+    request.HTTPBody = [NSJSONSerialization dataWithJSONObject:body options:0 error:&jsonError];
+    if (jsonError) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            completion(NO, @"Failed to prepare request");
+        });
+        return;
+    }
+
+    NSURLSessionDataTask *task = [[NSURLSession sharedSession] dataTaskWithRequest:request
+        completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+
+        // Network error - allow offline activation
+        if (error) {
+            NSLog(@"[SCLicenseManager] Online activation failed (network): %@", error);
+            // Fall back to offline activation (just store locally)
+            BOOL stored = [self storeLicenseInKeychain:code];
+            dispatch_async(dispatch_get_main_queue(), ^{
+                if (stored) {
+                    completion(YES, nil);  // Offline activation succeeded
+                } else {
+                    completion(NO, @"Failed to save license");
+                }
+            });
+            return;
+        }
+
+        NSHTTPURLResponse *httpResponse = (NSHTTPURLResponse *)response;
+        NSDictionary *json = nil;
+        if (data) {
+            json = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
+        }
+
+        if (httpResponse.statusCode == 200 && [json[@"success"] boolValue]) {
+            // Success - store in Keychain
+            BOOL stored = [self storeLicenseInKeychain:code];
+            dispatch_async(dispatch_get_main_queue(), ^{
+                if (stored) {
+                    completion(YES, nil);
+                } else {
+                    completion(NO, @"License validated but failed to save");
+                }
+            });
+        } else if (httpResponse.statusCode == 409) {
+            // Already activated
+            dispatch_async(dispatch_get_main_queue(), ^{
+                completion(NO, @"This license key has already been activated on another device");
+            });
+        } else if (httpResponse.statusCode == 404) {
+            // Invalid key (not in database - might be old key before DB was set up)
+            // Allow activation anyway since local validation passed
+            NSLog(@"[SCLicenseManager] Key not in DB but locally valid - allowing activation");
+            BOOL stored = [self storeLicenseInKeychain:code];
+            dispatch_async(dispatch_get_main_queue(), ^{
+                if (stored) {
+                    completion(YES, nil);
+                } else {
+                    completion(NO, @"Failed to save license");
+                }
+            });
+        } else {
+            // Other server error
+            NSString *errorMsg = json[@"message"] ?: @"Server error during activation";
+            dispatch_async(dispatch_get_main_queue(), ^{
+                completion(NO, errorMsg);
+            });
+        }
+    }];
+
+    [task resume];
+}
+
+#pragma mark - Trial Sync
+
+- (void)syncTrialStatusWithCompletion:(void(^)(NSInteger daysRemaining))completion {
+    NSString *deviceId = [SCDeviceIdentifier deviceIdentifier];
+    NSURL *url = [NSURL URLWithString:[NSString stringWithFormat:@"%@/api/trial/check", kLicenseAPIBaseURL]];
+
+    NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:url];
+    request.HTTPMethod = @"POST";
+    [request setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
+    request.timeoutInterval = 10.0;
+
+    NSDictionary *body = @{ @"deviceId": deviceId };
+    request.HTTPBody = [NSJSONSerialization dataWithJSONObject:body options:0 error:nil];
+
+    NSURLSessionDataTask *task = [[NSURLSession sharedSession] dataTaskWithRequest:request
+        completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+
+        if (error) {
+            NSLog(@"[SCLicenseManager] Trial sync failed (network): %@", error);
+            // Use cached or local trial
+            dispatch_async(dispatch_get_main_queue(), ^{
+                completion([self trialDaysRemaining]);
+            });
+            return;
+        }
+
+        NSHTTPURLResponse *httpResponse = (NSHTTPURLResponse *)response;
+        if (httpResponse.statusCode != 200 || !data) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                completion([self trialDaysRemaining]);
+            });
+            return;
+        }
+
+        NSDictionary *json = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
+        if (!json[@"expiresAt"]) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                completion([self trialDaysRemaining]);
+            });
+            return;
+        }
+
+        // Parse and cache server expiry date
+        NSString *expiresAtStr = json[@"expiresAt"];
+        NSISO8601DateFormatter *formatter = [[NSISO8601DateFormatter alloc] init];
+        NSDate *serverExpiry = [formatter dateFromString:expiresAtStr];
+
+        if (serverExpiry) {
+            // Cache server expiry date
+            [[NSUserDefaults standardUserDefaults] setObject:serverExpiry forKey:kCachedTrialExpiryKey];
+
+            // Also update local trial expiry to match server
+            [[NSUserDefaults standardUserDefaults] setObject:serverExpiry forKey:kTrialExpiryDateKey];
+            [[NSUserDefaults standardUserDefaults] synchronize];
+
+            NSLog(@"[SCLicenseManager] Trial synced from server: %@", serverExpiry);
+        }
+
+        NSInteger daysRemaining = [json[@"daysRemaining"] integerValue];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            completion(daysRemaining);
+        });
+    }];
+
+    [task resume];
 }
 
 #pragma mark - Debug/Testing

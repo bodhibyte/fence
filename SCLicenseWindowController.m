@@ -169,30 +169,33 @@
         return;
     }
 
-    // Clear previous error
-    self.errorLabel.stringValue = @"";
+    // Clear previous error and show activating state
+    self.errorLabel.stringValue = @"Activating...";
+    self.errorLabel.textColor = [NSColor secondaryLabelColor];
     self.activateButton.enabled = NO;
+    self.licenseCodeField.enabled = NO;
     [self.spinner startAnimation:nil];
 
-    // Attempt to activate
-    NSError *error = nil;
-    BOOL success = [[SCLicenseManager sharedManager] activateLicenseCode:code error:&error];
+    // Attempt online activation (async)
+    [[SCLicenseManager sharedManager] activateLicenseOnline:code completion:^(BOOL success, NSString *errorMessage) {
+        [self.spinner stopAnimation:nil];
+        self.activateButton.enabled = YES;
+        self.licenseCodeField.enabled = YES;
 
-    [self.spinner stopAnimation:nil];
-    self.activateButton.enabled = YES;
+        if (success) {
+            // Close the sheet
+            [self.window.sheetParent endSheet:self.window returnCode:NSModalResponseOK];
 
-    if (success) {
-        // Close the sheet
-        [self.window.sheetParent endSheet:self.window returnCode:NSModalResponseOK];
-
-        // Call the success callback
-        if (self.onLicenseActivated) {
-            self.onLicenseActivated();
+            // Call the success callback
+            if (self.onLicenseActivated) {
+                self.onLicenseActivated();
+            }
+        } else {
+            // Show error (reset to red color)
+            self.errorLabel.textColor = [NSColor systemRedColor];
+            self.errorLabel.stringValue = errorMessage ?: @"Activation failed. Please try again.";
         }
-    } else {
-        // Show error
-        self.errorLabel.stringValue = error.localizedDescription ?: @"Invalid license code. Please check and try again.";
-    }
+    }];
 }
 
 - (void)purchaseClicked:(id)sender {

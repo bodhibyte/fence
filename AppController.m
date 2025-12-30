@@ -429,6 +429,11 @@
         [SCMigrationUtilities copyLegacySettingsToDefaults];
     }
 
+    // Sync trial status with server (prevents trial reset by reinstalling)
+    [[SCLicenseManager sharedManager] syncTrialStatusWithCompletion:^(NSInteger daysRemaining) {
+        NSLog(@"[AppController] Trial sync complete - %ld days remaining", (long)daysRemaining);
+    }];
+
     // start up our daemon XPC
     self.xpc = [SCXPCClient new];
     [self.xpc connectToHelperTool];

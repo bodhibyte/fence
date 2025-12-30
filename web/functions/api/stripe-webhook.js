@@ -110,6 +110,26 @@ export async function onRequestPost(context) {
       env.LICENSE_SECRET_KEY
     );
 
+    // Store license in database (Railway server)
+    try {
+      const storeResponse = await fetch(`${env.LICENSE_API_URL}/api/license/store`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code: licenseCode,
+          email: customerEmail,
+          type: licenseType,
+          webhookSecret: env.LICENSE_WEBHOOK_SECRET
+        })
+      });
+      if (!storeResponse.ok) {
+        console.error('Failed to store license in DB:', await storeResponse.text());
+      }
+    } catch (dbErr) {
+      console.error('Error storing license in DB:', dbErr);
+      // Continue anyway - license was generated, customer will receive email
+    }
+
     // Send email via Resend
     const emailResponse = await fetch('https://api.resend.com/emails', {
       method: 'POST',
