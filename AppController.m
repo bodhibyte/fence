@@ -49,6 +49,7 @@
 
 @implementation AppController {
 	NSWindowController* getStartedWindowController;
+    BOOL appDidFinishLaunching_;
 }
 
 @synthesize addingBlock;
@@ -488,6 +489,8 @@
             [self showSafetyCheckPrompt];
         });
     }
+
+    appDidFinishLaunching_ = YES;
 }
 
 - (void)applicationWillTerminate:(NSNotification *)notification {
@@ -576,6 +579,11 @@
 }
 
 - (BOOL)applicationShouldTerminateAfterLastWindowClosed: (NSApplication*) theApplication {
+    // Don't terminate if app hasn't finished launching yet
+    // (prevents quit when user declines "Move to Applications" dialog)
+    if (!appDidFinishLaunching_)
+        return NO;
+
 	// Hack to make the application terminate after the last window is closed, but
 	// INCLUDE the HUD-style timer window.
 	if([[timerWindowController_ window] isVisible])
