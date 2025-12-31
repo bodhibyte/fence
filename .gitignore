@@ -38,3 +38,6 @@ Secrets.xcconfig
 # Private handover docs (contains API keys)
 docs/WEB_LAUNCH_HANDOVER.md
 .env
+
+# Release artifacts
+dist/
