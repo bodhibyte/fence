@@ -215,9 +215,9 @@ static const CGFloat kDimmedOpacity = 0.2;
 - (void)drawRect:(NSRect)dirtyRect {
     [super drawRect:dirtyRect];
 
-    // Background
+    // Background - use bounds, not dirtyRect (dirtyRect can have negative origin in scroll views)
     [[NSColor colorWithWhite:0.15 alpha:1.0] setFill];
-    NSRectFill(dirtyRect);
+    NSRectFill(self.bounds);
 
     // Hour lines
     [[NSColor colorWithWhite:0.25 alpha:1.0] setStroke];
