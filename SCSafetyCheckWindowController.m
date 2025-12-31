@@ -18,7 +18,6 @@
 // Programmatic UI elements
 @property (nonatomic, strong) NSProgressIndicator* progressIndicator;
 @property (nonatomic, strong) NSTextField* statusLabel;
-@property (nonatomic, strong) NSTextField* timeRemainingLabel;
 @property (nonatomic, strong) NSButton* skipButton;
 @property (nonatomic, strong) NSButton* okButton;
 @property (nonatomic, strong) NSView* resultsView;
@@ -79,14 +78,7 @@
     self.statusLabel = [self createLabelWithText:@"Ready to start..." fontSize:13 bold:NO];
     self.statusLabel.frame = NSMakeRect(20, y, width - 40, 18);
     [contentView addSubview:self.statusLabel];
-    y -= 22;
-
-    // Time remaining label
-    self.timeRemainingLabel = [self createLabelWithText:@"" fontSize:12 bold:NO];
-    self.timeRemainingLabel.textColor = [NSColor secondaryLabelColor];
-    self.timeRemainingLabel.frame = NSMakeRect(20, y, width - 40, 16);
-    [contentView addSubview:self.timeRemainingLabel];
-    y -= 30;
+    y -= 40;
 
     // Results view (initially hidden)
     self.resultsView = [[NSView alloc] initWithFrame:NSMakeRect(20, 60, width - 40, y - 60)];
@@ -179,7 +171,6 @@
     // Reset UI state for fresh run (fixes display bug on re-run)
     self.progressIndicator.doubleValue = 0;
     self.statusLabel.stringValue = @"Starting safety check...";
-    self.timeRemainingLabel.stringValue = @"";
     for (NSTextField* label in self.resultLabels) {
         label.textColor = [NSColor labelColor];
     }
@@ -212,14 +203,6 @@
         self.progressIndicator.doubleValue = progress * 100;
         self.statusLabel.stringValue = status;
 
-        // Calculate remaining time if we're in the waiting phase
-        if (progress >= 0.40 && progress < 0.75) {
-            CGFloat waitProgress = (progress - 0.40) / 0.35;
-            NSTimeInterval remaining = 30.0 * (1.0 - waitProgress);
-            self.timeRemainingLabel.stringValue = [NSString stringWithFormat:@"%.0f seconds remaining", MAX(0, remaining)];
-        } else {
-            self.timeRemainingLabel.stringValue = @"";
-        }
     });
 }
 
@@ -228,7 +211,6 @@
         self.resultsView.hidden = NO;
         self.okButton.hidden = NO;
         self.skipButton.hidden = YES;
-        self.timeRemainingLabel.stringValue = @"";
 
         if (result.passed) {
             self.resultTitleLabel.stringValue = @"Safety Check Passed";
