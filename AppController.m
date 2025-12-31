@@ -528,8 +528,8 @@
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
             [self showSafetyCheckPrompt];
         });
-    } else if ([SCVersionTracker testBlockNeeded]) {
-        // Safety check passed previously, but user never completed a test block
+    } else if ([SCVersionTracker testBlockNeeded] && ![SCVersionTracker hasEverCommitted]) {
+        // Safety check passed previously, but user never completed a test block or committed
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
             [self showTestBlockAfterSafetyCheck];
         });

@@ -35,6 +35,10 @@ NS_ASSUME_NONNULL_BEGIN
 + (void)markTestBlockCompleted;
 + (BOOL)testBlockNeeded;
 
+// Commitment tracking (persistent - once true, stays true)
++ (BOOL)hasEverCommitted;
++ (void)markHasEverCommitted;
+
 @end
 
 NS_ASSUME_NONNULL_END
