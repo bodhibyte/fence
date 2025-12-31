@@ -212,13 +212,28 @@ facebook.com               - Existing website block
 | `SCBlockEntry` | Block entry data model |
 
 ### Build & Run
+
+> **IMPORTANT:** This project uses CocoaPods. You MUST use the **workspace**, not the project file.
+
 ```bash
-# Build
-xcodebuild -project SelfControl.xcodeproj -scheme SelfControl
+# First time setup
+pod install
+
+# Debug build (CLI)
+xcodebuild -workspace SelfControl.xcworkspace -scheme SelfControl -configuration Debug
+
+# Release build (CLI)
+xcodebuild -workspace SelfControl.xcworkspace -scheme SelfControl -configuration Release \
+    -derivedDataPath build/DerivedData -arch arm64
+
+# Full release with signing, notarization, and DMG
+./scripts/build-release.sh 1.0
 
 # Run (requires signing for SMJobBless)
 open build/Release/SelfControl.app
 ```
+
+**Common mistake:** Using `-project SelfControl.xcodeproj` will fail with linker errors like `library 'Pods-SCKillerHelper' not found`. Always use `-workspace SelfControl.xcworkspace`.
 
 ---
 
