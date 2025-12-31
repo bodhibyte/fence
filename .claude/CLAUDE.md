@@ -173,11 +173,11 @@ If a term seems domain-specific but isn't in the dictionary:
    - App entries shown in purple with app name
 
 6. **Startup Safety Check** (`Common/SCStartupSafetyCheck.h/m`, `SCSafetyCheckWindowController.h/m`)
-   - Triggers on macOS or app version change (DEBUG builds only)
-   - Runs 30-second test blocking example.com + Calculator
-   - Verifies hosts, PF, and app blocking work
-   - Verifies cleanup after block expires
-   - Uses `SCVersionTracker` to detect version changes
+   - Triggers on macOS or app version change (ALL builds - DEBUG and RELEASE)
+   - Phase 1: 30-second test block (example.com + Calculator), verifies add/remove works
+   - Phase 2: Tests emergency.sh can clear an active block
+   - Prevents users from getting stuck in blocks on incompatible macOS versions
+   - See `docs/BLOCK_SAFETY_ANALYSIS.md` for full robustness analysis
 
 **Entry Format:**
 ```

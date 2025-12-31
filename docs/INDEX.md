@@ -7,9 +7,10 @@
 | Architecture | [SYSTEM_ARCHITECTURE.md](../SYSTEM_ARCHITECTURE.md) | - |
 | Blocking | [BLOCKING_MECHANISM.md](BLOCKING_MECHANISM.md) | BlockManager.m, PacketFilter.m, HostFileBlocker.m |
 | App blocking | [BLOCKING_MECHANISM.md#app-blocking](BLOCKING_MECHANISM.md#app-blocking-implementation) | AppBlocker.m, SCBlockEntry.m |
+| Safety/Robustness | [BLOCK_SAFETY_ANALYSIS.md](BLOCK_SAFETY_ANALYSIS.md) | SCStartupSafetyCheck.m, emergency.sh |
 | Scheduling | [dictionary.md](dictionary.md) | SCScheduleManager.m, SCScheduleLaunchdBridge.m |
 | Terminology | [dictionary.md](dictionary.md) | See dictionary/ folder for full entries |
-| Debug features | [SYSTEM_ARCHITECTURE.md#6-debug-features](../SYSTEM_ARCHITECTURE.md#6-debug-features) | SCStartupSafetyCheck.m, SCVersionTracker.m |
+| Debug features | [SYSTEM_ARCHITECTURE.md#6-debug-features](../SYSTEM_ARCHITECTURE.md#6-debug-features) | SCDebugUtilities.m |
 | UI | - | AppController.m, *.xib |
 | XPC | - | SCDaemonProtocol.h, SCDaemonXPC.m, SCXPCClient.m |
 
@@ -36,7 +37,7 @@ graph TB
 - SCWeekScheduleWindowController.m: Week schedule grid and bundle management
 - TimerWindowController.m: Legacy timer display (blocklist viewer)
 - DomainListWindowController.m: Blocklist editor
-- SCSafetyCheckWindowController.m: DEBUG startup test UI
+- SCSafetyCheckWindowController.m: Startup safety test UI
 
 **Daemon Layer (Daemon/):**
 - SCDaemon.m: Lifecycle, timers
@@ -60,10 +61,10 @@ graph TB
 **Common Layer (Common/):**
 - SCSettings.m: Settings
 - SCXPCClient.m: XPC client
-- SCStartupSafetyCheck.m: DEBUG startup test
+- SCStartupSafetyCheck.m: Startup safety test (runs on version change)
 - Utility/SCBlockUtilities.m: Block state
 - Utility/SCHelperToolUtilities.m: Privileged ops
-- Utility/SCVersionTracker.m: DEBUG version tracking
+- Utility/SCVersionTracker.m: Version tracking for safety check
 
 **CLI:** cli-main.m
 
