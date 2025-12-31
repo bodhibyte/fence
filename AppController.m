@@ -577,14 +577,11 @@
 
     self.safetyCheckWindowController = [[SCSafetyCheckWindowController alloc] init];
 
-    // Set completion handler to show test block after safety check passes
+    // Set completion handler to show test block after user clicks OK
     __weak typeof(self) weakSelf = self;
     self.safetyCheckWindowController.completionHandler = ^(SCSafetyCheckResult* result) {
         if (result.passed) {
-            // Delay slightly to let user see success, then offer test block
-            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-                [weakSelf showTestBlockAfterSafetyCheck];
-            });
+            [weakSelf showTestBlockAfterSafetyCheck];
         }
     };
 
@@ -593,11 +590,8 @@
 }
 
 - (void)showTestBlockAfterSafetyCheck {
-    // Close safety check window
-    if (self.safetyCheckWindowController) {
-        [self.safetyCheckWindowController.window close];
-        self.safetyCheckWindowController = nil;
-    }
+    // Clean up safety check controller (window already closed by OK click)
+    self.safetyCheckWindowController = nil;
 
     // Don't show test block if a block is already running
     if ([SCBlockUtilities anyBlockIsRunning]) {

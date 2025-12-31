@@ -14,6 +14,7 @@
 
 @property (nonatomic, strong) SCStartupSafetyCheck* safetyCheck;
 @property (nonatomic, assign) BOOL checkInProgress;
+@property (nonatomic, strong) SCSafetyCheckResult* lastResult;
 
 // Programmatic UI elements
 @property (nonatomic, strong) NSProgressIndicator* progressIndicator;
@@ -179,11 +180,9 @@
         [weakSelf updateProgress:progress status:status];
     } completionHandler:^(SCSafetyCheckResult* result) {
         weakSelf.checkInProgress = NO;
+        weakSelf.lastResult = result;
         [weakSelf showResults:result];
-
-        if (weakSelf.completionHandler) {
-            weakSelf.completionHandler(result);
-        }
+        // completionHandler called when user clicks OK
     }];
 }
 
@@ -250,6 +249,10 @@
 
 - (IBAction)okClicked:(id)sender {
     [self.window close];
+
+    if (self.completionHandler && self.lastResult) {
+        self.completionHandler(self.lastResult);
+    }
 }
 
 - (void)cancelCheck {
