@@ -40,6 +40,7 @@
 #import "SCMenuBarController.h"
 #import "SCStartupSafetyCheck.h"
 #import "SCSafetyCheckWindowController.h"
+#import "SCVersionTracker.h"
 #import "SCTestBlockWindowController.h"
 #import "SCLogger.h"
 #import "Common/SCLicenseManager.h"
@@ -526,6 +527,11 @@
         // Delay slightly to let the app finish launching
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
             [self showSafetyCheckPrompt];
+        });
+    } else if ([SCVersionTracker testBlockNeeded]) {
+        // Safety check passed previously, but user never completed a test block
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            [self showTestBlockAfterSafetyCheck];
         });
     }
 

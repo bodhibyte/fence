@@ -30,6 +30,11 @@ NS_ASSUME_NONNULL_BEGIN
 // Clear stored versions (for testing)
 + (void)clearStoredVersions;
 
+// Test block completion tracking
++ (BOOL)hasCompletedTestBlock;
++ (void)markTestBlockCompleted;
++ (BOOL)testBlockNeeded;
+
 @end
 
 NS_ASSUME_NONNULL_END

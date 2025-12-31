@@ -10,6 +10,7 @@
 #import "SCXPCClient.h"
 #import "SCSettings.h"
 #import "SCUIUtilities.h"
+#import "SCVersionTracker.h"
 
 typedef NS_ENUM(NSInteger, SCTestBlockState) {
     SCTestBlockStateSetup,      // User is setting up the test
@@ -562,6 +563,9 @@ typedef NS_ENUM(NSInteger, SCTestBlockState) {
 }
 
 - (void)doneClicked:(id)sender {
+    // Mark that user has completed a test block
+    [SCVersionTracker markTestBlockCompleted];
+
     if (self.completionHandler) {
         self.completionHandler(YES);
     }
