@@ -156,13 +156,8 @@
         commitItem.enabled = NO;
         [self.statusMenu addItem:commitItem];
     } else if (blockIsRunning && isTestBlock) {
-        // Test block active - show time remaining
-        NSDate *endDate = [[SCSettings sharedSettings] valueForKey:@"BlockEndDate"];
-        NSTimeInterval remaining = MAX(0, [endDate timeIntervalSinceNow]);
-        int minutes = (int)(remaining / 60);
-        int seconds = (int)remaining % 60;
-        NSString *timeStr = [NSString stringWithFormat:@"Test Block: %d:%02d remaining", minutes, seconds];
-        NSMenuItem *testBlockItem = [[NSMenuItem alloc] initWithTitle:timeStr
+        // Test block active
+        NSMenuItem *testBlockItem = [[NSMenuItem alloc] initWithTitle:@"Test Block Active"
                                                                action:nil
                                                         keyEquivalent:@""];
         testBlockItem.enabled = NO;
@@ -213,8 +208,7 @@
 
     // Try Test Block - always show when not committed, grey out if block active
     if (!manager.isCommitted) {
-        NSString *title = blockIsRunning ? @"Try Test Block (block active)" : @"Try Test Block...";
-        NSMenuItem *testBlockMenuItem = [[NSMenuItem alloc] initWithTitle:title
+        NSMenuItem *testBlockMenuItem = [[NSMenuItem alloc] initWithTitle:@"Try Test Block..."
                                                                action:@selector(tryTestBlockClicked:)
                                                         keyEquivalent:@""];
         testBlockMenuItem.target = self;

@@ -54,6 +54,13 @@
 		228355282EFB7C8100E77469 /* SCDayScheduleEditorController.m in Sources */ = {isa = PBXBuildFile; fileRef = 228355232EFB7C8100E77469 /* SCDayScheduleEditorController.m */; };
 		22AE30892F056A6D00B0FDE8 /* SCCalendarGridView.m in Sources */ = {isa = PBXBuildFile; fileRef = 22AE30882F056A6D00B0FDE8 /* SCCalendarGridView.m */; };
 		22AE308A2F056A6D00B0FDE8 /* SCBundleSidebarView.m in Sources */ = {isa = PBXBuildFile; fileRef = 22AE30862F056A6D00B0FDE8 /* SCBundleSidebarView.m */; };
+		22AE30B72F057AAD00B0FDE8 /* SCVersionTracker.h in Headers */ = {isa = PBXBuildFile; fileRef = 22AE30B52F057AAD00B0FDE8 /* SCVersionTracker.h */; };
+		22AE30B82F057AAD00B0FDE8 /* SCVersionTracker.m in Sources */ = {isa = PBXBuildFile; fileRef = 22AE30B62F057AAD00B0FDE8 /* SCVersionTracker.m */; };
+		22AE30B92F057AAD00B0FDE8 /* SCVersionTracker.m in Sources */ = {isa = PBXBuildFile; fileRef = 22AE30B62F057AAD00B0FDE8 /* SCVersionTracker.m */; };
+		22AE30BA2F057AAD00B0FDE8 /* SCVersionTracker.m in Sources */ = {isa = PBXBuildFile; fileRef = 22AE30B62F057AAD00B0FDE8 /* SCVersionTracker.m */; };
+		22AE30BB2F057AAD00B0FDE8 /* SCVersionTracker.m in Sources */ = {isa = PBXBuildFile; fileRef = 22AE30B62F057AAD00B0FDE8 /* SCVersionTracker.m */; };
+		22AE30BC2F057AAD00B0FDE8 /* SCVersionTracker.m in Sources */ = {isa = PBXBuildFile; fileRef = 22AE30B62F057AAD00B0FDE8 /* SCVersionTracker.m */; };
+		22AE30BD2F057AAD00B0FDE8 /* SCVersionTracker.m in Sources */ = {isa = PBXBuildFile; fileRef = 22AE30B62F057AAD00B0FDE8 /* SCVersionTracker.m */; };
 		22EB5C052F0552B4006A837E /* SCTestBlockWindowController.m in Sources */ = {isa = PBXBuildFile; fileRef = 22EB5C042F0552B4006A837E /* SCTestBlockWindowController.m */; };
 		2934E75ACAD30A9C99C7A2D3 /* SCScheduleLaunchdBridge.m in Sources */ = {isa = PBXBuildFile; fileRef = CF1441F5703140F3C25B9C5E /* SCScheduleLaunchdBridge.m */; };
 		2C6099A14B934A17B6C0087E /* AppBlocker.m in Sources */ = {isa = PBXBuildFile; fileRef = 2B4CBC9BC7A744309802C589 /* AppBlocker.m */; };
@@ -621,6 +628,8 @@
 		22AE30862F056A6D00B0FDE8 /* SCBundleSidebarView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = SCBundleSidebarView.m; sourceTree = "<group>"; };
 		22AE30872F056A6D00B0FDE8 /* SCCalendarGridView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SCCalendarGridView.h; sourceTree = "<group>"; };
 		22AE30882F056A6D00B0FDE8 /* SCCalendarGridView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = SCCalendarGridView.m; sourceTree = "<group>"; };
+		22AE30B52F057AAD00B0FDE8 /* SCVersionTracker.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SCVersionTracker.h; sourceTree = "<group>"; };
+		22AE30B62F057AAD00B0FDE8 /* SCVersionTracker.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = SCVersionTracker.m; sourceTree = "<group>"; };
 		22EB5C032F0552B4006A837E /* SCTestBlockWindowController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SCTestBlockWindowController.h; sourceTree = "<group>"; };
 		22EB5C042F0552B4006A837E /* SCTestBlockWindowController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = SCTestBlockWindowController.m; sourceTree = "<group>"; };
 		2387372C4819C994AC3040AB /* SCVersionTracker.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = SCVersionTracker.h; path = Common/Utility/SCVersionTracker.h; sourceTree = "<group>"; };
@@ -1896,6 +1905,8 @@
 		CB81A9E325B7C2B9006956F7 /* Utility */ = {
 			isa = PBXGroup;
 			children = (
+				22AE30B52F057AAD00B0FDE8 /* SCVersionTracker.h */,
+				22AE30B62F057AAD00B0FDE8 /* SCVersionTracker.m */,
 				CB81A9E225B7C2A8006956F7 /* SCUtility.h */,
 				CB81A94625B7B5B5006956F7 /* SCMigrationUtilities.h */,
 				CB81A94725B7B5B5006956F7 /* SCMigrationUtilities.m */,
@@ -3056,6 +3067,7 @@
 				CB81AAB725B7E6C7006956F7 /* DeprecationSilencers.h in Headers */,
 				CBC1F4B426070358008E3FA8 /* SCFileWatcher.h in Headers */,
 				CB81A9CF25B7C269006956F7 /* SCBlockUtilities.h in Headers */,
+				22AE30B72F057AAD00B0FDE8 /* SCVersionTracker.h in Headers */,
 				CB81A9F225B7C5F7006956F7 /* SCBlockFileReaderWriter.h in Headers */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -3966,6 +3978,7 @@
 				228355262EFB7C8100E77469 /* SCMenuBarController.m in Sources */,
 				228355272EFB7C8100E77469 /* SCBundleEditorController.m in Sources */,
 				228355282EFB7C8100E77469 /* SCDayScheduleEditorController.m in Sources */,
+				22AE30BA2F057AAD00B0FDE8 /* SCVersionTracker.m in Sources */,
 				F5B8CBEE19EE21C30026F3A5 /* SCTimeIntervalFormatter.m in Sources */,
 				CB81AB8A25B8E6BE006956F7 /* SCBlockEntry.m in Sources */,
 				CBD4848A19D764440020F949 /* PreferencesGeneralViewController.m in Sources */,
@@ -4020,6 +4033,7 @@
 				228355042EFB7C0100E77469 /* SCBlockBundle.m in Sources */,
 				CB81A9F725B7C5F7006956F7 /* SCBlockFileReaderWriter.m in Sources */,
 				CB114284222CD4F0004B7868 /* SCSettings.m in Sources */,
+				22AE30B82F057AAD00B0FDE8 /* SCVersionTracker.m in Sources */,
 				CB0EEF7820FE49030024D27B /* SCUtilityTests.m in Sources */,
 				CB81A94D25B7B5B6006956F7 /* SCMigrationUtilities.m in Sources */,
 				2934E75ACAD30A9C99C7A2D3 /* SCScheduleLaunchdBridge.m in Sources */,
@@ -4033,6 +4047,7 @@
 				CB74D11F2480E55D002B2079 /* DaemonMain.m in Sources */,
 				CB850F3925130F5300EE2E2D /* NSString+IPAddress.m in Sources */,
 				CB62FC4624B132A300ADBC40 /* HostImporter.m in Sources */,
+				22AE30BB2F057AAD00B0FDE8 /* SCVersionTracker.m in Sources */,
 				CB62FC4724B132A600ADBC40 /* AllowlistScraper.m in Sources */,
 				CB62FC4524B1329F00ADBC40 /* ThunderbirdPreferenceParser.m in Sources */,
 				CB81A9F825B7C5F7006956F7 /* SCBlockFileReaderWriter.m in Sources */,
@@ -4091,6 +4106,7 @@
 				CBADC28025B22BC7000EE5BB /* SCSentry.m in Sources */,
 				CBC1F4B726070358008E3FA8 /* SCFileWatcher.m in Sources */,
 				CB81A94B25B7B5B6006956F7 /* SCMigrationUtilities.m in Sources */,
+				22AE30BD2F057AAD00B0FDE8 /* SCVersionTracker.m in Sources */,
 				C6C132CB5B4BE2168CD5E6D4 /* SCScheduleLaunchdBridge.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -4115,6 +4131,7 @@
 				CB114283222CCF19004B7868 /* SCSettings.m in Sources */,
 				CB81A9D325B7C269006956F7 /* SCBlockUtilities.m in Sources */,
 				228355172EFB7C1900E77469 /* SCScheduleManager.m in Sources */,
+				22AE30B92F057AAD00B0FDE8 /* SCVersionTracker.m in Sources */,
 				CB9C812319CFBB4400CDCAE1 /* LaunchctlHelper.m in Sources */,
 				CB1CA64D25ABA5BB0084A551 /* SCXPCAuthorization.m in Sources */,
 				CBC1F4B826070358008E3FA8 /* SCFileWatcher.m in Sources */,
@@ -4172,6 +4189,7 @@
 				CB1465B925B027E700130D2E /* SCErr.m in Sources */,
 				3F838215472444C2AFF3BAF1 /* SCDebugUtilities.m in Sources */,
 				1869042B4D754EE781990073 /* AppBlocker.m in Sources */,
+				22AE30BC2F057AAD00B0FDE8 /* SCVersionTracker.m in Sources */,
 				228355152EFB7C1900E77469 /* SCScheduleManager.m in Sources */,
 				228354FC2EFB7BCB00E77469 /* SCTimeRange.m in Sources */,
 				CBB1731520F041F4007FCAE9 /* SCMiscUtilities.m in Sources */,

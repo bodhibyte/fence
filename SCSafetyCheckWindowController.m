@@ -14,12 +14,11 @@
 
 @property (nonatomic, strong) SCStartupSafetyCheck* safetyCheck;
 @property (nonatomic, assign) BOOL checkInProgress;
+@property (nonatomic, strong) SCSafetyCheckResult* lastResult;
 
 // Programmatic UI elements
 @property (nonatomic, strong) NSProgressIndicator* progressIndicator;
 @property (nonatomic, strong) NSTextField* statusLabel;
-@property (nonatomic, strong) NSTextField* timeRemainingLabel;
-@property (nonatomic, strong) NSButton* skipButton;
 @property (nonatomic, strong) NSButton* okButton;
 @property (nonatomic, strong) NSView* resultsView;
 @property (nonatomic, strong) NSTextField* resultTitleLabel;
@@ -79,14 +78,7 @@
     self.statusLabel = [self createLabelWithText:@"Ready to start..." fontSize:13 bold:NO];
     self.statusLabel.frame = NSMakeRect(20, y, width - 40, 18);
     [contentView addSubview:self.statusLabel];
-    y -= 22;
-
-    // Time remaining label
-    self.timeRemainingLabel = [self createLabelWithText:@"" fontSize:12 bold:NO];
-    self.timeRemainingLabel.textColor = [NSColor secondaryLabelColor];
-    self.timeRemainingLabel.frame = NSMakeRect(20, y, width - 40, 16);
-    [contentView addSubview:self.timeRemainingLabel];
-    y -= 30;
+    y -= 40;
 
     // Results view (initially hidden)
     self.resultsView = [[NSView alloc] initWithFrame:NSMakeRect(20, 60, width - 40, y - 60)];
@@ -134,14 +126,6 @@
     self.okButton.hidden = YES;
     [contentView addSubview:self.okButton];
 
-    // Skip button
-    self.skipButton = [[NSButton alloc] initWithFrame:NSMakeRect(20, buttonY, buttonWidth, 32)];
-    self.skipButton.bezelStyle = NSBezelStyleRounded;
-    self.skipButton.title = @"Skip";
-    self.skipButton.target = self;
-    self.skipButton.action = @selector(skipClicked:);
-    [contentView addSubview:self.skipButton];
-
     [self.window center];
 }
 
@@ -179,15 +163,12 @@
     // Reset UI state for fresh run (fixes display bug on re-run)
     self.progressIndicator.doubleValue = 0;
     self.statusLabel.stringValue = @"Starting safety check...";
-    self.timeRemainingLabel.stringValue = @"";
     for (NSTextField* label in self.resultLabels) {
         label.textColor = [NSColor labelColor];
     }
     self.resultTitleLabel.textColor = [NSColor labelColor];
 
     self.checkInProgress = YES;
-    self.skipButton.enabled = NO;
-    self.skipButton.hidden = NO;
     self.resultsView.hidden = YES;
     self.okButton.hidden = YES;
 
@@ -199,11 +180,9 @@
         [weakSelf updateProgress:progress status:status];
     } completionHandler:^(SCSafetyCheckResult* result) {
         weakSelf.checkInProgress = NO;
+        weakSelf.lastResult = result;
         [weakSelf showResults:result];
-
-        if (weakSelf.completionHandler) {
-            weakSelf.completionHandler(result);
-        }
+        // completionHandler called when user clicks OK
     }];
 }
 
@@ -212,14 +191,6 @@
         self.progressIndicator.doubleValue = progress * 100;
         self.statusLabel.stringValue = status;
 
-        // Calculate remaining time if we're in the waiting phase
-        if (progress >= 0.40 && progress < 0.75) {
-            CGFloat waitProgress = (progress - 0.40) / 0.35;
-            NSTimeInterval remaining = 30.0 * (1.0 - waitProgress);
-            self.timeRemainingLabel.stringValue = [NSString stringWithFormat:@"%.0f seconds remaining", MAX(0, remaining)];
-        } else {
-            self.timeRemainingLabel.stringValue = @"";
-        }
     });
 }
 
@@ -227,8 +198,6 @@
     dispatch_async(dispatch_get_main_queue(), ^{
         self.resultsView.hidden = NO;
         self.okButton.hidden = NO;
-        self.skipButton.hidden = YES;
-        self.timeRemainingLabel.stringValue = @"";
 
         if (result.passed) {
             self.resultTitleLabel.stringValue = @"Safety Check Passed";
@@ -278,22 +247,12 @@
     });
 }
 
-- (IBAction)skipClicked:(id)sender {
-    if (self.checkInProgress) {
-        [self.safetyCheck cancel];
-    }
-
-    [SCVersionTracker updateLastTestedVersions];
-
-    if (self.skipHandler) {
-        self.skipHandler();
-    }
-
-    [self.window close];
-}
-
 - (IBAction)okClicked:(id)sender {
     [self.window close];
+
+    if (self.completionHandler && self.lastResult) {
+        self.completionHandler(self.lastResult);
+    }
 }
 
 - (void)cancelCheck {

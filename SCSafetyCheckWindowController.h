@@ -15,11 +15,9 @@ NS_ASSUME_NONNULL_BEGIN
 @interface SCSafetyCheckWindowController : NSWindowController
 
 // Callbacks
-@property (nonatomic, copy, nullable) void(^skipHandler)(void);
 @property (nonatomic, copy, nullable) void(^completionHandler)(SCSafetyCheckResult* result);
 
 // Actions
-- (IBAction)skipClicked:(id)sender;
 - (IBAction)okClicked:(id)sender;
 
 // Control methods

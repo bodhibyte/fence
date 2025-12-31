@@ -9,6 +9,7 @@
 #import "SCXPCClient.h"
 #import "SCMiscUtilities.h"
 #import "SCSettings.h"
+#import "SCVersionTracker.h"
 
 NSNotificationName const SCScheduleManagerDidChangeNotification = @"SCScheduleManagerDidChangeNotification";
 
@@ -548,6 +549,9 @@ static const NSInteger kDefaultEmergencyUnlockCredits = 5;
     NSString *storageKey = [kWeekCommitmentPrefix stringByAppendingString:weekKey];
     [[NSUserDefaults standardUserDefaults] setObject:endOfWeek forKey:storageKey];
     [[NSUserDefaults standardUserDefaults] synchronize];
+
+    // Mark that user has committed (persistent - skips test block prompt on future launches)
+    [SCVersionTracker markHasEverCommitted];
 
     [self postChangeNotification];
 }

@@ -40,6 +40,7 @@
 #import "SCMenuBarController.h"
 #import "SCStartupSafetyCheck.h"
 #import "SCSafetyCheckWindowController.h"
+#import "SCVersionTracker.h"
 #import "SCTestBlockWindowController.h"
 #import "SCLogger.h"
 #import "Common/SCLicenseManager.h"
@@ -527,6 +528,11 @@
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
             [self showSafetyCheckPrompt];
         });
+    } else if ([SCVersionTracker testBlockNeeded] && ![SCVersionTracker hasEverCommitted]) {
+        // Safety check passed previously, but user never completed a test block or committed
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            [self showTestBlockAfterSafetyCheck];
+        });
     }
 
     appDidFinishLaunching_ = YES;
@@ -549,22 +555,12 @@
 
 - (void)showSafetyCheckPrompt {
     NSAlert* alert = [[NSAlert alloc] init];
-    [alert setMessageText:@"Safety Check Recommended"];
-    [alert setInformativeText:@"Your macOS or Fence version has changed since the last safety check. Would you like to run a 30-second test to verify blocking works correctly?"];
-    [alert addButtonWithTitle:@"Run Test"];
-    [alert addButtonWithTitle:@"Skip"];
-    [alert addButtonWithTitle:@"Remind Me Later"];
+    [alert setMessageText:@"Safety Check Required"];
+    [alert setInformativeText:@"Your macOS or Fence version has changed since the last safety check. Running a 30-second test to verify blocking works correctly."];
+    [alert addButtonWithTitle:@"Continue"];
 
-    NSModalResponse response = [alert runModal];
-
-    if (response == NSAlertFirstButtonReturn) {
-        // Run Test
-        [self runSafetyCheck];
-    } else if (response == NSAlertSecondButtonReturn) {
-        // Skip - mark as tested
-        [SCStartupSafetyCheck skipSafetyCheck];
-    }
-    // Remind Me Later - do nothing, will prompt again next launch
+    [alert runModal];
+    [self runSafetyCheck];
 }
 
 - (void)runSafetyCheck {
@@ -577,14 +573,11 @@
 
     self.safetyCheckWindowController = [[SCSafetyCheckWindowController alloc] init];
 
-    // Set completion handler to show test block after safety check passes
+    // Set completion handler to show test block after user clicks OK
     __weak typeof(self) weakSelf = self;
     self.safetyCheckWindowController.completionHandler = ^(SCSafetyCheckResult* result) {
         if (result.passed) {
-            // Delay slightly to let user see success, then offer test block
-            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-                [weakSelf showTestBlockAfterSafetyCheck];
-            });
+            [weakSelf showTestBlockAfterSafetyCheck];
         }
     };
 
@@ -593,6 +586,9 @@
 }
 
 - (void)showTestBlockAfterSafetyCheck {
+    // Clean up safety check controller (window already closed by OK click)
+    self.safetyCheckWindowController = nil;
+
     // Don't show test block if a block is already running
     if ([SCBlockUtilities anyBlockIsRunning]) {
         return;
@@ -600,8 +596,8 @@
 
     // Show alert offering to try test block
     NSAlert* alert = [[NSAlert alloc] init];
-    alert.messageText = @"Safety Check Passed!";
-    alert.informativeText = @"Would you like to try a test block? This lets you test blocking websites/apps for a short time (30 seconds to 5 minutes) with a free \"Stop\" button.";
+    alert.messageText = @"Would you like to try a test block? (Recommended)";
+    alert.informativeText = @"You can try this any time from the menu when outside an active block.";
     [alert addButtonWithTitle:@"Try Test Block"];
     [alert addButtonWithTitle:@"Maybe Later"];
 

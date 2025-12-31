@@ -9,6 +9,8 @@
 
 static NSString* const kLastTestedAppVersionKey = @"SCSafetyCheck_LastTestedAppVersion";
 static NSString* const kLastTestedOSVersionKey = @"SCSafetyCheck_LastTestedOSVersion";
+static NSString* const kTestBlockCompletedKey = @"SCTestBlock_Completed";
+static NSString* const kHasEverCommittedKey = @"SCHasEverCommitted";
 
 @implementation SCVersionTracker
 
@@ -73,6 +75,30 @@ static NSString* const kLastTestedOSVersionKey = @"SCSafetyCheck_LastTestedOSVer
     [defaults synchronize];
 
     NSLog(@"SCVersionTracker: Cleared stored versions");
+}
+
++ (BOOL)hasCompletedTestBlock {
+    return [[NSUserDefaults standardUserDefaults] boolForKey:kTestBlockCompletedKey];
+}
+
++ (void)markTestBlockCompleted {
+    [[NSUserDefaults standardUserDefaults] setBool:YES forKey:kTestBlockCompletedKey];
+    [[NSUserDefaults standardUserDefaults] synchronize];
+    NSLog(@"SCVersionTracker: Marked test block as completed");
+}
+
++ (BOOL)testBlockNeeded {
+    return ![self hasCompletedTestBlock];
+}
+
++ (BOOL)hasEverCommitted {
+    return [[NSUserDefaults standardUserDefaults] boolForKey:kHasEverCommittedKey];
+}
+
++ (void)markHasEverCommitted {
+    [[NSUserDefaults standardUserDefaults] setBool:YES forKey:kHasEverCommittedKey];
+    [[NSUserDefaults standardUserDefaults] synchronize];
+    NSLog(@"SCVersionTracker: Marked user as having committed");
 }
 
 @end
