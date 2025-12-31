@@ -345,6 +345,14 @@ typedef NS_ENUM(NSInteger, SCTestBlockState) {
     readyLabel.frame = NSMakeRect(padding, y, width - 2*padding, 20);
     readyLabel.alignment = NSTextAlignmentCenter;
     [self.completeView addSubview:readyLabel];
+    y -= 30;
+
+    // Menu hint
+    NSTextField* menuHintLabel = [self createLabelWithText:@"(You can run test blocks anytime from the menu)" fontSize:11 bold:NO];
+    menuHintLabel.textColor = [NSColor tertiaryLabelColor];
+    menuHintLabel.frame = NSMakeRect(padding, y, width - 2*padding, 16);
+    menuHintLabel.alignment = NSTextAlignmentCenter;
+    [self.completeView addSubview:menuHintLabel];
 
     // Done button
     self.doneButton = [[NSButton alloc] initWithFrame:NSMakeRect((width - 100) / 2, 40, 100, 36)];
