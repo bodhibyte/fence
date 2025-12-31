@@ -31,6 +31,9 @@ NS_ASSUME_NONNULL_BEGIN
 
 + (void)checkBlockIntegrity;
 
+// Stop a test block (only works when IsTestBlock=YES)
++ (void)stopTestBlock:(void(^)(NSError* error))reply;
+
 // Check if PF block is active (for XPC query from app)
 - (void)isPFBlockActiveWithReply:(void(^)(BOOL active))reply;
 

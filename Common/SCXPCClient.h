@@ -44,6 +44,9 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (void)clearBlockForDebug:(void(^)(NSError* error))reply;
 
+// Stop a test block (only works when IsTestBlock=YES, no auth required)
+- (void)stopTestBlock:(void(^)(NSError* error))reply;
+
 // Query PF state from daemon (which runs as root)
 - (void)isPFBlockActive:(void(^)(BOOL active, NSError* _Nullable error))reply;
 

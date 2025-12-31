@@ -1,0 +1,1382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fence - Stop Working</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;1,400&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;1,9..40,400&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #FAFAF8;
+      --bg-elevated: #FFFFFF;
+      --text: #0D0D0D;
+      --text-secondary: #525252;
+      --accent: #1A472A;
+      --accent-light: #E8F0EB;
+      --accent-hover: #143820;
+      --border: #E5E5E3;
+      --border-subtle: #F0F0EE;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html {
+      font-size: 18px;
+      scroll-behavior: smooth;
+    }
+
+    body {
+      font-family: 'DM Sans', -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.65;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Subtle grain texture overlay */
+    body::before {
+      content: '';
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      opacity: 0.025;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+      z-index: 1000;
+    }
+
+    /* Layout containers */
+    .container {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 0 48px;
+    }
+
+    .container-narrow {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 0 48px;
+    }
+
+    /* Nav */
+    nav {
+      padding: 32px 48px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      max-width: 1120px;
+      margin: 0 auto;
+    }
+
+    .logo {
+      font-family: 'Playfair Display', Georgia, serif;
+      font-size: 1.35rem;
+      color: var(--text);
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      transition: opacity 0.2s;
+    }
+
+    .logo:hover {
+      opacity: 0.7;
+    }
+
+    .logo-icon {
+      width: 22px;
+      height: 18px;
+      fill: var(--accent);
+    }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 32px;
+    }
+
+    .nav-link {
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+
+    .nav-link:hover {
+      color: var(--text);
+    }
+
+    .nav-cta {
+      font-size: 0.875rem;
+      font-weight: 500;
+      color: var(--bg);
+      background: var(--text);
+      padding: 10px 20px;
+      border-radius: 6px;
+      text-decoration: none;
+      transition: all 0.2s;
+    }
+
+    .nav-cta:hover {
+      background: var(--accent);
+    }
+
+    /* Hero */
+    .hero {
+      padding: 80px 0 100px;
+      text-align: center;
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--accent-light);
+      color: var(--accent);
+      padding: 8px 16px;
+      border-radius: 100px;
+      font-size: 0.8125rem;
+      font-weight: 500;
+      margin-bottom: 32px;
+      animation: fadeInUp 0.6s ease-out;
+    }
+
+    .hero-badge svg {
+      width: 14px;
+      height: 14px;
+    }
+
+    h1 {
+      font-family: 'Playfair Display', Georgia, serif;
+      font-size: 4rem;
+      font-weight: 400;
+      line-height: 1.1;
+      letter-spacing: -0.03em;
+      margin-bottom: 28px;
+      max-width: 800px;
+      margin-left: auto;
+      margin-right: auto;
+      animation: fadeInUp 0.6s ease-out 0.1s both;
+    }
+
+    h1 em {
+      font-style: italic;
+      color: var(--accent);
+    }
+
+    .subhead {
+      font-size: 1.25rem;
+      color: var(--text-secondary);
+      line-height: 1.6;
+      margin-bottom: 40px;
+      max-width: 520px;
+      margin-left: auto;
+      margin-right: auto;
+      animation: fadeInUp 0.6s ease-out 0.2s both;
+    }
+
+    .hero-cta-group {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      animation: fadeInUp 0.6s ease-out 0.3s both;
+    }
+
+    .cta-button {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--accent);
+      color: white;
+      padding: 18px 36px;
+      font-size: 1rem;
+      font-weight: 500;
+      text-decoration: none;
+      border-radius: 8px;
+      transition: all 0.25s ease;
+      box-shadow: 0 2px 8px rgba(26, 71, 42, 0.15);
+      border: none;
+      cursor: pointer;
+    }
+
+    .cta-button:hover {
+      background: var(--accent-hover);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 16px rgba(26, 71, 42, 0.25);
+    }
+
+    .cta-button svg {
+      width: 18px;
+      height: 18px;
+    }
+
+    .cta-note {
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+    }
+
+    .cta-meta {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .cta-meta .cta-note {
+      margin: 0;
+    }
+
+    .student-chip {
+      font-size: 0.75rem;
+      color: var(--accent);
+      background: var(--accent-light);
+      padding: 5px 12px;
+      border-radius: 100px;
+      text-decoration: none;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+
+    .student-chip:hover {
+      background: var(--accent);
+      color: white;
+    }
+
+    /* App preview */
+    .app-preview {
+      margin-top: 72px;
+      animation: fadeInUp 0.8s ease-out 0.4s both;
+    }
+
+    .app-window {
+      background: var(--bg-elevated);
+      border-radius: 16px;
+      box-shadow:
+        0 0 0 1px var(--border),
+        0 4px 6px rgba(0,0,0,0.02),
+        0 12px 24px rgba(0,0,0,0.04),
+        0 24px 48px rgba(0,0,0,0.06);
+      overflow: hidden;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    .app-titlebar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 16px 20px;
+      background: var(--border-subtle);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .titlebar-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--border);
+    }
+
+    .app-content {
+      padding: 32px;
+      aspect-ratio: 16/10;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(180deg, var(--bg-elevated) 0%, var(--border-subtle) 100%);
+    }
+
+    .app-placeholder {
+      text-align: center;
+      color: var(--text-secondary);
+    }
+
+    .app-placeholder-icon {
+      width: 48px;
+      height: 48px;
+      margin: 0 auto 16px;
+      opacity: 0.3;
+    }
+
+    .app-placeholder p {
+      font-size: 0.875rem;
+      max-width: 280px;
+    }
+
+    /* Sections */
+    section {
+      padding: 100px 0;
+    }
+
+    .section-label {
+      font-size: 0.75rem;
+      font-weight: 500;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 20px;
+    }
+
+    h2 {
+      font-family: 'Playfair Display', Georgia, serif;
+      font-size: 2.75rem;
+      font-weight: 400;
+      letter-spacing: -0.02em;
+      line-height: 1.15;
+      margin-bottom: 24px;
+    }
+
+    p {
+      color: var(--text-secondary);
+      margin-bottom: 20px;
+    }
+
+    p:last-child {
+      margin-bottom: 0;
+    }
+
+    .emphasis {
+      color: var(--text);
+      font-weight: 500;
+    }
+
+    /* Problem section */
+    .problem-section {
+      background: var(--bg-elevated);
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .problem-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 80px;
+      align-items: center;
+    }
+
+    .problem-content p {
+      font-size: 1.0625rem;
+      line-height: 1.75;
+    }
+
+    .problem-content .accent-text {
+      color: var(--accent);
+      font-weight: 500;
+    }
+
+    .pull-quote {
+      position: relative;
+      padding: 40px;
+      background: var(--accent-light);
+      border-radius: 12px;
+    }
+
+    .pull-quote::before {
+      content: '"';
+      position: absolute;
+      top: 16px;
+      left: 24px;
+      font-family: 'Playfair Display', Georgia, serif;
+      font-size: 5rem;
+      line-height: 1;
+      color: var(--accent);
+      opacity: 0.2;
+    }
+
+    .pull-quote p {
+      font-family: 'Playfair Display', Georgia, serif;
+      font-size: 1.5rem;
+      font-style: italic;
+      line-height: 1.45;
+      color: var(--text);
+      position: relative;
+      z-index: 1;
+    }
+
+    /* How it works */
+    .how-section {
+      overflow: hidden;
+    }
+
+    .how-header {
+      text-align: center;
+      max-width: 600px;
+      margin: 0 auto 64px;
+    }
+
+    .how-header p {
+      font-size: 1.125rem;
+    }
+
+    .steps-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 32px;
+    }
+
+    .step-card {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 36px;
+      transition: all 0.3s ease;
+    }
+
+    .step-card:hover {
+      border-color: var(--accent);
+      box-shadow: 0 8px 32px rgba(26, 71, 42, 0.08);
+      transform: translateY(-4px);
+    }
+
+    .step-number {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      height: 36px;
+      background: var(--accent);
+      color: white;
+      font-family: 'Playfair Display', Georgia, serif;
+      font-size: 1.125rem;
+      border-radius: 50%;
+      margin-bottom: 20px;
+    }
+
+    .step-card h3 {
+      font-family: 'Playfair Display', Georgia, serif;
+      font-size: 1.375rem;
+      font-weight: 400;
+      margin-bottom: 12px;
+    }
+
+    .step-card p {
+      font-size: 0.9375rem;
+      line-height: 1.7;
+    }
+
+    .unlock-callout {
+      margin-top: 48px;
+      padding: 32px 40px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-left: 4px solid var(--accent);
+      border-radius: 0 12px 12px 0;
+      max-width: 720px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .unlock-callout p {
+      font-size: 1rem;
+      color: var(--text);
+      margin: 0;
+    }
+
+    .unlock-callout strong {
+      color: var(--accent);
+    }
+
+    /* Who section */
+    .who-section {
+      background: var(--text);
+      color: white;
+    }
+
+    .who-section .section-label {
+      color: rgba(255,255,255,0.5);
+    }
+
+    .who-section h2 {
+      color: white;
+    }
+
+    .who-section p {
+      color: rgba(255,255,255,0.7);
+    }
+
+    .who-header {
+      text-align: center;
+      max-width: 700px;
+      margin: 0 auto 64px;
+    }
+
+    .who-subtitle {
+      font-size: 1.125rem;
+      margin-bottom: 28px;
+    }
+
+    .who-tags {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 12px;
+    }
+
+    .who-tag {
+      padding: 10px 20px;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 100px;
+      font-size: 0.875rem;
+      color: rgba(255,255,255,0.85);
+    }
+
+    .reviews-section {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    .reviews-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .reviews-header h3 {
+      font-family: 'Playfair Display', Georgia, serif;
+      font-size: 1.25rem;
+      font-weight: 400;
+      color: white;
+    }
+
+    .reviews-cta {
+      font-size: 0.875rem;
+      color: rgba(255,255,255,0.5);
+      margin: 0;
+    }
+
+    .reviews-cta a {
+      color: rgba(255,255,255,0.8);
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+
+    .reviews-cta a:hover {
+      color: white;
+    }
+
+    .review-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+    }
+
+    .review-card {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 12px;
+      padding: 28px 24px;
+    }
+
+    .review-card.empty-state {
+      border-style: dashed;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 160px;
+    }
+
+    .empty-icon {
+      width: 40px;
+      height: 40px;
+      margin-bottom: 16px;
+      opacity: 0.3;
+    }
+
+    .empty-icon svg {
+      width: 100%;
+      height: 100%;
+      stroke: white;
+    }
+
+    .empty-text {
+      font-size: 0.9375rem;
+      color: rgba(255,255,255,0.6);
+      margin-bottom: 4px;
+    }
+
+    .empty-subtext {
+      font-size: 0.8125rem;
+      color: rgba(255,255,255,0.35);
+      font-style: italic;
+    }
+
+    .indie-note {
+      margin-top: 40px;
+      padding: 24px 32px;
+      background: rgba(255,255,255,0.03);
+      border-radius: 8px;
+      text-align: center;
+    }
+
+    .indie-note p {
+      font-size: 0.9375rem;
+      color: rgba(255,255,255,0.6);
+      margin: 0;
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    .indie-note a {
+      color: rgba(255,255,255,0.85);
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+
+    .indie-note a:hover {
+      color: white;
+    }
+
+    /* Pricing section */
+    .pricing-section {
+      text-align: center;
+      background: var(--bg-elevated);
+      border-top: 1px solid var(--border);
+    }
+
+    .price-display {
+      margin: 48px 0;
+    }
+
+    .price {
+      font-family: 'Playfair Display', Georgia, serif;
+      font-size: 5rem;
+      font-weight: 400;
+      color: var(--text);
+      line-height: 1;
+    }
+
+    .price-note {
+      font-size: 1.125rem;
+      color: var(--text-secondary);
+      margin-top: 8px;
+    }
+
+    .pricing-cta {
+      margin-bottom: 48px;
+    }
+
+    /* Student verification form */
+    .student-form {
+      max-width: 400px;
+      margin: 32px auto 0;
+      padding: 24px;
+      background: var(--accent-light);
+      border-radius: 12px;
+      text-align: left;
+    }
+
+    .student-form label {
+      display: block;
+      font-size: 0.875rem;
+      font-weight: 500;
+      margin-bottom: 8px;
+      color: var(--text);
+    }
+
+    .student-form-row {
+      display: flex;
+      gap: 12px;
+    }
+
+    .student-form input[type="email"] {
+      flex: 1;
+      padding: 12px 16px;
+      font-size: 1rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-family: inherit;
+      background: white;
+    }
+
+    .student-form input[type="email"]:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    .student-form button {
+      padding: 12px 20px;
+      background: var(--accent);
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 0.9375rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.2s;
+      font-family: inherit;
+    }
+
+    .student-form button:hover {
+      background: var(--accent-hover);
+    }
+
+    .student-form button:disabled {
+      background: var(--text-secondary);
+      cursor: not-allowed;
+    }
+
+    .student-form .form-note {
+      margin-top: 12px;
+      font-size: 0.8125rem;
+      color: var(--text-secondary);
+    }
+
+    .student-form .form-message {
+      margin-top: 12px;
+      padding: 12px 16px;
+      border-radius: 6px;
+      font-size: 0.9375rem;
+    }
+
+    .student-form .form-message.success {
+      background: #d4edda;
+      color: #155724;
+    }
+
+    .student-form .form-message.error {
+      background: #f8d7da;
+      color: #721c24;
+    }
+
+    .pricing-details {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 32px;
+      max-width: 800px;
+      margin: 0 auto;
+      padding-top: 48px;
+      border-top: 1px solid var(--border);
+    }
+
+    .pricing-detail {
+      text-align: center;
+    }
+
+    .pricing-detail-label {
+      font-size: 0.75rem;
+      font-weight: 500;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+      margin-bottom: 8px;
+    }
+
+    .pricing-detail-value {
+      font-family: 'Playfair Display', Georgia, serif;
+      font-size: 1.25rem;
+      color: var(--text);
+    }
+
+    .pricing-detail-value a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    .pricing-detail-value a:hover {
+      text-decoration: underline;
+    }
+
+    /* About section */
+    .about-section {
+      border-top: 1px solid var(--border);
+    }
+
+    .about-grid {
+      display: grid;
+      grid-template-columns: 240px 1fr;
+      gap: 64px;
+      align-items: start;
+    }
+
+    .about-photo {
+      aspect-ratio: 1;
+      background: var(--border-subtle);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--border);
+    }
+
+    .about-photo-placeholder {
+      text-align: center;
+      color: var(--text-secondary);
+      font-size: 0.875rem;
+    }
+
+    .about-content p {
+      font-size: 1.0625rem;
+      line-height: 1.8;
+    }
+
+    .about-content em {
+      font-family: 'Playfair Display', Georgia, serif;
+      font-style: italic;
+    }
+
+    .about-content .emphasis {
+      font-weight: 500;
+      color: var(--text);
+    }
+
+    /* Footer */
+    footer {
+      padding: 80px 0;
+      text-align: center;
+      border-top: 1px solid var(--border);
+    }
+
+    .footer-cta {
+      margin-bottom: 48px;
+    }
+
+    .footer-links {
+      display: flex;
+      justify-content: center;
+      gap: 32px;
+      margin-bottom: 32px;
+    }
+
+    .footer-links a {
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+
+    .footer-links a:hover {
+      color: var(--text);
+    }
+
+    .footer-brand {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      font-size: 0.8125rem;
+      color: var(--text-secondary);
+    }
+
+    .footer-brand svg {
+      width: 16px;
+      height: 13px;
+      fill: var(--text-secondary);
+    }
+
+    /* Trust indicators */
+    .trust-row {
+      display: flex;
+      justify-content: center;
+      gap: 48px;
+      padding: 24px 0;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg-elevated);
+    }
+
+    .trust-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.8125rem;
+      color: var(--text-secondary);
+    }
+
+    .trust-item svg {
+      width: 16px;
+      height: 16px;
+      fill: var(--accent);
+    }
+
+    /* Animations */
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    /* Responsive */
+    @media (max-width: 900px) {
+      html {
+        font-size: 16px;
+      }
+
+      .container, .container-narrow {
+        padding: 0 24px;
+      }
+
+      nav {
+        padding: 24px;
+      }
+
+      h1 {
+        font-size: 2.75rem;
+      }
+
+      h2 {
+        font-size: 2rem;
+      }
+
+      .problem-grid,
+      .about-grid {
+        grid-template-columns: 1fr;
+        gap: 48px;
+      }
+
+      .steps-grid,
+      .review-grid {
+        grid-template-columns: 1fr;
+        gap: 24px;
+      }
+
+      .pricing-details {
+        grid-template-columns: 1fr;
+        gap: 24px;
+      }
+
+      .trust-row {
+        flex-wrap: wrap;
+        gap: 24px;
+      }
+
+      .nav-links {
+        display: none;
+      }
+
+      .hero {
+        padding: 48px 0 64px;
+      }
+
+      section {
+        padding: 64px 0;
+      }
+
+      .student-form-row {
+        flex-direction: column;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <nav>
+    <a href="#" class="logo">
+      <svg class="logo-icon" viewBox="0 0 406 305" xmlns="http://www.w3.org/2000/svg">
+        <path d="m 202.46,23.82 -19.63,18.98 0.44,45.78 h -21.4 l 0.45,-45.78 -20.87,-18.92 -19.25,17.68 -0.54,47.02 h -21.4 v -47.02 l -20.08,-17.51 -18.57,17.51 -0.04,47.11 h -10.49 v 28.47 h 10.46 l -0.08,88.49 h -10.65 v 29.9 h 10.62 l -0.03,29.61 38.23,0.03 v -29.49 h 21.41 l -0.31,29.51 40.51,0.04 v -29.55 l 21.08,0.13 -0.45,29.44 40.33,0.04 v -29.6 h 21.47 l -0.36,29.61 40.27,0.04 -0.41,-29.65 h 21.4 v 29.67 l 40.63,0.04 -0.07,-27.98 -0.01,-1.88 h 10.48 v -29.9 h -10.55 c -0.09,-37.04 -0.26,-88.22 -0.26,-88.49 h 10.47 v -28.47 h -10.53 l -0.01,-0.65 -0.07,-46.46 -19.62,-17.07 -19.87,17.07 0.02,47.02 h -21.4 l -0.23,-46.4 -19.87,-17.81 -19.25,17.19 -0.21,47.02 h -21.4 l -0.2,-47.02 z m -40.6,93.26 21.08,0.36 -0.48,88.53 h -20.6 z m -61.61,0.03 h 21.41 l -0.33,88.53 -21.08,0.36 z m 122.58,0 h 21.47 l -0.39,88.53 -21.08,0.36 z m 60.96,0 h 21.4 v 88.85 l -20.97,-0.43 z"/>
+      </svg>
+      Fence
+    </a>
+    <div class="nav-links">
+      <a href="#how" class="nav-link">How it works</a>
+      <a href="#pricing" class="nav-link">Pricing</a>
+      <a href="https://github.com/vishaljain/fence" class="nav-link">GitHub</a>
+      <a href="#pricing" class="nav-cta">Download</a>
+    </div>
+  </nav>
+
+  <div class="trust-row">
+    <div class="trust-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+      </svg>
+      <span>macOS native</span>
+    </div>
+    <div class="trust-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M9 12l2 2 4-4"/>
+        <circle cx="12" cy="12" r="10"/>
+      </svg>
+      <span>Open source</span>
+    </div>
+    <div class="trust-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+        <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+      </svg>
+      <span>Privacy-first</span>
+    </div>
+    <div class="trust-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="10"/>
+        <path d="M12 6v6l4 2"/>
+      </svg>
+      <span>One-time purchase</span>
+    </div>
+  </div>
+
+  <section class="hero">
+    <div class="container">
+      <div class="hero-badge">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+        </svg>
+        Version 1.0 — Now available
+      </div>
+      <h1>For those who've never struggled to work hard — only to <em>stop</em></h1>
+      <p class="subhead">A Mac app that blocks work, not just distractions. Set your boundaries and mean them.</p>
+      <div class="hero-cta-group">
+        <a href="#" class="cta-button download-button">
+          <svg viewBox="0 0 24 24" fill="currentColor">
+            <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/>
+          </svg>
+          Download for Mac
+        </a>
+        <div class="cta-meta">
+          <p class="cta-note">2 weeks free. Then $49, once, forever.</p>
+          <a href="#pricing" class="student-chip">student pricing available</a>
+        </div>
+      </div>
+
+      <div class="app-preview">
+        <div class="app-window">
+          <div class="app-titlebar">
+            <span class="titlebar-dot"></span>
+            <span class="titlebar-dot"></span>
+            <span class="titlebar-dot"></span>
+          </div>
+          <div class="app-content">
+            <div class="app-placeholder">
+              <svg class="app-placeholder-icon" viewBox="0 0 406 305" fill="currentColor">
+                <path d="m 202.46,23.82 -19.63,18.98 0.44,45.78 h -21.4 l 0.45,-45.78 -20.87,-18.92 -19.25,17.68 -0.54,47.02 h -21.4 v -47.02 l -20.08,-17.51 -18.57,17.51 -0.04,47.11 h -10.49 v 28.47 h 10.46 l -0.08,88.49 h -10.65 v 29.9 h 10.62 l -0.03,29.61 38.23,0.03 v -29.49 h 21.41 l -0.31,29.51 40.51,0.04 v -29.55 l 21.08,0.13 -0.45,29.44 40.33,0.04 v -29.6 h 21.47 l -0.36,29.61 40.27,0.04 -0.41,-29.65 h 21.4 v 29.67 l 40.63,0.04 -0.07,-27.98 -0.01,-1.88 h 10.48 v -29.9 h -10.55 c -0.09,-37.04 -0.26,-88.22 -0.26,-88.49 h 10.47 v -28.47 h -10.53 l -0.01,-0.65 -0.07,-46.46 -19.62,-17.07 -19.87,17.07 0.02,47.02 h -21.4 l -0.23,-46.4 -19.87,-17.81 -19.25,17.19 -0.21,47.02 h -21.4 l -0.2,-47.02 z m -40.6,93.26 21.08,0.36 -0.48,88.53 h -20.6 z m -61.61,0.03 h 21.41 l -0.33,88.53 -21.08,0.36 z m 122.58,0 h 21.47 l -0.39,88.53 -21.08,0.36 z m 60.96,0 h 21.4 v 88.85 l -20.97,-0.43 z"/>
+              </svg>
+              <p>App screenshot showing weekly calendar grid with bundles</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="problem-section">
+    <div class="container">
+      <div class="problem-grid">
+        <div class="problem-content">
+          <span class="section-label">The problem</span>
+          <h2>You don't have a focus problem</h2>
+          <p>Most blockers keep you focused on work. This one keeps you away from it.</p>
+          <p>You're not distracted. You're obsessed. You love what you're building. <span class="emphasis">That's the problem.</span></p>
+          <p>You've told yourself you'll take Sunday off. Then Sunday morning comes and you're "just checking one thing." By noon you're deep in a rabbit hole. By evening you're wondering where the day went.</p>
+          <p>You know the cost. Conversations where you're not really there. Friends you keep rescheduling. Relationships, hobbies, health — all quietly withering while you ship.</p>
+          <p><span class="accent-text">You don't need more willpower. You need a lock you can't pick.</span></p>
+        </div>
+        <div class="pull-quote">
+          <p>Everyone says life's a marathon. This is for those running it as a series of all-out sprints with blackouts in between.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="how-section" id="how">
+    <div class="container">
+      <div class="how-header">
+        <span class="section-label">How it works</span>
+        <h2>Set it once. Mean it always.</h2>
+        <p>Sunday night, you set your schedule for the week. Which apps. Which sites. Which hours. Then Fence holds the line.</p>
+      </div>
+
+      <div class="steps-grid">
+        <div class="step-card">
+          <span class="step-number">1</span>
+          <h3>Set your boundaries</h3>
+          <p>Choose which apps and sites to block, and when. Do it once, when you're thinking clearly.</p>
+        </div>
+        <div class="step-card">
+          <span class="step-number">2</span>
+          <h3>Fence holds them</h3>
+          <p>No override button. No "just this once." No PIN you definitely remember.</p>
+        </div>
+        <div class="step-card">
+          <span class="step-number">3</span>
+          <h3>Live your life</h3>
+          <p>The version of you that set the rules wins. Not the version that wakes up ready to negotiate.</p>
+        </div>
+      </div>
+
+      <div class="unlock-callout">
+        <p>You get <strong>5 emergency unlocks. Total. Lifetime.</strong> Use them wisely — or don't use them at all. They're for actual emergencies, not "I just want to check Slack."</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="who-section">
+    <div class="container">
+      <div class="who-header">
+        <span class="section-label">Who it's for</span>
+        <h2>For people who love their work too much to stop</h2>
+        <p class="who-subtitle">Who see what it's costing. Who stopped calling it the price of success.</p>
+        <div class="who-tags">
+          <span class="who-tag">Founders</span>
+          <span class="who-tag">Indie hackers</span>
+          <span class="who-tag">Researchers</span>
+          <span class="who-tag">The ADHD + OCD brain</span>
+          <span class="who-tag">Workaholics in recovery</span>
+        </div>
+      </div>
+
+      <div class="reviews-section">
+        <div class="reviews-header">
+          <h3>What people are saying</h3>
+          <p class="reviews-cta">This section is looking a bit empty. <a href="mailto:vishal@usefence.app">Be the first to roast me?</a></p>
+        </div>
+
+        <div class="review-grid">
+          <div class="review-card empty-state">
+            <div class="empty-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+              </svg>
+            </div>
+            <p class="empty-text">Your review here?</p>
+            <p class="empty-subtext">I'll even take "it's mid"</p>
+          </div>
+          <div class="review-card empty-state">
+            <div class="empty-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+              </svg>
+            </div>
+            <p class="empty-text">Surely someone has opinions</p>
+            <p class="empty-subtext">The internet usually does</p>
+          </div>
+          <div class="review-card empty-state">
+            <div class="empty-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+              </svg>
+            </div>
+            <p class="empty-text">I promise I can take criticism</p>
+            <p class="empty-subtext">(mostly)</p>
+          </div>
+        </div>
+
+        <div class="indie-note">
+          <p>Real talk: this is an indie project. No VC money. No marketing team. Just me, building something I needed. If Fence helps you, tell someone. If it doesn't, <a href="mailto:vishal@usefence.app">tell me</a>.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="pricing-section" id="pricing">
+    <div class="container">
+      <span class="section-label">Pricing</span>
+      <h2>One price. No subscriptions. No gotchas.</h2>
+
+      <div class="price-display">
+        <span class="price">$49</span>
+        <p class="price-note">Once. Forever. Yours.</p>
+      </div>
+
+      <div class="pricing-cta">
+        <a href="#" class="cta-button buy-button">
+          <svg viewBox="0 0 24 24" fill="currentColor">
+            <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/>
+          </svg>
+          Buy License — $49
+        </a>
+        <p class="cta-note" style="margin-top: 16px;">2 weeks free trial. Download first, pay when you're ready.</p>
+      </div>
+
+      <!-- Student verification form -->
+      <div class="student-form">
+        <label for="student-email">Student? Verify with your university email for $5:</label>
+        <div class="student-form-row">
+          <input type="email" id="student-email" placeholder="you@university.edu" />
+          <button type="button" id="verify-student">Get $5 Link</button>
+        </div>
+        <p class="form-note">We'll email you a payment link instantly.</p>
+        <div id="form-message" class="form-message" style="display: none;"></div>
+      </div>
+
+      <div class="pricing-details">
+        <div class="pricing-detail">
+          <div class="pricing-detail-label">Trial</div>
+          <div class="pricing-detail-value">2 weeks free</div>
+        </div>
+        <div class="pricing-detail">
+          <div class="pricing-detail-label">Source code</div>
+          <div class="pricing-detail-value"><a href="https://github.com/vishaljain/fence">Open on GitHub</a></div>
+        </div>
+        <div class="pricing-detail">
+          <div class="pricing-detail-label">Questions?</div>
+          <div class="pricing-detail-value"><a href="mailto:vishal@usefence.app">Email me</a></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="about-section">
+    <div class="container">
+      <div class="about-grid">
+        <div class="about-photo">
+          <div class="about-photo-placeholder">Your photo</div>
+        </div>
+        <div class="about-content">
+          <span class="section-label">Why I built this</span>
+          <h2>A tool I needed myself</h2>
+          <p>I'm Vishal, a researcher who kept missing life while building things I loved.</p>
+          <p>I'd look up from my laptop and realize I'd been half-listening to my mum for twenty minutes. I'd skip the gym <em>"just today"</em> for six months straight. I'd tell myself I'd take Sunday off, then watch Sunday disappear into "one more feature."</p>
+          <p>The problem was never time. It was that I couldn't stop. And every blocker I tried was too easy to undo.</p>
+          <p><span class="emphasis">So I built Fence. The tool I needed. Maybe you need it too.</span></p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="container">
+      <div class="footer-cta">
+        <a href="#" class="cta-button download-button">
+          <svg viewBox="0 0 24 24" fill="currentColor">
+            <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/>
+          </svg>
+          Download for Mac
+        </a>
+      </div>
+      <div class="footer-links">
+        <a href="#pricing">Student pricing</a>
+        <a href="https://github.com/vishaljain/fence">GitHub</a>
+        <a href="mailto:vishal@usefence.app">Contact</a>
+      </div>
+      <div class="footer-brand">
+        <svg viewBox="0 0 406 305" xmlns="http://www.w3.org/2000/svg">
+          <path d="m 202.46,23.82 -19.63,18.98 0.44,45.78 h -21.4 l 0.45,-45.78 -20.87,-18.92 -19.25,17.68 -0.54,47.02 h -21.4 v -47.02 l -20.08,-17.51 -18.57,17.51 -0.04,47.11 h -10.49 v 28.47 h 10.46 l -0.08,88.49 h -10.65 v 29.9 h 10.62 l -0.03,29.61 38.23,0.03 v -29.49 h 21.41 l -0.31,29.51 40.51,0.04 v -29.55 l 21.08,0.13 -0.45,29.44 40.33,0.04 v -29.6 h 21.47 l -0.36,29.61 40.27,0.04 -0.41,-29.65 h 21.4 v 29.67 l 40.63,0.04 -0.07,-27.98 -0.01,-1.88 h 10.48 v -29.9 h -10.55 c -0.09,-37.04 -0.26,-88.22 -0.26,-88.49 h 10.47 v -28.47 h -10.53 l -0.01,-0.65 -0.07,-46.46 -19.62,-17.07 -19.87,17.07 0.02,47.02 h -21.4 l -0.23,-46.4 -19.87,-17.81 -19.25,17.19 -0.21,47.02 h -21.4 l -0.2,-47.02 z m -40.6,93.26 21.08,0.36 -0.48,88.53 h -20.6 z m -61.61,0.03 h 21.41 l -0.33,88.53 -21.08,0.36 z m 122.58,0 h 21.47 l -0.39,88.53 -21.08,0.36 z m 60.96,0 h 21.4 v 88.85 l -20.97,-0.43 z"/>
+        </svg>
+        Fence
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    // Configuration - UPDATE THESE
+    const CONFIG = {
+      // Stripe Payment Links (TEST MODE - switch to live when ready)
+      regularPaymentLink: 'https://buy.stripe.com/test_eVq14m0ROegkgAt0kpafS00', // $49
+      studentPaymentLink: 'https://buy.stripe.com/test_9B69AS440c8c6ZTc37afS01', // $5
+
+      // Download URL (update after first release)
+      downloadUrl: '/updates/Fence-1.0.zip',
+
+      // API endpoint for student verification
+      apiEndpoint: '/api/verify-student',
+
+      // Valid student email domains
+      validDomains: [
+        '.edu', '.edu.au', '.ac.uk', '.edu.cn', '.edu.in', '.ac.in',
+        '.edu.sg', '.edu.hk', '.ac.nz', '.edu.br', '.edu.mx', '.ac.jp',
+        '.edu.tw', '.ac.kr', '.edu.pl', '.edu.es', '.edu.fr', '.edu.de',
+        '.edu.it', '.ac.za', '.edu.co', '.edu.ar', '.edu.pe', '.edu.cl',
+        '.edu.ng', '.edu.pk', '.edu.ph', '.edu.my', '.edu.vn', '.edu.eg', '.ac.il'
+      ]
+    };
+
+    // Check if email looks like a student email
+    function isStudentEmail(email) {
+      const lowerEmail = email.toLowerCase().trim();
+      return CONFIG.validDomains.some(domain => lowerEmail.endsWith(domain));
+    }
+
+    // Handle download buttons - direct download
+    document.querySelectorAll('.download-button').forEach(button => {
+      button.addEventListener('click', function(e) {
+        e.preventDefault();
+        window.location.href = CONFIG.downloadUrl;
+      });
+    });
+
+    // Handle buy buttons - Stripe payment
+    document.querySelectorAll('.buy-button').forEach(button => {
+      button.addEventListener('click', function(e) {
+        e.preventDefault();
+        window.open(CONFIG.regularPaymentLink, '_blank');
+      });
+    });
+
+    // Handle student verification form
+    document.getElementById('verify-student').addEventListener('click', async function() {
+      const emailInput = document.getElementById('student-email');
+      const button = this;
+      const messageDiv = document.getElementById('form-message');
+      const email = emailInput.value.trim();
+
+      // Basic validation
+      if (!email) {
+        showMessage('Please enter your email address.', 'error');
+        return;
+      }
+
+      if (!email.includes('@')) {
+        showMessage('Please enter a valid email address.', 'error');
+        return;
+      }
+
+      // Check if it's a student email
+      if (!isStudentEmail(email)) {
+        showMessage('Please use a university email address (ending in .edu, .ac.uk, etc.)', 'error');
+        return;
+      }
+
+      // Disable button and show loading
+      button.disabled = true;
+      button.textContent = 'Sending...';
+
+      try {
+        const response = await fetch(CONFIG.apiEndpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ email }),
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          showMessage('Check your inbox! We sent a $5 payment link to ' + email, 'success');
+          emailInput.value = '';
+        } else {
+          showMessage(data.error || 'Something went wrong. Please try again.', 'error');
+        }
+      } catch (error) {
+        showMessage('Network error. Please try again.', 'error');
+      } finally {
+        button.disabled = false;
+        button.textContent = 'Get $5 Link';
+      }
+    });
+
+    function showMessage(text, type) {
+      const messageDiv = document.getElementById('form-message');
+      messageDiv.textContent = text;
+      messageDiv.className = 'form-message ' + type;
+      messageDiv.style.display = 'block';
+    }
+
+    // Allow Enter key to submit student form
+    document.getElementById('student-email').addEventListener('keypress', function(e) {
+      if (e.key === 'Enter') {
+        document.getElementById('verify-student').click();
+      }
+    });
+  </script>
+
+</body>
+</html>

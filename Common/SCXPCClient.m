@@ -514,6 +514,26 @@
     }];
 }
 
+- (void)stopTestBlock:(void(^)(NSError* error))reply {
+    // Note: This method does NOT require authorization - test blocks are meant to be freely stoppable
+    [self connectAndExecuteCommandBlock:^(NSError * connectError) {
+        if (connectError != nil) {
+            NSLog(@"Stop test block failed with connection error: %@", connectError);
+            reply(connectError);
+        } else {
+            [[self.daemonConnection remoteObjectProxyWithErrorHandler:^(NSError * proxyError) {
+                NSLog(@"Stop test block failed with remote object proxy error: %@", proxyError);
+                reply(proxyError);
+            }] stopTestBlockWithReply:^(NSError* error) {
+                if (error != nil) {
+                    NSLog(@"Stop test block failed with error = %@\n", error);
+                }
+                reply(error);
+            }];
+        }
+    }];
+}
+
 - (NSString*)selfControlHelperToolPath {
     static NSString* path;
 

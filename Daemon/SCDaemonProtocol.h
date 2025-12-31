@@ -53,6 +53,9 @@ NS_ASSUME_NONNULL_BEGIN
 // XPC method to check if PF block is active (runs as root, can query pfctl)
 - (void)isPFBlockActiveWithReply:(void(^)(BOOL active))reply;
 
+// XPC method to stop a test block (only works when IsTestBlock=YES, no auth required)
+- (void)stopTestBlockWithReply:(void(^)(NSError* _Nullable error))reply;
+
 @end
 
 NS_ASSUME_NONNULL_END

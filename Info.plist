@@ -68,8 +68,8 @@
 	<true/>
 	<key>SUFeedURL</key>
 	<string>https://usefence.app/appcast.xml</string>
-	<key>SUPublicDSAKeyFile</key>
-	<string>dsa_pub.pem</string>
+	<key>SUPublicEDKey</key>
+	<string>eTe8bVdQa1wkSJmYtuTnCntI9eKNGz3dNhjGsInzrDQ=</string>
 	<key>SUEnableSystemProfiling</key>
 	<true/>
 	<key>SUSendProfileInfo</key>

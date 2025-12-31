@@ -230,6 +230,16 @@
                                              selector:@selector(windowDidResize:)
                                                  name:NSWindowDidResizeNotification
                                                object:self.window];
+
+    // Observe request to show this window (from test block completion)
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(showWeekScheduleWindowRequested:)
+                                                 name:@"SCShowWeekScheduleWindow"
+                                               object:nil];
+}
+
+- (void)showWeekScheduleWindowRequested:(NSNotification*)note {
+    [self.window makeKeyAndOrderFront:nil];
 }
 
 - (void)windowDidResize:(NSNotification *)note {

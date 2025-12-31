@@ -59,9 +59,7 @@
 
 @property (assign) BOOL addingBlock;
 
-#ifdef DEBUG
 @property (nonatomic, strong) SCSafetyCheckWindowController* safetyCheckWindowController;
-#endif
 
 // Called when the block duration slider is moved.  Updates the label that gives
 // the block duration in words (hours and minutes).

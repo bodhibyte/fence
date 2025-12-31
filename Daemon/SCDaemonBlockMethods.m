@@ -96,6 +96,10 @@ NSTimeInterval CHECKUP_LOCK_TIMEOUT = 0.5; // use a shorter lock timeout for che
     [settings setValue: blockSettings[@"BlockSound"] forKey: @"BlockSound"];
     [settings setValue: blockSettings[@"EnableErrorReporting"] forKey: @"EnableErrorReporting"];
 
+    // Track if this is a test block (can be stopped without emergency unlock)
+    BOOL isTestBlock = [blockSettings[@"IsTestBlock"] boolValue];
+    [settings setValue: @(isTestBlock) forKey: @"IsTestBlock"];
+
     if(([blocklist count] <= 0 && !isAllowlist) || [SCBlockUtilities currentBlockIsExpired]) {
         NSLog(@"ERROR: Blocklist is empty, or block end date is in the past");
         NSLog(@"Block End Date: %@ (%@), vs now is %@", [settings valueForKey: @"BlockEndDate"], [[settings valueForKey: @"BlockEndDate"] class], [NSDate date]);
@@ -426,6 +430,52 @@ NSTimeInterval CHECKUP_LOCK_TIMEOUT = 0.5; // use a shorter lock timeout for che
         NSLog(@"INFO: Integrity check ran; readded block rules.");
     } else NSLog(@"INFO: Integrity check ran; no action needed.");
 
+    [self.daemonMethodLock unlock];
+}
+
++ (void)stopTestBlock:(void(^)(NSError* error))reply {
+    if (![SCDaemonBlockMethods lockOrTimeout: reply]) {
+        return;
+    }
+
+    [SCSentry addBreadcrumb: @"Daemon method stopTestBlock called" category: @"daemon"];
+
+    SCSettings* settings = [SCSettings sharedSettings];
+
+    // Double-check that this is a test block (XPC handler already checked, but be safe)
+    BOOL isTestBlock = [[settings valueForKey:@"IsTestBlock"] boolValue];
+    if (!isTestBlock) {
+        NSLog(@"ERROR: stopTestBlock called but IsTestBlock=NO");
+        NSError* err = [SCErr errorWithCode: 401 subDescription: @"Not a test block"];
+        reply(err);
+        [self.daemonMethodLock unlock];
+        return;
+    }
+
+    NSLog(@"INFO: Stopping test block (user requested)");
+
+    // Remove the block (same as removeBlock in other contexts)
+    [SCHelperToolUtilities removeBlock];
+
+    // Clear the test block flag
+    [settings setValue: @NO forKey: @"IsTestBlock"];
+
+    // Synchronize settings
+    NSError* syncErr = [settings syncSettingsAndWait: 5];
+    if (syncErr != nil) {
+        NSLog(@"WARNING: Sync failed or timed out with error %@ after stopping test block", syncErr);
+    }
+
+    [SCHelperToolUtilities sendConfigurationChangedNotification];
+
+    // Stop the checkup timer since block is gone
+    [[SCDaemon sharedDaemon] stopCheckupTimer];
+
+    [SCSentry addBreadcrumb: @"Daemon stopped test block successfully" category: @"daemon"];
+    NSLog(@"INFO: Test block stopped successfully.");
+    reply(nil);
+
+    [[SCDaemon sharedDaemon] resetInactivityTimer];
     [self.daemonMethodLock unlock];
 }
 

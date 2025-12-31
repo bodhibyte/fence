@@ -19,7 +19,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 @end
 
-@interface SCMenuBarController : NSObject
+@interface SCMenuBarController : NSObject <NSMenuDelegate>
 
 @property (nonatomic, weak, nullable) id<SCMenuBarControllerDelegate> delegate;
 

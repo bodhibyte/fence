@@ -31,6 +31,7 @@
 #import "SCXPCClient.h"
 #import "SCBlockFileReaderWriter.h"
 #import "SCUIUtilities.h"
+#import "Common/Utility/SCBlockUtilities.h"
 #import <TransformerKit/NSValueTransformer+TransformerKit.h>
 #import "SCDebugUtilities.h"
 #import "SCWeekScheduleWindowController.h"
@@ -39,6 +40,7 @@
 #import "SCMenuBarController.h"
 #import "SCStartupSafetyCheck.h"
 #import "SCSafetyCheckWindowController.h"
+#import "SCTestBlockWindowController.h"
 #import "SCLogger.h"
 #import "Common/SCLicenseManager.h"
 #import "SCLicenseWindowController.h"
@@ -48,6 +50,7 @@
 @property (atomic, strong, readwrite) SCXPCClient* xpc;
 @property (nonatomic, strong) SCWeekScheduleWindowController* weekScheduleWindowController;
 @property (nonatomic, strong, nullable) SCLicenseWindowController* licenseWindowController;
+@property (nonatomic, strong, nullable) SCTestBlockWindowController* testBlockWindowController;
 
 @end
 
@@ -573,8 +576,46 @@
     }
 
     self.safetyCheckWindowController = [[SCSafetyCheckWindowController alloc] init];
+
+    // Set completion handler to show test block after safety check passes
+    __weak typeof(self) weakSelf = self;
+    self.safetyCheckWindowController.completionHandler = ^(SCSafetyCheckResult* result) {
+        if (result.passed) {
+            // Delay slightly to let user see success, then offer test block
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                [weakSelf showTestBlockAfterSafetyCheck];
+            });
+        }
+    };
+
     [self.safetyCheckWindowController showWindow:self];
     [self.safetyCheckWindowController runSafetyCheck];
+}
+
+- (void)showTestBlockAfterSafetyCheck {
+    // Don't show test block if a block is already running
+    if ([SCBlockUtilities anyBlockIsRunning]) {
+        return;
+    }
+
+    // Show alert offering to try test block
+    NSAlert* alert = [[NSAlert alloc] init];
+    alert.messageText = @"Safety Check Passed!";
+    alert.informativeText = @"Would you like to try a test block? This lets you test blocking websites/apps for a short time (30 seconds to 5 minutes) with a free \"Stop\" button.";
+    [alert addButtonWithTitle:@"Try Test Block"];
+    [alert addButtonWithTitle:@"Maybe Later"];
+
+    NSModalResponse response = [alert runModal];
+
+    if (response == NSAlertFirstButtonReturn) {
+        // Show test block window
+        self.testBlockWindowController = [[SCTestBlockWindowController alloc] init];
+        self.testBlockWindowController.completionHandler = ^(BOOL didComplete) {
+            self.testBlockWindowController = nil;
+        };
+        [self.testBlockWindowController showWindow:nil];
+        [NSApp activateIgnoringOtherApps:YES];
+    }
 }
 
 - (void)reinstallDaemon {
@@ -606,17 +647,25 @@
     BOOL blockRunning = [SCUIUtilities blockIsRunning];
     domainListWindowController_.readOnly = blockRunning;
 
-    // When block is running, gather entries from bundles currently blocking (not in allowed window)
+    // When block is running, show the active blocklist
     if (blockRunning) {
-        SCScheduleManager *manager = [SCScheduleManager sharedManager];
-        NSMutableArray<NSString *> *allEntries = [NSMutableArray array];
-        for (SCBlockBundle *bundle in manager.bundles) {
-            // Only include entries from bundles that are currently blocking
-            if (![manager wouldBundleBeAllowed:bundle.bundleID]) {
-                [allEntries addObjectsFromArray:bundle.entries];
+        BOOL isTestBlock = [[[SCSettings sharedSettings] valueForKey:@"IsTestBlock"] boolValue];
+        if (isTestBlock) {
+            // Test block - read from ActiveBlocklist setting (not schedule manager)
+            NSArray *activeBlocklist = [[SCSettings sharedSettings] valueForKey:@"ActiveBlocklist"];
+            domainListWindowController_.displayEntries = [activeBlocklist mutableCopy];
+        } else {
+            // Regular block - gather entries from bundles currently blocking
+            SCScheduleManager *manager = [SCScheduleManager sharedManager];
+            NSMutableArray<NSString *> *allEntries = [NSMutableArray array];
+            for (SCBlockBundle *bundle in manager.bundles) {
+                // Only include entries from bundles that are currently blocking
+                if (![manager wouldBundleBeAllowed:bundle.bundleID]) {
+                    [allEntries addObjectsFromArray:bundle.entries];
+                }
             }
+            domainListWindowController_.displayEntries = allEntries;
         }
-        domainListWindowController_.displayEntries = allEntries;
     } else {
         domainListWindowController_.displayEntries = nil;
     }

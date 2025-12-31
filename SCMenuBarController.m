@@ -10,6 +10,9 @@
 #import "SCLogger.h"
 #import "Common/SCLicenseManager.h"
 #import "SCLicenseWindowController.h"
+#import "SCTestBlockWindowController.h"
+#import "SCSettings.h"
+#import "Common/Utility/SCBlockUtilities.h"
 
 @interface SCMenuBarController ()
 
@@ -17,6 +20,7 @@
 @property (nonatomic, strong) NSMenu *statusMenu;
 @property (nonatomic, strong) NSTimer *updateTimer;
 @property (nonatomic, strong, nullable) SCLicenseWindowController *licenseWindowController;
+@property (nonatomic, strong, nullable) SCTestBlockWindowController *testBlockWindowController;
 
 @end
 
@@ -92,6 +96,7 @@
 
 - (void)rebuildMenu {
     self.statusMenu = [[NSMenu alloc] init];
+    self.statusMenu.delegate = self;
 
     SCScheduleManager *manager = [SCScheduleManager sharedManager];
 
@@ -132,7 +137,14 @@
         [self.statusMenu addItem:[NSMenuItem separatorItem]];
     }
 
-    // Commitment info
+    // Commitment / Test Block info
+    BOOL blockIsRunning = [[SCSettings sharedSettings] boolForKey:@"BlockIsRunning"];
+    BOOL isTestBlock = [[[SCSettings sharedSettings] valueForKey:@"IsTestBlock"] boolValue];
+    NSDate *blockEndDate = [[SCSettings sharedSettings] valueForKey:@"BlockEndDate"];
+
+    NSLog(@"[MENU DEBUG] rebuildMenu called - blockIsRunning=%d, isTestBlock=%d, blockEndDate=%@, isCommitted=%d",
+          blockIsRunning, isTestBlock, blockEndDate, manager.isCommitted);
+
     if (manager.isCommitted) {
         NSDateFormatter *endFormatter = [[NSDateFormatter alloc] init];
         endFormatter.dateFormat = @"EEEE";
@@ -143,8 +155,20 @@
                                                      keyEquivalent:@""];
         commitItem.enabled = NO;
         [self.statusMenu addItem:commitItem];
+    } else if (blockIsRunning && isTestBlock) {
+        // Test block active - show time remaining
+        NSDate *endDate = [[SCSettings sharedSettings] valueForKey:@"BlockEndDate"];
+        NSTimeInterval remaining = MAX(0, [endDate timeIntervalSinceNow]);
+        int minutes = (int)(remaining / 60);
+        int seconds = (int)remaining % 60;
+        NSString *timeStr = [NSString stringWithFormat:@"Test Block: %d:%02d remaining", minutes, seconds];
+        NSMenuItem *testBlockItem = [[NSMenuItem alloc] initWithTitle:timeStr
+                                                               action:nil
+                                                        keyEquivalent:@""];
+        testBlockItem.enabled = NO;
+        [self.statusMenu addItem:testBlockItem];
     } else {
-        // "No active commitment" - always show when not committed
+        // "No active commitment" - show when not committed and no test block
         NSMenuItem *noCommitItem = [[NSMenuItem alloc] initWithTitle:@"No active commitment"
                                                               action:nil
                                                        keyEquivalent:@""];
@@ -187,6 +211,17 @@
     scheduleItem.target = self;
     [self.statusMenu addItem:scheduleItem];
 
+    // Try Test Block - always show when not committed, grey out if block active
+    if (!manager.isCommitted) {
+        NSString *title = blockIsRunning ? @"Try Test Block (block active)" : @"Try Test Block...";
+        NSMenuItem *testBlockMenuItem = [[NSMenuItem alloc] initWithTitle:title
+                                                               action:@selector(tryTestBlockClicked:)
+                                                        keyEquivalent:@""];
+        testBlockMenuItem.target = self;
+        testBlockMenuItem.enabled = !blockIsRunning;
+        [self.statusMenu addItem:testBlockMenuItem];
+    }
+
     // License option (reuse licenseStatus from above)
     if (licenseStatus != SCLicenseStatusValid) {
         [self.statusMenu addItem:[NSMenuItem separatorItem]];
@@ -198,9 +233,14 @@
         [self.statusMenu addItem:licenseItem];
     }
 
-    // View Blocklist - only when committed
-    if (manager.isCommitted) {
-        NSString *blocklistTitle = [self blocklistMenuTitle];
+    // View Blocklist - when committed OR test block active
+    if (manager.isCommitted || (blockIsRunning && isTestBlock)) {
+        NSString *blocklistTitle;
+        if (blockIsRunning && isTestBlock) {
+            blocklistTitle = [self testBlockBlocklistMenuTitle];
+        } else {
+            blocklistTitle = [self blocklistMenuTitle];
+        }
         NSMenuItem *blocklistItem = [[NSMenuItem alloc] initWithTitle:blocklistTitle
                                                                action:@selector(showBlocklistClicked:)
                                                         keyEquivalent:@""];
@@ -295,6 +335,26 @@
     return [NSString stringWithFormat:@"View Blocklist (%ld sites, %ld apps)", (long)siteCount, (long)appCount];
 }
 
+- (NSString *)testBlockBlocklistMenuTitle {
+    // For test blocks, count from ActiveBlocklist setting
+    NSArray *activeBlocklist = [[SCSettings sharedSettings] valueForKey:@"ActiveBlocklist"];
+    NSInteger siteCount = 0;
+    NSInteger appCount = 0;
+
+    for (id entry in activeBlocklist) {
+        if ([entry isKindOfClass:[NSString class]]) {
+            NSString *entryStr = (NSString *)entry;
+            if ([entryStr hasPrefix:@"app:"]) {
+                appCount++;
+            } else {
+                siteCount++;
+            }
+        }
+    }
+
+    return [NSString stringWithFormat:@"View Blocklist (%ld sites, %ld apps)", (long)siteCount, (long)appCount];
+}
+
 - (NSImage *)statusImage {
     // Load the fence image as a template (macOS will handle light/dark mode)
     NSImage *image = [NSImage imageNamed:@"MenuBarFence"];
@@ -354,6 +414,15 @@
     });
 }
 
+#pragma mark - NSMenuDelegate
+
+- (void)menuWillOpen:(NSMenu *)menu {
+    NSLog(@"[MENU DEBUG] menuWillOpen called - rebuilding menu");
+    // Rebuild menu fresh when opened to ensure latest state
+    [self rebuildMenu];
+    self.statusItem.menu = self.statusMenu;
+}
+
 #pragma mark - Actions
 
 - (void)openAppClicked:(id)sender {
@@ -366,6 +435,22 @@
     } else {
         [self.delegate menuBarControllerDidRequestOpenApp:self];
     }
+}
+
+- (void)tryTestBlockClicked:(id)sender {
+    // Don't open multiple windows
+    if (self.testBlockWindowController) {
+        [self.testBlockWindowController.window makeKeyAndOrderFront:nil];
+        [NSApp activateIgnoringOtherApps:YES];
+        return;
+    }
+
+    self.testBlockWindowController = [[SCTestBlockWindowController alloc] init];
+    self.testBlockWindowController.completionHandler = ^(BOOL didComplete) {
+        self.testBlockWindowController = nil;
+    };
+    [self.testBlockWindowController showWindow:nil];
+    [NSApp activateIgnoringOtherApps:YES];
 }
 
 - (void)showBlocklistClicked:(id)sender {

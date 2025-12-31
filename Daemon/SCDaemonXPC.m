@@ -233,4 +233,21 @@
     [[SCDaemonBlockMethods new] isPFBlockActiveWithReply:reply];
 }
 
+- (void)stopTestBlockWithReply:(void(^)(NSError* error))reply {
+    NSLog(@"XPC method called: stopTestBlock");
+
+    // NO authorization required - test blocks are meant to be freely stoppable
+    // But we MUST verify this is actually a test block
+    SCSettings* settings = [SCSettings sharedSettings];
+    BOOL isTestBlock = [[settings valueForKey:@"IsTestBlock"] boolValue];
+
+    if (!isTestBlock) {
+        NSLog(@"ERROR: stopTestBlock called but IsTestBlock=NO - refusing to stop");
+        reply([SCErr errorWithCode: 401 subDescription: @"Not a test block - cannot stop without emergency unlock"]);
+        return;
+    }
+
+    [SCDaemonBlockMethods stopTestBlock:reply];
+}
+
 @end
