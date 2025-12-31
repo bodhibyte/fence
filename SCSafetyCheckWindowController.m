@@ -18,7 +18,6 @@
 // Programmatic UI elements
 @property (nonatomic, strong) NSProgressIndicator* progressIndicator;
 @property (nonatomic, strong) NSTextField* statusLabel;
-@property (nonatomic, strong) NSButton* skipButton;
 @property (nonatomic, strong) NSButton* okButton;
 @property (nonatomic, strong) NSView* resultsView;
 @property (nonatomic, strong) NSTextField* resultTitleLabel;
@@ -126,14 +125,6 @@
     self.okButton.hidden = YES;
     [contentView addSubview:self.okButton];
 
-    // Skip button
-    self.skipButton = [[NSButton alloc] initWithFrame:NSMakeRect(20, buttonY, buttonWidth, 32)];
-    self.skipButton.bezelStyle = NSBezelStyleRounded;
-    self.skipButton.title = @"Skip";
-    self.skipButton.target = self;
-    self.skipButton.action = @selector(skipClicked:);
-    [contentView addSubview:self.skipButton];
-
     [self.window center];
 }
 
@@ -177,8 +168,6 @@
     self.resultTitleLabel.textColor = [NSColor labelColor];
 
     self.checkInProgress = YES;
-    self.skipButton.enabled = NO;
-    self.skipButton.hidden = NO;
     self.resultsView.hidden = YES;
     self.okButton.hidden = YES;
 
@@ -210,7 +199,6 @@
     dispatch_async(dispatch_get_main_queue(), ^{
         self.resultsView.hidden = NO;
         self.okButton.hidden = NO;
-        self.skipButton.hidden = YES;
 
         if (result.passed) {
             self.resultTitleLabel.stringValue = @"Safety Check Passed";
@@ -258,20 +246,6 @@
 
         self.progressIndicator.doubleValue = 100;
     });
-}
-
-- (IBAction)skipClicked:(id)sender {
-    if (self.checkInProgress) {
-        [self.safetyCheck cancel];
-    }
-
-    [SCVersionTracker updateLastTestedVersions];
-
-    if (self.skipHandler) {
-        self.skipHandler();
-    }
-
-    [self.window close];
 }
 
 - (IBAction)okClicked:(id)sender {
