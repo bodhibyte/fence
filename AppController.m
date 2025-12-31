@@ -549,22 +549,12 @@
 
 - (void)showSafetyCheckPrompt {
     NSAlert* alert = [[NSAlert alloc] init];
-    [alert setMessageText:@"Safety Check Recommended"];
-    [alert setInformativeText:@"Your macOS or Fence version has changed since the last safety check. Would you like to run a 30-second test to verify blocking works correctly?"];
-    [alert addButtonWithTitle:@"Run Test"];
-    [alert addButtonWithTitle:@"Skip"];
-    [alert addButtonWithTitle:@"Remind Me Later"];
+    [alert setMessageText:@"Safety Check Required"];
+    [alert setInformativeText:@"Your macOS or Fence version has changed since the last safety check. Running a 30-second test to verify blocking works correctly."];
+    [alert addButtonWithTitle:@"Continue"];
 
-    NSModalResponse response = [alert runModal];
-
-    if (response == NSAlertFirstButtonReturn) {
-        // Run Test
-        [self runSafetyCheck];
-    } else if (response == NSAlertSecondButtonReturn) {
-        // Skip - mark as tested
-        [SCStartupSafetyCheck skipSafetyCheck];
-    }
-    // Remind Me Later - do nothing, will prompt again next launch
+    [alert runModal];
+    [self runSafetyCheck];
 }
 
 - (void)runSafetyCheck {
