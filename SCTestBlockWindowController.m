@@ -37,7 +37,6 @@ typedef NS_ENUM(NSInteger, SCTestBlockState) {
 @property (nonatomic, strong) NSScrollView* blocklistScrollView;
 @property (nonatomic, strong) NSTableView* blocklistTableView;
 @property (nonatomic, strong) NSButton* startButton;
-@property (nonatomic, strong) NSButton* cancelButton;
 
 // Active view elements
 @property (nonatomic, strong) NSView* activeView;
@@ -222,13 +221,6 @@ typedef NS_ENUM(NSInteger, SCTestBlockState) {
 
     // Buttons at bottom
     CGFloat buttonY = 20;
-
-    self.cancelButton = [[NSButton alloc] initWithFrame:NSMakeRect(padding, buttonY, 80, 32)];
-    self.cancelButton.bezelStyle = NSBezelStyleRounded;
-    self.cancelButton.title = @"Cancel";
-    self.cancelButton.target = self;
-    self.cancelButton.action = @selector(cancelClicked:);
-    [self.setupView addSubview:self.cancelButton];
 
     self.startButton = [[NSButton alloc] initWithFrame:NSMakeRect(width - padding - 130, buttonY, 130, 32)];
     self.startButton.bezelStyle = NSBezelStyleRounded;
@@ -623,11 +615,13 @@ typedef NS_ENUM(NSInteger, SCTestBlockState) {
         [timer invalidate];
         self.updateTimer = nil;
 
-        // Bring window to front when test block completes
-        [self.window makeKeyAndOrderFront:nil];
-        [NSApp activateIgnoringOtherApps:YES];
-
         [self transitionToCompleteState];
+
+        // Bring window to front after delay (refreshUserInterface shows week schedule first)
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.6 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            [self.window makeKeyAndOrderFront:nil];
+            [self.window orderFrontRegardless];
+        });
     }
 }
 
