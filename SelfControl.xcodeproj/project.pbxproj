@@ -52,6 +52,8 @@
 		228355262EFB7C8100E77469 /* SCMenuBarController.m in Sources */ = {isa = PBXBuildFile; fileRef = 228355252EFB7C8100E77469 /* SCMenuBarController.m */; };
 		228355272EFB7C8100E77469 /* SCBundleEditorController.m in Sources */ = {isa = PBXBuildFile; fileRef = 228355212EFB7C8100E77469 /* SCBundleEditorController.m */; };
 		228355282EFB7C8100E77469 /* SCDayScheduleEditorController.m in Sources */ = {isa = PBXBuildFile; fileRef = 228355232EFB7C8100E77469 /* SCDayScheduleEditorController.m */; };
+		22AE30892F056A6D00B0FDE8 /* SCCalendarGridView.m in Sources */ = {isa = PBXBuildFile; fileRef = 22AE30882F056A6D00B0FDE8 /* SCCalendarGridView.m */; };
+		22AE308A2F056A6D00B0FDE8 /* SCBundleSidebarView.m in Sources */ = {isa = PBXBuildFile; fileRef = 22AE30862F056A6D00B0FDE8 /* SCBundleSidebarView.m */; };
 		22EB5C052F0552B4006A837E /* SCTestBlockWindowController.m in Sources */ = {isa = PBXBuildFile; fileRef = 22EB5C042F0552B4006A837E /* SCTestBlockWindowController.m */; };
 		2934E75ACAD30A9C99C7A2D3 /* SCScheduleLaunchdBridge.m in Sources */ = {isa = PBXBuildFile; fileRef = CF1441F5703140F3C25B9C5E /* SCScheduleLaunchdBridge.m */; };
 		2C6099A14B934A17B6C0087E /* AppBlocker.m in Sources */ = {isa = PBXBuildFile; fileRef = 2B4CBC9BC7A744309802C589 /* AppBlocker.m */; };
@@ -615,6 +617,10 @@
 		228355232EFB7C8100E77469 /* SCDayScheduleEditorController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = SCDayScheduleEditorController.m; sourceTree = "<group>"; };
 		228355242EFB7C8100E77469 /* SCMenuBarController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SCMenuBarController.h; sourceTree = "<group>"; };
 		228355252EFB7C8100E77469 /* SCMenuBarController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = SCMenuBarController.m; sourceTree = "<group>"; };
+		22AE30852F056A6D00B0FDE8 /* SCBundleSidebarView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SCBundleSidebarView.h; sourceTree = "<group>"; };
+		22AE30862F056A6D00B0FDE8 /* SCBundleSidebarView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = SCBundleSidebarView.m; sourceTree = "<group>"; };
+		22AE30872F056A6D00B0FDE8 /* SCCalendarGridView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SCCalendarGridView.h; sourceTree = "<group>"; };
+		22AE30882F056A6D00B0FDE8 /* SCCalendarGridView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = SCCalendarGridView.m; sourceTree = "<group>"; };
 		22EB5C032F0552B4006A837E /* SCTestBlockWindowController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SCTestBlockWindowController.h; sourceTree = "<group>"; };
 		22EB5C042F0552B4006A837E /* SCTestBlockWindowController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = SCTestBlockWindowController.m; sourceTree = "<group>"; };
 		2387372C4819C994AC3040AB /* SCVersionTracker.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = SCVersionTracker.h; path = Common/Utility/SCVersionTracker.h; sourceTree = "<group>"; };
@@ -1689,6 +1695,10 @@
 		29B97314FDCFA39411CA2CEA /* SelfControl */ = {
 			isa = PBXGroup;
 			children = (
+				22AE30852F056A6D00B0FDE8 /* SCBundleSidebarView.h */,
+				22AE30862F056A6D00B0FDE8 /* SCBundleSidebarView.m */,
+				22AE30872F056A6D00B0FDE8 /* SCCalendarGridView.h */,
+				22AE30882F056A6D00B0FDE8 /* SCCalendarGridView.m */,
 				22EB5C032F0552B4006A837E /* SCTestBlockWindowController.h */,
 				22EB5C042F0552B4006A837E /* SCTestBlockWindowController.m */,
 				224DFCF82F04180C00D97A1C /* SCLicenseWindowController.h */,
@@ -3938,6 +3948,8 @@
 				CBADC27E25B22BC7000EE5BB /* SCSentry.m in Sources */,
 				228354FE2EFB7BCB00E77469 /* SCTimeRange.m in Sources */,
 				8D11072D0486CEB800E47090 /* main.m in Sources */,
+				22AE30892F056A6D00B0FDE8 /* SCCalendarGridView.m in Sources */,
+				22AE308A2F056A6D00B0FDE8 /* SCBundleSidebarView.m in Sources */,
 				CB81AC2A25B909E1006956F7 /* SCUIUtilities.m in Sources */,
 				CB1CA66525ABA6240084A551 /* SCXPCAuthorization.m in Sources */,
 				CB529BBF0F32B7ED00564FB8 /* AppController.m in Sources */,
