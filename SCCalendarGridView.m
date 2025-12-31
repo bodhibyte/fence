@@ -33,39 +33,77 @@ static const CGFloat kDimmedOpacity = 0.2;
 
 @implementation SCAllowBlockView
 
+- (instancetype)initWithFrame:(NSRect)frame {
+    self = [super initWithFrame:frame];
+    if (self) {
+        self.wantsLayer = YES;
+        self.layer.cornerRadius = 6;
+    }
+    return self;
+}
+
+- (void)updateLayer {
+    [super updateLayer];
+    [self updateAppearance];
+}
+
+- (void)updateAppearance {
+    // Semi-transparent background + border (slightly more solid than status pills)
+    CGFloat bgAlpha = 0.4;
+    CGFloat borderAlpha = 0.6;
+
+    if (self.isDimmed) {
+        bgAlpha = 0.15;
+        borderAlpha = 0.3;
+    } else if (self.isSelected && !self.isCommitted) {
+        bgAlpha = 0.55;
+        borderAlpha = 0.85;
+    }
+
+    self.layer.backgroundColor = [self.color colorWithAlphaComponent:bgAlpha].CGColor;
+    self.layer.borderColor = [self.color colorWithAlphaComponent:borderAlpha].CGColor;
+    self.layer.borderWidth = self.isSelected ? 2.0 : 1.0;
+}
+
+- (void)setColor:(NSColor *)color {
+    _color = color;
+    [self updateAppearance];
+}
+
+- (void)setIsSelected:(BOOL)isSelected {
+    _isSelected = isSelected;
+    [self updateAppearance];
+}
+
+- (void)setIsDimmed:(BOOL)isDimmed {
+    _isDimmed = isDimmed;
+    [self updateAppearance];
+}
+
 - (void)drawRect:(NSRect)dirtyRect {
     [super drawRect:dirtyRect];
 
-    // Background fill
-    NSColor *fillColor = self.color;
-    if (self.isDimmed) {
-        fillColor = [fillColor colorWithAlphaComponent:kDimmedOpacity];
-    } else if (self.isSelected) {
-        fillColor = [fillColor colorWithAlphaComponent:0.9];
-    } else {
-        fillColor = [fillColor colorWithAlphaComponent:0.7];
-    }
-
-    NSBezierPath *path = [NSBezierPath bezierPathWithRoundedRect:self.bounds xRadius:4 yRadius:4];
-    [fillColor setFill];
-    [path fill];
-
-    // Border
-    if (self.isSelected && !self.isCommitted) {
-        [[self.color colorWithAlphaComponent:1.0] setStroke];
-        path.lineWidth = 2.0;
-        [path stroke];
-    }
-
-    // Time label if block is tall enough
+    // Time label if block is tall enough (2 lines with dash)
     if (self.bounds.size.height > 30 && self.timeRange) {
-        NSString *label = [self.timeRange displayString12Hour];
+        NSColor *textColor = self.isDimmed ?
+            [[NSColor labelColor] colorWithAlphaComponent:0.3] :
+            [NSColor labelColor];
+
         NSDictionary *attrs = @{
-            NSFontAttributeName: [NSFont systemFontOfSize:9],
-            NSForegroundColorAttributeName: self.isDimmed ? [[NSColor labelColor] colorWithAlphaComponent:0.3] : [NSColor labelColor]
+            NSFontAttributeName: [NSFont systemFontOfSize:10 weight:NSFontWeightMedium],
+            NSForegroundColorAttributeName: textColor
         };
-        CGFloat textY = self.bounds.size.height - 14;
-        [label drawAtPoint:NSMakePoint(4, textY) withAttributes:attrs];
+
+        // Format: "2:00am -" on line 1, "10:00pm" on line 2
+        NSString *startTime = [NSString stringWithFormat:@"%@ -",
+            [self.timeRange format12Hour:self.timeRange.startTime]];
+        NSString *endTime = [self.timeRange format12Hour:self.timeRange.endTime];
+
+        CGFloat lineHeight = 14;
+        CGFloat textY = self.bounds.size.height - lineHeight - 4;
+
+        [startTime drawAtPoint:NSMakePoint(6, textY) withAttributes:attrs];
+        [endTime drawAtPoint:NSMakePoint(6, textY - lineHeight) withAttributes:attrs];
     }
 }
 

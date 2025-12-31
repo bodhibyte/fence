@@ -48,6 +48,9 @@ NS_ASSUME_NONNULL_BEGIN
 /// Returns human-readable description with 12h format
 - (NSString *)displayString12Hour;
 
+/// Formats a 24h time string to 12h format (e.g., "14:30" -> "2:30pm")
+- (NSString *)format12Hour:(NSString *)time24;
+
 /// Validates the time range (start < end, valid times)
 - (BOOL)isValid;
 
