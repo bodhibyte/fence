@@ -593,6 +593,12 @@
 }
 
 - (void)showTestBlockAfterSafetyCheck {
+    // Close safety check window
+    if (self.safetyCheckWindowController) {
+        [self.safetyCheckWindowController.window close];
+        self.safetyCheckWindowController = nil;
+    }
+
     // Don't show test block if a block is already running
     if ([SCBlockUtilities anyBlockIsRunning]) {
         return;
@@ -600,8 +606,8 @@
 
     // Show alert offering to try test block
     NSAlert* alert = [[NSAlert alloc] init];
-    alert.messageText = @"Safety Check Passed!";
-    alert.informativeText = @"Would you like to try a test block? This lets you test blocking websites/apps for a short time (30 seconds to 5 minutes) with a free \"Stop\" button.";
+    alert.messageText = @"Would you like to try a test block? (Recommended)";
+    alert.informativeText = @"You can try this any time from the menu when outside an active block.";
     [alert addButtonWithTitle:@"Try Test Block"];
     [alert addButtonWithTitle:@"Maybe Later"];
 
