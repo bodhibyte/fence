@@ -262,14 +262,25 @@
             [userNoteCenter deliverNotification: endedNote];
 
 			[self closeTimerWindow];
-
-            // Show Week Schedule on app launch or when block ends
-            // (if committed, menu bar is sufficient - user chose their schedule)
-            SCScheduleManager *manager = [SCScheduleManager sharedManager];
-            if (![manager isCommitted]) {
-                [self showWeekSchedule:self];
-            }
 		}
+
+        // UI visibility logic OUTSIDE transition check (runs on every refresh)
+        // This ensures UI shows on cold launch, not just state transitions
+        SCScheduleManager *manager = [SCScheduleManager sharedManager];
+        if ([manager isCommitted]) {
+            // Committed state: show menu bar for access to schedule/settings
+            [[SCMenuBarController sharedController] setVisible:YES];
+            __weak typeof(self) weakSelf = self;
+            [SCMenuBarController sharedController].onShowSchedule = ^{
+                [weakSelf showWeekSchedule:weakSelf];
+            };
+            [SCMenuBarController sharedController].onShowBlocklist = ^{
+                [weakSelf showDomainList:weakSelf];
+            };
+        } else if (blockWasOn) {
+            // Not committed + just transitioned off: show week schedule
+            [self showWeekSchedule:self];
+        }
 
 		[self updateTimeSliderDisplay: blockDurationSlider_];
 
