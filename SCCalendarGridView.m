@@ -412,6 +412,9 @@ static const CGFloat kDimmedOpacity = 0.2;
 
             [self reloadBlocks];
 
+            // Make this column first responder so it receives keyboard events (for Delete key)
+            [self.window makeFirstResponder:self];
+
             // Tracking loop - captures all drag events, prevents NSScrollView from stealing them
             BOOL didActuallyDrag = NO;
             NSPoint startPoint = loc;
