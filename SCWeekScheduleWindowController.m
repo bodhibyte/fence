@@ -607,7 +607,7 @@ static BOOL const kUseCalendarUI = YES;
     alert.informativeText = [NSString stringWithFormat:
                              @"Once committed, the schedule is locked and cannot be modified. "
                              @"This commitment lasts until %@.\n\n"
-                             @"Blocking will start immediately for any in-progress block windows.", lastDay];
+                             @"You will still be able to add apps and websites to bundles.", lastDay];
     [alert addButtonWithTitle:@"Commit"];
     [alert addButtonWithTitle:@"Cancel"];
 
