@@ -104,6 +104,12 @@
 
 - (NSString *)format12Hour:(NSString *)time24 {
     NSInteger minutes = [self minutesFromTimeString:time24];
+
+    // Handle 24:00 (end of day midnight) explicitly
+    if (minutes == 24 * 60) {
+        return @"12:00am";
+    }
+
     NSInteger hours = minutes / 60;
     NSInteger mins = minutes % 60;
 
@@ -119,9 +125,10 @@
     NSInteger start = [self startMinutes];
     NSInteger end = [self endMinutes];
 
-    // Times must be in valid range
+    // Times must be in valid range (0-1439 for start, 0-1440 for end)
+    // End can be 1440 (24:00) to represent end of day
     if (start < 0 || start > 24 * 60 - 1) return NO;
-    if (end < 0 || end > 24 * 60 - 1) return NO;
+    if (end < 0 || end > 24 * 60) return NO;
 
     // End must be after start (we don't allow overnight in single range)
     return end >= start;
@@ -142,7 +149,7 @@
 }
 
 + (instancetype)allDay {
-    return [self rangeWithStart:@"00:00" end:@"23:59"];
+    return [self rangeWithStart:@"00:00" end:@"24:00"];
 }
 
 #pragma mark - NSCopying
