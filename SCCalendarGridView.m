@@ -47,6 +47,7 @@ static const CGFloat kDimmedOpacity = 0.2;
 @property (nonatomic, assign) BOOL isSelected;
 @property (nonatomic, assign) BOOL isDimmed;
 @property (nonatomic, assign) BOOL isCommitted;
+@property (nonatomic, assign) NSInteger timeLabelDisplayMode;  // 0=auto, 1=full, 2=fallback, 3=hidden
 
 @end
 
@@ -102,28 +103,57 @@ static const CGFloat kDimmedOpacity = 0.2;
 - (void)drawRect:(NSRect)dirtyRect {
     [super drawRect:dirtyRect];
 
-    // Time label if block is tall enough (2 lines with dash)
-    if (self.bounds.size.height > 30 && self.timeRange) {
-        NSColor *textColor = self.isDimmed ?
-            [[NSColor labelColor] colorWithAlphaComponent:0.3] :
-            [NSColor labelColor];
-
-        NSDictionary *attrs = @{
-            NSFontAttributeName: [NSFont systemFontOfSize:10 weight:NSFontWeightMedium],
-            NSForegroundColorAttributeName: textColor
-        };
-
-        // Format: "2:00am -" on line 1, "10:00pm" on line 2
-        NSString *startTime = [NSString stringWithFormat:@"%@ -",
-            [self.timeRange format12Hour:self.timeRange.startTime]];
-        NSString *endTime = [self.timeRange format12Hour:self.timeRange.endTime];
-
-        CGFloat lineHeight = 14;
-        CGFloat textY = self.bounds.size.height - lineHeight - 4;
-
-        [startTime drawAtPoint:NSMakePoint(6, textY) withAttributes:attrs];
-        [endTime drawAtPoint:NSMakePoint(6, textY - lineHeight) withAttributes:attrs];
+    // Early exit if height is insufficient
+    if (self.bounds.size.height <= 30 || !self.timeRange) {
+        return;
     }
+
+    NSColor *textColor = self.isDimmed ?
+        [[NSColor labelColor] colorWithAlphaComponent:0.3] :
+        [NSColor labelColor];
+
+    NSDictionary *attrs = @{
+        NSFontAttributeName: [NSFont systemFontOfSize:10 weight:NSFontWeightMedium],
+        NSForegroundColorAttributeName: textColor
+    };
+
+    // Prepare strings
+    NSString *startString = [self.timeRange format12Hour:self.timeRange.startTime];
+    NSString *fullStartString = [NSString stringWithFormat:@"%@ -", startString];
+    NSString *endString = [self.timeRange format12Hour:self.timeRange.endTime];
+
+    // Measure text widths (ceil to handle fractional pixels)
+    CGFloat fullStartWidth = ceil([fullStartString sizeWithAttributes:attrs].width);
+    CGFloat endWidth = ceil([endString sizeWithAttributes:attrs].width);
+
+    CGFloat margin = 3.0;
+    CGFloat availableWidth = self.bounds.size.width - (margin * 2);
+
+    // Use display mode from column if set, otherwise calculate locally
+    NSInteger displayMode = self.timeLabelDisplayMode;
+    if (displayMode == 0) {
+        // Auto-calculate: 1 = full, 2 = fallback, 3 = hidden
+        BOOL canFitFull = (availableWidth >= fullStartWidth) && (availableWidth >= endWidth);
+        CGFloat rawStartWidth = ceil([startString sizeWithAttributes:attrs].width);
+        BOOL canFitStart = (availableWidth >= rawStartWidth);
+
+        if (canFitFull) displayMode = 1;
+        else if (canFitStart) displayMode = 2;
+        else displayMode = 3;
+    }
+
+    CGFloat lineHeight = 14;
+    CGFloat textY = self.bounds.size.height - lineHeight - 4;
+
+    if (displayMode == 1) {
+        // Full: "2:00am -" on line 1, "10:00pm" on line 2
+        [fullStartString drawAtPoint:NSMakePoint(margin, textY) withAttributes:attrs];
+        [endString drawAtPoint:NSMakePoint(margin, textY - lineHeight) withAttributes:attrs];
+    } else if (displayMode == 2) {
+        // Fallback: just start time
+        [startString drawAtPoint:NSMakePoint(margin, textY) withAttributes:attrs];
+    }
+    // displayMode == 3: hidden, draw nothing
 }
 
 @end
@@ -318,6 +348,12 @@ static const CGFloat kDimmedOpacity = 0.2;
             [self addSubview:blockView];
             [_blockViews addObject:blockView];
         }
+    }
+
+    // Calculate unified display mode for all blocks (use the most constrained)
+    NSInteger unifiedDisplayMode = [self calculateUnifiedDisplayModeForBlocks:_blockViews];
+    for (SCAllowBlockView *blockView in _blockViews) {
+        blockView.timeLabelDisplayMode = unifiedDisplayMode;
     }
 
     // Render dragged existing block as overlay (during move/resize)
@@ -851,6 +887,50 @@ static const CGFloat kDimmedOpacity = 0.2;
         }
     }
     return nil;
+}
+
+/// Calculate unified display mode: find the most constrained block and use that mode for all
+/// Returns: 1=full, 2=fallback (start only), 3=hidden
+- (NSInteger)calculateUnifiedDisplayModeForBlocks:(NSArray<SCAllowBlockView *> *)blockViews {
+    if (blockViews.count == 0) return 1;
+
+    NSDictionary *attrs = @{
+        NSFontAttributeName: [NSFont systemFontOfSize:10 weight:NSFontWeightMedium],
+        NSForegroundColorAttributeName: [NSColor labelColor]
+    };
+    CGFloat margin = 3.0;
+
+    NSInteger worstMode = 1;  // Start with "full" (best case)
+
+    for (SCAllowBlockView *blockView in blockViews) {
+        if (!blockView.timeRange || blockView.bounds.size.height <= 30) {
+            // Too short for any labels
+            worstMode = MAX(worstMode, 3);
+            continue;
+        }
+
+        NSString *startString = [blockView.timeRange format12Hour:blockView.timeRange.startTime];
+        NSString *fullStartString = [NSString stringWithFormat:@"%@ -", startString];
+        NSString *endString = [blockView.timeRange format12Hour:blockView.timeRange.endTime];
+
+        CGFloat fullStartWidth = ceil([fullStartString sizeWithAttributes:attrs].width);
+        CGFloat endWidth = ceil([endString sizeWithAttributes:attrs].width);
+        CGFloat rawStartWidth = ceil([startString sizeWithAttributes:attrs].width);
+
+        CGFloat availableWidth = blockView.bounds.size.width - (margin * 2);
+
+        BOOL canFitFull = (availableWidth >= fullStartWidth) && (availableWidth >= endWidth);
+        BOOL canFitStart = (availableWidth >= rawStartWidth);
+
+        NSInteger blockMode;
+        if (canFitFull) blockMode = 1;
+        else if (canFitStart) blockMode = 2;
+        else blockMode = 3;
+
+        worstMode = MAX(worstMode, blockMode);
+    }
+
+    return worstMode;
 }
 
 #pragma mark - Dynamic Layout Computation
