@@ -142,9 +142,6 @@
     BOOL isTestBlock = [[[SCSettings sharedSettings] valueForKey:@"IsTestBlock"] boolValue];
     NSDate *blockEndDate = [[SCSettings sharedSettings] valueForKey:@"BlockEndDate"];
 
-    NSLog(@"[MENU DEBUG] rebuildMenu called - blockIsRunning=%d, isTestBlock=%d, blockEndDate=%@, isCommitted=%d",
-          blockIsRunning, isTestBlock, blockEndDate, manager.isCommitted);
-
     if (manager.isCommitted) {
         NSDateFormatter *endFormatter = [[NSDateFormatter alloc] init];
         endFormatter.dateFormat = @"EEEE";
@@ -411,7 +408,6 @@
 #pragma mark - NSMenuDelegate
 
 - (void)menuWillOpen:(NSMenu *)menu {
-    NSLog(@"[MENU DEBUG] menuWillOpen called - rebuilding menu");
     // Rebuild menu fresh when opened to ensure latest state
     [self rebuildMenu];
     self.statusItem.menu = self.statusMenu;
@@ -480,8 +476,6 @@
 
     // Rebuild menu to reflect new state
     [self rebuildMenu];
-
-    NSLog(@"[Debug] Trial reset to fresh state");
 }
 
 - (void)debugExpireTrial:(id)sender {
@@ -490,8 +484,6 @@
 
     // Rebuild menu to reflect new state
     [self rebuildMenu];
-
-    NSLog(@"[Debug] Trial expired");
 }
 #endif
 

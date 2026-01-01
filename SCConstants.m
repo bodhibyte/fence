@@ -50,7 +50,6 @@ OSStatus const AUTH_CANCELLED_STATUS = -60006;
             @"BlockDuration": @1,
             @"MaxBlockLength": @1440,
             @"WhitelistAlertSuppress": @NO,
-            @"GetStartedShown": @NO,
             @"EvaluateCommonSubdomains": @YES,
             @"IncludeLinkedDomains": @YES,
             @"BlockSoundShouldPlay": @NO,

@@ -56,7 +56,6 @@
 @end
 
 @implementation AppController {
-	NSWindowController* getStartedWindowController;
     BOOL appDidFinishLaunching_;
 }
 
@@ -293,11 +292,6 @@
 			[submitButton_ setTitle: NSLocalizedString(@"Starting Block", @"Starting Block button")];
 		}
 
-		// if block's off, and we haven't shown it yet, show the first-time modal
-		if (![defaults_ boolForKey: @"GetStartedShown"]) {
-			[defaults_ setBool: YES forKey: @"GetStartedShown"];
-			[self showGetStartedWindow: self];
-		}
 	}
 
     // finally: if the helper tool marked that it detected tampering, make sure
@@ -382,19 +376,6 @@
         [self applyFrostedGlassToPreferencesWindow];
 	}
 	[preferencesWindowController_ showWindow: nil];
-}
-
-- (IBAction)showGetStartedWindow:(id)sender {
-    [SCSentry addBreadcrumb: @"Showing \"Get Started\" window" category: @"app"];
-	if (!getStartedWindowController) {
-		getStartedWindowController = [[NSWindowController alloc] initWithWindowNibName: @"FirstTime"];
-
-        // Apply frosted glass styling to Get Started window
-        [self applyFrostedGlassToWindow:getStartedWindowController.window];
-	}
-	[getStartedWindowController.window center];
-	[getStartedWindowController.window makeKeyAndOrderFront: nil];
-	[getStartedWindowController showWindow: nil];
 }
 
 - (void)applicationWillFinishLaunching:(NSNotification *)notification {

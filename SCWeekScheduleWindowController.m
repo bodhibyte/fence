@@ -5,6 +5,8 @@
 
 #import "SCWeekScheduleWindowController.h"
 #import "SCWeekGridView.h"
+#import "SCBundleSidebarView.h"
+#import "SCCalendarGridView.h"
 #import "SCDayScheduleEditorController.h"
 #import "SCBundleEditorController.h"
 #import "SCMenuBarController.h"
@@ -15,7 +17,12 @@
 #import "Common/SCLicenseManager.h"
 #import "SCLicenseWindowController.h"
 
+// Feature flag to switch between old grid and new calendar UI
+static BOOL const kUseCalendarUI = YES;
+
 @interface SCWeekScheduleWindowController () <SCWeekGridViewDelegate,
+                                               SCBundleSidebarViewDelegate,
+                                               SCCalendarGridViewDelegate,
                                                SCDayScheduleEditorDelegate,
                                                SCBundleEditorDelegate,
                                                SCMenuBarControllerDelegate>
@@ -32,6 +39,11 @@
 @property (nonatomic, strong) NSButton *commitButton;
 @property (nonatomic, strong) NSTextField *commitmentLabel;
 
+// New Calendar UI Elements
+@property (nonatomic, strong) SCBundleSidebarView *bundleSidebar;
+@property (nonatomic, strong) SCCalendarGridView *calendarGridView;
+@property (nonatomic, copy, nullable) NSString *focusedBundleID;  // nil = All-Up state
+
 // Week navigation
 @property (nonatomic, strong) NSButton *prevWeekButton;
 @property (nonatomic, strong) NSButton *nextWeekButton;
@@ -43,12 +55,15 @@
 @property (nonatomic, strong, nullable) SCBundleEditorController *bundleEditorController;
 @property (nonatomic, strong, nullable) SCLicenseWindowController *licenseWindowController;
 
+// Flag to prevent redundant reloadData when grid updates schedule
+@property (nonatomic, assign) BOOL isUpdatingFromGrid;
+
 @end
 
 @implementation SCWeekScheduleWindowController
 
 - (instancetype)init {
-    NSRect frame = NSMakeRect(0, 0, 900, 700);
+    NSRect frame = NSMakeRect(0, 0, 1440, 1116);
     NSWindow *window = [[NSWindow alloc] initWithContentRect:frame
                                                    styleMask:(NSWindowStyleMaskTitled |
                                                              NSWindowStyleMaskClosable |
@@ -88,7 +103,8 @@
     [contentView addSubview:frostedBackground positioned:NSWindowBelow relativeTo:nil];
 
     CGFloat padding = 16;
-    CGFloat y = contentView.bounds.size.height - padding;
+    CGFloat topPadding = 32; // Extra space below traffic lights
+    CGFloat y = contentView.bounds.size.height - topPadding;
 
     // Title
     y -= 30;
@@ -138,7 +154,7 @@
     [contentView addSubview:self.nextWeekButton];
 
     // Status view - use semi-transparent background to work with frosted glass
-    y -= 55; // 50px height + 5px gap
+    y -= 66; // 50px height + 16px gap
     self.statusView = [[NSView alloc] initWithFrame:NSMakeRect(padding, y, contentView.bounds.size.width - padding * 2, 50)];
     self.statusView.wantsLayer = YES;
     self.statusView.layer.backgroundColor = [[NSColor.whiteColor colorWithAlphaComponent:0.1] CGColor];
@@ -156,33 +172,60 @@
     self.statusStackView.autoresizingMask = NSViewWidthSizable;
     [self.statusView addSubview:self.statusStackView];
 
-    // Week grid - position with minimal gap from status bar
+    // Main content area - either old grid or new calendar UI
     CGFloat bottomControlsHeight = 85; // Space for buttons at bottom
-    CGFloat gridHeight = y - bottomControlsHeight;
-    self.gridScrollView = [[NSScrollView alloc] initWithFrame:NSMakeRect(padding, bottomControlsHeight, contentView.bounds.size.width - padding * 2, gridHeight)];
-    self.gridScrollView.hasVerticalScroller = YES;
-    self.gridScrollView.hasHorizontalScroller = NO;
-    self.gridScrollView.autohidesScrollers = YES;
-    self.gridScrollView.borderType = NSNoBorder; // Remove border for cleaner look
-    self.gridScrollView.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+    CGFloat gapBelowStatus = 16; // Space between status bar and content
+    CGFloat mainAreaHeight = y - bottomControlsHeight - gapBelowStatus;
+    CGFloat sidebarWidth = 180;
 
-    self.weekGridView = [[SCWeekGridView alloc] initWithFrame:NSMakeRect(0, 0, self.gridScrollView.bounds.size.width, 300)];
-    self.weekGridView.delegate = self;
-    self.weekGridView.showOnlyRemainingDays = YES;
+    if (kUseCalendarUI) {
+        // NEW CALENDAR UI: Sidebar on left + Calendar on right
 
-    self.gridScrollView.documentView = self.weekGridView;
-    [contentView addSubview:self.gridScrollView];
+        // Bundle sidebar
+        self.bundleSidebar = [[SCBundleSidebarView alloc] initWithFrame:NSMakeRect(padding, bottomControlsHeight, sidebarWidth, mainAreaHeight)];
+        self.bundleSidebar.delegate = self;
+        self.bundleSidebar.autoresizingMask = NSViewHeightSizable | NSViewMaxXMargin;
+        [contentView addSubview:self.bundleSidebar];
+
+        // Calendar grid (to the right of sidebar)
+        CGFloat calendarX = padding + sidebarWidth + padding;
+        CGFloat calendarWidth = contentView.bounds.size.width - calendarX - padding;
+        self.calendarGridView = [[SCCalendarGridView alloc] initWithFrame:NSMakeRect(calendarX, bottomControlsHeight, calendarWidth, mainAreaHeight)];
+        self.calendarGridView.delegate = self;
+        self.calendarGridView.showOnlyRemainingDays = YES;
+        self.calendarGridView.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+        [contentView addSubview:self.calendarGridView];
+
+    } else {
+        // OLD GRID UI: Week grid takes full width
+        self.gridScrollView = [[NSScrollView alloc] initWithFrame:NSMakeRect(padding, bottomControlsHeight, contentView.bounds.size.width - padding * 2, mainAreaHeight)];
+        self.gridScrollView.hasVerticalScroller = YES;
+        self.gridScrollView.hasHorizontalScroller = NO;
+        self.gridScrollView.autohidesScrollers = YES;
+        self.gridScrollView.borderType = NSNoBorder;
+        self.gridScrollView.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+
+        self.weekGridView = [[SCWeekGridView alloc] initWithFrame:NSMakeRect(0, 0, self.gridScrollView.bounds.size.width, 300)];
+        self.weekGridView.delegate = self;
+        self.weekGridView.showOnlyRemainingDays = YES;
+
+        self.gridScrollView.documentView = self.weekGridView;
+        [contentView addSubview:self.gridScrollView];
+    }
 
     // Bottom buttons - positioned at fixed location above window bottom
     CGFloat buttonY = 45;
 
-    self.addBundleButton = [[NSButton alloc] initWithFrame:NSMakeRect(padding, buttonY, 120, 30)];
-    self.addBundleButton.title = @"+ Add Bundle";
-    self.addBundleButton.bezelStyle = NSBezelStyleRounded;
-    self.addBundleButton.target = self;
-    self.addBundleButton.action = @selector(addBundleClicked:);
-    self.addBundleButton.autoresizingMask = NSViewMaxYMargin; // Stay at bottom
-    [contentView addSubview:self.addBundleButton];
+    // Add Bundle button (only in old UI, sidebar has its own in new UI)
+    if (!kUseCalendarUI) {
+        self.addBundleButton = [[NSButton alloc] initWithFrame:NSMakeRect(padding, buttonY, 120, 30)];
+        self.addBundleButton.title = @"+ Add Bundle";
+        self.addBundleButton.bezelStyle = NSBezelStyleRounded;
+        self.addBundleButton.target = self;
+        self.addBundleButton.action = @selector(addBundleClicked:);
+        self.addBundleButton.autoresizingMask = NSViewMaxYMargin;
+        [contentView addSubview:self.addBundleButton];
+    }
 
     // Emergency Unlock button (red, next to commit button)
     self.emergencyUnlockButton = [[NSButton alloc] initWithFrame:NSMakeRect(contentView.bounds.size.width - padding - 150 - 10 - 160, buttonY, 160, 30)];
@@ -251,16 +294,45 @@
 
 - (void)reloadData {
     SCScheduleManager *manager = [SCScheduleManager sharedManager];
+    BOOL isCommitted = [manager isCommittedForWeekOffset:self.currentWeekOffset];
 
-    // Update grid with week-specific data
-    self.weekGridView.bundles = manager.bundles;
-    self.weekGridView.schedules = [manager schedulesForWeekOffset:self.currentWeekOffset];
-    self.weekGridView.isCommitted = [manager isCommittedForWeekOffset:self.currentWeekOffset];
+    if (kUseCalendarUI) {
+        // NEW CALENDAR UI: Update sidebar and calendar
 
-    // Show only remaining days for current week, all days for future weeks
-    self.weekGridView.showOnlyRemainingDays = (self.currentWeekOffset == 0);
-    self.weekGridView.weekOffset = self.currentWeekOffset;
-    [self.weekGridView reloadData];
+        // Update sidebar
+        self.bundleSidebar.bundles = manager.bundles;
+        self.bundleSidebar.selectedBundleID = self.focusedBundleID;
+        self.bundleSidebar.isCommitted = isCommitted;
+        [self.bundleSidebar reloadData];
+
+        // Update calendar grid
+        self.calendarGridView.bundles = manager.bundles;
+
+        // Build schedules dictionary
+        NSMutableDictionary *scheduleDict = [NSMutableDictionary dictionary];
+        for (SCBlockBundle *bundle in manager.bundles) {
+            SCWeeklySchedule *schedule = [manager scheduleForBundleID:bundle.bundleID weekOffset:self.currentWeekOffset];
+            if (schedule) {
+                scheduleDict[bundle.bundleID] = schedule;
+            }
+        }
+        self.calendarGridView.schedules = scheduleDict;
+
+        self.calendarGridView.focusedBundleID = self.focusedBundleID;
+        self.calendarGridView.isCommitted = isCommitted;
+        self.calendarGridView.showOnlyRemainingDays = (self.currentWeekOffset == 0);
+        self.calendarGridView.weekOffset = self.currentWeekOffset;
+        [self.calendarGridView reloadData];
+
+    } else {
+        // OLD GRID UI: Update grid with week-specific data
+        self.weekGridView.bundles = manager.bundles;
+        self.weekGridView.schedules = [manager schedulesForWeekOffset:self.currentWeekOffset];
+        self.weekGridView.isCommitted = isCommitted;
+        self.weekGridView.showOnlyRemainingDays = (self.currentWeekOffset == 0);
+        self.weekGridView.weekOffset = self.currentWeekOffset;
+        [self.weekGridView reloadData];
+    }
 
     // Update status (only for current week)
     [self updateStatusLabel];
@@ -537,7 +609,7 @@
     alert.informativeText = [NSString stringWithFormat:
                              @"Once committed, the schedule is locked and cannot be modified. "
                              @"This commitment lasts until %@.\n\n"
-                             @"Blocking will start immediately for any in-progress block windows.", lastDay];
+                             @"You will still be able to add apps and websites to bundles.", lastDay];
     [alert addButtonWithTitle:@"Commit"];
     [alert addButtonWithTitle:@"Cancel"];
 
@@ -678,6 +750,10 @@
 #pragma mark - Notifications
 
 - (void)scheduleDidChange:(NSNotification *)note {
+    // Skip redundant reload when the grid itself triggered the update
+    // (the grid already refreshes via handleScheduleUpdate)
+    if (self.isUpdatingFromGrid) return;
+
     dispatch_async(dispatch_get_main_queue(), ^{
         [self reloadData];
     });
@@ -727,6 +803,193 @@
     [self addBundleClicked:nil];
 }
 
+#pragma mark - SCBundleSidebarViewDelegate
+
+- (void)bundleSidebar:(SCBundleSidebarView *)sidebar didSelectBundle:(nullable SCBlockBundle *)bundle {
+    // Update focus state
+    self.focusedBundleID = bundle.bundleID;
+
+    // Update calendar grid with new focus
+    self.calendarGridView.focusedBundleID = self.focusedBundleID;
+    [self.calendarGridView reloadData];
+}
+
+- (void)bundleSidebarDidRequestAddBundle:(SCBundleSidebarView *)sidebar {
+    [self addBundleClicked:nil];
+}
+
+- (void)bundleSidebar:(SCBundleSidebarView *)sidebar didRequestEditBundle:(SCBlockBundle *)bundle {
+    SCScheduleManager *manager = [SCScheduleManager sharedManager];
+    self.bundleEditorController = [[SCBundleEditorController alloc] initWithBundle:bundle];
+    self.bundleEditorController.delegate = self;
+    self.bundleEditorController.isCommitted = [manager isCommittedForWeekOffset:self.currentWeekOffset];
+    [self.bundleEditorController beginSheetModalForWindow:self.window completionHandler:nil];
+}
+
+#pragma mark - SCCalendarGridViewDelegate
+
+- (void)calendarGrid:(SCCalendarGridView *)grid didUpdateSchedule:(SCWeeklySchedule *)schedule forBundleID:(NSString *)bundleID {
+    SCScheduleManager *manager = [SCScheduleManager sharedManager];
+
+    // Capture old schedule for undo
+    SCWeeklySchedule *oldSchedule = [manager scheduleForBundleID:bundleID weekOffset:self.currentWeekOffset];
+    NSInteger weekOffset = self.currentWeekOffset;
+
+    // Register undo action
+    [[grid.undoManager prepareWithInvocationTarget:self] restoreSchedule:oldSchedule
+                                                             forBundleID:bundleID
+                                                              weekOffset:weekOffset
+                                                            calendarGrid:grid];
+
+    // Save the updated schedule to the manager
+    // Set flag to prevent redundant reloadData (grid already updated itself)
+    self.isUpdatingFromGrid = YES;
+    [manager updateSchedule:schedule forWeekOffset:self.currentWeekOffset];
+    self.isUpdatingFromGrid = NO;
+}
+
+- (void)restoreSchedule:(SCWeeklySchedule *)schedule
+            forBundleID:(NSString *)bundleID
+             weekOffset:(NSInteger)weekOffset
+           calendarGrid:(SCCalendarGridView *)grid {
+    SCScheduleManager *manager = [SCScheduleManager sharedManager];
+
+    // Capture current state for redo
+    SCWeeklySchedule *currentSchedule = [manager scheduleForBundleID:bundleID weekOffset:weekOffset];
+    [[grid.undoManager prepareWithInvocationTarget:self] restoreSchedule:currentSchedule
+                                                             forBundleID:bundleID
+                                                              weekOffset:weekOffset
+                                                            calendarGrid:grid];
+
+    // Restore the old schedule
+    [manager updateSchedule:schedule forWeekOffset:weekOffset];
+
+    // Refresh the UI
+    [self reloadData];
+}
+
+- (void)calendarGridDidClickEmptyArea:(SCCalendarGridView *)grid {
+    // Clear focus - return to All-Up state
+    self.focusedBundleID = nil;
+    self.bundleSidebar.selectedBundleID = nil;
+    [self.bundleSidebar reloadData];
+    self.calendarGridView.focusedBundleID = nil;
+    [self.calendarGridView reloadData];
+}
+
+- (void)calendarGrid:(SCCalendarGridView *)grid didRequestEditBundle:(SCBlockBundle *)bundle forDay:(SCDayOfWeek)day {
+    // Open the day editor sheet for detailed editing
+    SCScheduleManager *manager = [SCScheduleManager sharedManager];
+
+    self.editingWeekOffset = self.currentWeekOffset;
+
+    SCWeeklySchedule *schedule = [manager scheduleForBundleID:bundle.bundleID weekOffset:self.editingWeekOffset];
+    if (!schedule) {
+        schedule = [manager createScheduleForBundle:bundle weekOffset:self.editingWeekOffset];
+    }
+
+    self.dayEditorController = [[SCDayScheduleEditorController alloc] initWithBundle:bundle
+                                                                            schedule:schedule
+                                                                                 day:day];
+    self.dayEditorController.delegate = self;
+    self.dayEditorController.isCommitted = [manager isCommittedForWeekOffset:self.editingWeekOffset];
+
+    [self.dayEditorController beginSheetModalForWindow:self.window completionHandler:nil];
+}
+
+- (void)calendarGridDidAttemptInteractionWithoutFocus:(SCCalendarGridView *)grid {
+    [self showSelectBundleWarning];
+}
+
+#pragma mark - Warning UI
+
+- (void)showSelectBundleWarning {
+    // Don't show multiple warnings at once
+    static BOOL isShowingWarning = NO;
+    if (isShowingWarning) return;
+    isShowingWarning = YES;
+
+    // Create thin frosted glass toast (like status pills but grey)
+    CGFloat toastWidth = 280;
+    CGFloat toastHeight = 28;
+
+    NSVisualEffectView *toast = [[NSVisualEffectView alloc] initWithFrame:NSMakeRect(0, 0, toastWidth, toastHeight)];
+    toast.blendingMode = NSVisualEffectBlendingModeBehindWindow;
+    toast.material = NSVisualEffectMaterialToolTip;  // Lighter, more translucent
+    toast.state = NSVisualEffectStateActive;
+    toast.wantsLayer = YES;
+    toast.layer.cornerRadius = toastHeight / 2;  // Pill shape like status pills
+
+    // Add subtle border for definition (like status pills)
+    toast.layer.borderWidth = 1.0;
+    toast.layer.borderColor = [[NSColor grayColor] colorWithAlphaComponent:0.3].CGColor;
+
+    // Add shadow for floating effect
+    toast.shadow = [[NSShadow alloc] init];
+    toast.shadow.shadowColor = [[NSColor blackColor] colorWithAlphaComponent:0.25];
+    toast.shadow.shadowOffset = NSMakeSize(0, -2);
+    toast.shadow.shadowBlurRadius = 8;
+
+    toast.alphaValue = 0;
+
+    // Add label with contextual message
+    SCScheduleManager *manager = [SCScheduleManager sharedManager];
+    NSString *message = (manager.bundles.count == 0)
+        ? @"To create allow block — create a bundle first"
+        : @"To create allow block — select a bundle first";
+    NSTextField *label = [NSTextField labelWithString:message];
+    label.font = [NSFont systemFontOfSize:11 weight:NSFontWeightMedium];
+    label.textColor = [NSColor secondaryLabelColor];
+    label.alignment = NSTextAlignmentCenter;
+    label.frame = NSMakeRect(0, (toastHeight - 16) / 2, toastWidth, 16);
+    [toast addSubview:label];
+
+    // Position toast near top center of calendar grid
+    NSRect gridFrame = self.calendarGridView.frame;
+    toast.frame = NSMakeRect(
+        gridFrame.origin.x + (gridFrame.size.width - toastWidth) / 2,
+        gridFrame.origin.y + gridFrame.size.height - 50,
+        toastWidth, toastHeight
+    );
+    [self.calendarGridView.superview addSubview:toast positioned:NSWindowAbove relativeTo:self.calendarGridView];
+
+    // Flash calendar border red
+    CALayer *flashLayer = [CALayer layer];
+    flashLayer.frame = self.calendarGridView.layer.bounds;
+    flashLayer.autoresizingMask = kCALayerWidthSizable | kCALayerHeightSizable;
+    flashLayer.zPosition = 1000;  // Stay on top of grid content
+    flashLayer.borderColor = [NSColor systemRedColor].CGColor;
+    flashLayer.borderWidth = 2.0;
+    flashLayer.cornerRadius = 4.0;
+    flashLayer.opacity = 0;
+    [self.calendarGridView.layer addSublayer:flashLayer];
+
+    // Animate toast in, hold, then out
+    [NSAnimationContext runAnimationGroup:^(NSAnimationContext *context) {
+        context.duration = 0.4;
+        toast.animator.alphaValue = 1.0;
+        flashLayer.opacity = 0.8;
+    } completionHandler:^{
+        // Flash out
+        [NSAnimationContext runAnimationGroup:^(NSAnimationContext *context) {
+            context.duration = 0.6;
+            flashLayer.opacity = 0;
+        } completionHandler:nil];
+
+        // Hold then fade out toast
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            [NSAnimationContext runAnimationGroup:^(NSAnimationContext *context) {
+                context.duration = 0.3;
+                toast.animator.alphaValue = 0;
+            } completionHandler:^{
+                [toast removeFromSuperview];
+                [flashLayer removeFromSuperlayer];
+                isShowingWarning = NO;
+            }];
+        });
+    }];
+}
+
 #pragma mark - SCDayScheduleEditorDelegate
 
 - (void)dayScheduleEditor:(SCDayScheduleEditorController *)editor
@@ -770,6 +1033,17 @@
 - (void)menuBarControllerDidRequestOpenApp:(SCMenuBarController *)controller {
     [self.window makeKeyAndOrderFront:nil];
     [NSApp activateIgnoringOtherApps:YES];
+}
+
+#pragma mark - Keyboard Handling
+
+- (void)cancelOperation:(id)sender {
+    // Escape key - progressive: first clear selection, then clear focus
+    if ([self.calendarGridView hasSelectedBlock]) {
+        [self.calendarGridView clearAllSelections];
+    } else if (self.focusedBundleID) {
+        [self calendarGridDidClickEmptyArea:self.calendarGridView];
+    }
 }
 
 @end

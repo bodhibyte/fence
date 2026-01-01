@@ -12,6 +12,7 @@ static const CGFloat kSnapMinutes = 15.0;
 static const CGFloat kEdgeDetectionZone = 10.0; // Pixels near edge for resize detection
 static const CGFloat kTimelinePaddingTop = 12.0;    // Padding so 12am label isn't cut off
 static const CGFloat kTimelinePaddingBottom = 12.0; // Padding so bottom 12am label isn't cut off
+static const CGFloat kDragThreshold = 5.0;  // Pixels to move before starting drag-to-create
 
 #pragma mark - SCTimelineView (Private)
 
@@ -36,6 +37,8 @@ static const CGFloat kTimelinePaddingBottom = 12.0; // Padding so bottom 12am la
 @property (nonatomic, assign) BOOL draggingEndEdge;
 @property (nonatomic, assign) BOOL draggingWholeBlock;
 @property (nonatomic, assign) BOOL isCreatingNewBlock;
+@property (nonatomic, assign) BOOL hasPendingEmptyAreaClick;  // Waiting for drag threshold
+@property (nonatomic, assign) NSPoint mouseDownPoint;
 @property (nonatomic, assign) CGFloat dragStartY;
 @property (nonatomic, assign) NSInteger dragStartMinutes;
 @property (nonatomic, strong, nullable) SCTimeRange *originalDragRange;
@@ -100,25 +103,47 @@ static const CGFloat kTimelinePaddingBottom = 12.0; // Padding so bottom 12am la
 
     BOOL cmdPressed = (flags & NSEventModifierFlagCommand) != 0;
     BOOL shiftPressed = (flags & NSEventModifierFlagShift) != 0;
-    BOOL isZ = [chars isEqualToString:@"z"];
 
-    // Cmd+Shift+Z = Redo (check first since it also has Cmd)
-    if (cmdPressed && shiftPressed && isZ) {
+    // Cmd+Q = Quit (close sheet first, then terminate to avoid bonk)
+    if (cmdPressed && !shiftPressed && [chars isEqualToString:@"q"]) {
+        NSWindow *sheet = self.window;
+        NSWindow *parent = sheet.sheetParent;
+        if (parent) {
+            [parent endSheet:sheet];
+        }
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [NSApp terminate:nil];
+        });
+        return YES;
+    }
+
+    // Cmd+W = Close sheet
+    if (cmdPressed && !shiftPressed && [chars isEqualToString:@"w"]) {
+        NSWindowController *controller = self.window.windowController;
+        if ([controller respondsToSelector:@selector(cancelClicked:)]) {
+            [controller performSelector:@selector(cancelClicked:) withObject:nil];
+            return YES;
+        }
+    }
+
+    // Cmd+Shift+Z = Redo
+    if (cmdPressed && shiftPressed && [chars isEqualToString:@"z"]) {
         if ([self.undoManager canRedo]) {
             [self.undoManager redo];
             return YES;
         }
     }
 
-    // Cmd+Z = Undo (without shift)
-    if (cmdPressed && !shiftPressed && isZ) {
+    // Cmd+Z = Undo
+    if (cmdPressed && !shiftPressed && [chars isEqualToString:@"z"]) {
         if ([self.undoManager canUndo]) {
             [self.undoManager undo];
             return YES;
         }
     }
 
-    return [super performKeyEquivalent:event];
+    // Let other key equivalents propagate
+    return NO;
 }
 
 - (void)addBlockWithUndo:(SCTimeRange *)block {
@@ -467,29 +492,47 @@ static const CGFloat kTimelinePaddingBottom = 12.0; // Padding so bottom 12am la
         return;
     }
 
-    // Single click on empty space - create new window with drag
+    // Click on empty space - wait for drag before creating
+    // (Don't create block yet - wait for drag threshold)
     if (!self.isCommitted) {
-        NSInteger minutes = [self snapToGrid:[self minutesFromY:point.y]];
-        SCTimeRange *newWindow = [SCTimeRange rangeWithStart:[self timeStringFromMinutes:minutes]
-                                                         end:[self timeStringFromMinutes:minutes + 60]];
-        [self.allowedWindows addObject:newWindow];
-        self.isDragging = YES;
-        self.isCreatingNewBlock = YES;  // Track that this is a new block
-        self.draggingWindowIndex = self.allowedWindows.count - 1;
-        self.draggingStartEdge = NO;
-        self.draggingEndEdge = YES;
-        self.draggingWholeBlock = NO;
+        self.hasPendingEmptyAreaClick = YES;
+        self.mouseDownPoint = point;
         self.dragStartY = point.y;
-
-        [self setNeedsDisplay:YES];
-        if (self.onWindowsChanged) self.onWindowsChanged();
+        self.dragStartMinutes = [self snapToGrid:[self minutesFromY:point.y]];
     }
 }
 
 - (void)mouseDragged:(NSEvent *)event {
-    if (!self.isDragging || self.draggingWindowIndex < 0) return;
-
     NSPoint point = [self convertPoint:event.locationInWindow fromView:nil];
+
+    // Check if we should start drag-to-create from a pending empty area click
+    if (self.hasPendingEmptyAreaClick && !self.isDragging) {
+        CGFloat dy = point.y - self.mouseDownPoint.y;
+        CGFloat distance = fabs(dy);
+
+        if (distance >= kDragThreshold) {
+            // Start creating new block via drag
+            self.hasPendingEmptyAreaClick = NO;
+
+            // Create the initial block
+            NSInteger minutes = self.dragStartMinutes;
+            SCTimeRange *newWindow = [SCTimeRange rangeWithStart:[self timeStringFromMinutes:minutes]
+                                                             end:[self timeStringFromMinutes:minutes + 15]];
+            [self.allowedWindows addObject:newWindow];
+
+            self.isDragging = YES;
+            self.isCreatingNewBlock = YES;
+            self.draggingWindowIndex = self.allowedWindows.count - 1;
+            self.draggingStartEdge = NO;
+            self.draggingEndEdge = YES;  // Resize from end as user drags
+            self.draggingWholeBlock = NO;
+
+            [self setNeedsDisplay:YES];
+            if (self.onWindowsChanged) self.onWindowsChanged();
+        }
+    }
+
+    if (!self.isDragging || self.draggingWindowIndex < 0) return;
     NSInteger minutes = [self snapToGrid:[self minutesFromY:point.y]];
     minutes = MAX(0, MIN(24 * 60, minutes));
 
@@ -549,6 +592,9 @@ static const CGFloat kTimelinePaddingBottom = 12.0; // Padding so bottom 12am la
 }
 
 - (void)mouseUp:(NSEvent *)event {
+    // Reset pending empty area click state
+    self.hasPendingEmptyAreaClick = NO;
+
     NSInteger draggedIndex = self.draggingWindowIndex;
     BOOL wasCreatingNew = self.isCreatingNewBlock;
     SCTimeRange *originalRange = self.originalDragRange;
@@ -699,8 +745,6 @@ static const CGFloat kTimelinePaddingBottom = 12.0; // Padding so bottom 12am la
 // UI Elements
 @property (nonatomic, strong) SCTimelineView *timelineView;
 @property (nonatomic, strong) NSTextField *titleLabel;
-@property (nonatomic, strong) NSPopUpButton *duplicateFromDayButton;
-@property (nonatomic, strong) NSPopUpButton *applyToButton;
 @property (nonatomic, strong) NSButton *deleteWindowButton;
 @property (nonatomic, strong) NSButton *doneButton;
 @property (nonatomic, strong) NSButton *cancelButton;
@@ -710,6 +754,9 @@ static const CGFloat kTimelinePaddingBottom = 12.0; // Padding so bottom 12am la
 @property (nonatomic, strong) NSDatePicker *startTimePicker;
 @property (nonatomic, strong) NSDatePicker *endTimePicker;
 @property (nonatomic, assign) NSInteger editingBlockIndex;
+
+// Event monitor for click-outside-to-close
+@property (nonatomic, strong) id clickOutsideMonitor;
 
 @end
 
@@ -814,49 +861,6 @@ static const CGFloat kTimelinePaddingBottom = 12.0; // Padding so bottom 12am la
     self.timelineView.layer.borderColor = [[NSColor separatorColor] CGColor];
     [contentView addSubview:self.timelineView];
 
-    // Copy schedule from another day
-    y -= 35;
-    NSTextField *copyLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(padding, y, 50, 20)];
-    copyLabel.stringValue = @"Copy:";
-    copyLabel.font = [NSFont systemFontOfSize:11];
-    copyLabel.bezeled = NO;
-    copyLabel.editable = NO;
-    copyLabel.drawsBackground = NO;
-    [contentView addSubview:copyLabel];
-
-    self.duplicateFromDayButton = [[NSPopUpButton alloc] initWithFrame:NSMakeRect(50, y - 2, 80, 22) pullsDown:YES];
-    [self.duplicateFromDayButton addItemWithTitle:@"Day..."];
-    for (SCDayOfWeek d = SCDayOfWeekSunday; d <= SCDayOfWeekSaturday; d++) {
-        if (d != self.day) {
-            [self.duplicateFromDayButton addItemWithTitle:[SCWeeklySchedule shortNameForDay:d]];
-        }
-    }
-    self.duplicateFromDayButton.target = self;
-    self.duplicateFromDayButton.action = @selector(copyFromSelected:);
-    self.duplicateFromDayButton.font = [NSFont systemFontOfSize:11];
-    self.duplicateFromDayButton.toolTip = @"Copy schedule from another day";
-    [contentView addSubview:self.duplicateFromDayButton];
-
-    // Apply this schedule to other days
-    NSTextField *applyLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(140, y, 70, 20)];
-    applyLabel.stringValue = @"Apply to:";
-    applyLabel.font = [NSFont systemFontOfSize:11];
-    applyLabel.bezeled = NO;
-    applyLabel.editable = NO;
-    applyLabel.drawsBackground = NO;
-    [contentView addSubview:applyLabel];
-
-    self.applyToButton = [[NSPopUpButton alloc] initWithFrame:NSMakeRect(200, y - 2, 85, 22) pullsDown:YES];
-    [self.applyToButton addItemWithTitle:@"Days..."];
-    [self.applyToButton addItemWithTitle:@"All Days"];
-    [self.applyToButton addItemWithTitle:@"Weekdays"];
-    [self.applyToButton addItemWithTitle:@"Weekend"];
-    self.applyToButton.target = self;
-    self.applyToButton.action = @selector(applyToSelected:);
-    self.applyToButton.font = [NSFont systemFontOfSize:11];
-    self.applyToButton.toolTip = @"Copy this schedule to other days";
-    [contentView addSubview:self.applyToButton];
-
     // Buttons
     y -= 45;
     self.cancelButton = [[NSButton alloc] initWithFrame:NSMakeRect(padding, y, 80, 30)];
@@ -881,80 +885,6 @@ static const CGFloat kTimelinePaddingBottom = 12.0; // Padding so bottom 12am la
 }
 
 #pragma mark - Actions
-
-- (void)copyFromSelected:(id)sender {
-    NSInteger index = self.duplicateFromDayButton.indexOfSelectedItem;
-    if (index <= 0) return;
-
-    // Map selection to day
-    NSString *dayName = [self.duplicateFromDayButton titleOfSelectedItem];
-    SCDayOfWeek sourceDay = SCDayOfWeekSunday;
-    for (SCDayOfWeek d = SCDayOfWeekSunday; d <= SCDayOfWeekSaturday; d++) {
-        if ([[SCWeeklySchedule shortNameForDay:d] isEqualToString:dayName]) {
-            sourceDay = d;
-            break;
-        }
-    }
-
-    NSArray<SCTimeRange *> *sourceWindows = [self.schedule allowedWindowsForDay:sourceDay];
-
-    // Block all copying when committed
-    if (self.isCommitted) {
-        NSAlert *alert = [[NSAlert alloc] init];
-        alert.messageText = @"Schedule Locked";
-        alert.informativeText = @"You're committed to this week. The schedule cannot be modified.";
-        [alert runModal];
-        return;
-    }
-
-    // Deep copy windows
-    NSMutableArray *copiedWindows = [NSMutableArray array];
-    for (SCTimeRange *window in sourceWindows) {
-        [copiedWindows addObject:[window copy]];
-    }
-
-    self.timelineView.allowedWindows = copiedWindows;
-    [self.timelineView setNeedsDisplay:YES];
-    [self timelineWindowsChanged];
-
-    [self.duplicateFromDayButton selectItemAtIndex:0];
-}
-
-- (void)applyToSelected:(id)sender {
-    NSInteger index = self.applyToButton.indexOfSelectedItem;
-    if (index <= 0) return;
-
-    NSArray<SCTimeRange *> *currentWindows = self.timelineView.allowedWindows;
-    NSArray<NSNumber *> *targetDays;
-
-    switch (index) {
-        case 1: // All
-            targetDays = @[@(SCDayOfWeekSunday), @(SCDayOfWeekMonday), @(SCDayOfWeekTuesday),
-                          @(SCDayOfWeekWednesday), @(SCDayOfWeekThursday), @(SCDayOfWeekFriday),
-                          @(SCDayOfWeekSaturday)];
-            break;
-        case 2: // Weekdays
-            targetDays = @[@(SCDayOfWeekMonday), @(SCDayOfWeekTuesday), @(SCDayOfWeekWednesday),
-                          @(SCDayOfWeekThursday), @(SCDayOfWeekFriday)];
-            break;
-        case 3: // Weekend
-            targetDays = @[@(SCDayOfWeekSaturday), @(SCDayOfWeekSunday)];
-            break;
-        default:
-            return;
-    }
-
-    for (NSNumber *dayNum in targetDays) {
-        SCDayOfWeek targetDay = [dayNum integerValue];
-        NSMutableArray *copiedWindows = [NSMutableArray array];
-        for (SCTimeRange *window in currentWindows) {
-            [copiedWindows addObject:[window copy]];
-        }
-        [self.workingSchedule setAllowedWindows:copiedWindows forDay:targetDay];
-    }
-
-    [self.applyToButton selectItemAtIndex:0];
-}
 
 - (void)doneClicked:(id)sender {
     // Save the current timeline state
@@ -1071,6 +1001,11 @@ static const CGFloat kTimelinePaddingBottom = 12.0; // Padding so bottom 12am la
 - (void)createTimeBlockFromPopover:(id)sender {
     NSInteger startMinutes = [self minutesFromDate:self.startTimePicker.dateValue];
     NSInteger endMinutes = [self minutesFromDate:self.endTimePicker.dateValue];
+
+    // Treat 00:00 (midnight) end time as 24:00 (end of day) when start is non-zero
+    if (endMinutes == 0 && startMinutes > 0) {
+        endMinutes = 24 * 60;
+    }
 
     // Validate
     if (endMinutes <= startMinutes) {
@@ -1266,6 +1201,11 @@ static const CGFloat kTimelinePaddingBottom = 12.0; // Padding so bottom 12am la
     NSInteger startMinutes = [self minutesFromDate:self.startTimePicker.dateValue];
     NSInteger endMinutes = [self minutesFromDate:self.endTimePicker.dateValue];
 
+    // Treat 00:00 (midnight) end time as 24:00 (end of day) when start is non-zero
+    if (endMinutes == 0 && startMinutes > 0) {
+        endMinutes = 24 * 60;
+    }
+
     // Validate
     if (endMinutes <= startMinutes) {
         NSAlert *alert = [[NSAlert alloc] init];
@@ -1310,11 +1250,65 @@ static const CGFloat kTimelinePaddingBottom = 12.0; // Padding so bottom 12am la
     [self.timelineView removeBlockAtIndexWithUndo:blockIndex];
 }
 
+#pragma mark - Click Outside Handling
+
+- (void)setupClickOutsideMonitor {
+    __weak typeof(self) weakSelf = self;
+    self.clickOutsideMonitor = [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskLeftMouseDown
+                                                                     handler:^NSEvent *(NSEvent *event) {
+        typeof(self) strongSelf = weakSelf;
+        if (!strongSelf) return event;
+
+        NSWindow *eventWindow = event.window;
+
+        // Don't close if click is in our window
+        if (eventWindow == strongSelf.window) {
+            return event;
+        }
+
+        // Don't close if click is in a popover (time input, edit block)
+        if (strongSelf.timeInputPopover.isShown || strongSelf.editBlockPopover.isShown) {
+            return event;
+        }
+
+        // Don't close if click is in an alert
+        if ([eventWindow.className containsString:@"Alert"]) {
+            return event;
+        }
+
+        // Click is in parent window (the background) - close editor
+        if (eventWindow == strongSelf.window.sheetParent) {
+            [strongSelf cancelClicked:nil];
+            return nil; // Consume the event
+        }
+
+        return event;
+    }];
+}
+
+- (void)removeClickOutsideMonitor {
+    if (self.clickOutsideMonitor) {
+        [NSEvent removeMonitor:self.clickOutsideMonitor];
+        self.clickOutsideMonitor = nil;
+    }
+}
+
+- (void)dealloc {
+    [self removeClickOutsideMonitor];
+}
+
 #pragma mark - Sheet Presentation
 
 - (void)beginSheetModalForWindow:(NSWindow *)parentWindow
                completionHandler:(void (^)(NSModalResponse))handler {
-    [parentWindow beginSheet:self.window completionHandler:handler];
+    [self setupClickOutsideMonitor];
+
+    [parentWindow beginSheet:self.window completionHandler:^(NSModalResponse response) {
+        [self removeClickOutsideMonitor];
+        if (handler) {
+            handler(response);
+        }
+    }];
 }
 
 @end
