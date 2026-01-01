@@ -72,6 +72,7 @@ static const CGFloat kDragThreshold = 5.0;  // Pixels to move before starting dr
 
 - (void)keyDown:(NSEvent *)event {
     unichar key = [[event charactersIgnoringModifiers] characterAtIndex:0];
+    NSLog(@"[KEY] SCTimelineView keyDown: key=%d ('%c') modifiers=%lu", key, key, (unsigned long)[event modifierFlags]);
 
     // Handle Escape key - close the editor
     if (key == 27) { // ESC key
@@ -103,25 +104,50 @@ static const CGFloat kDragThreshold = 5.0;  // Pixels to move before starting dr
 
     BOOL cmdPressed = (flags & NSEventModifierFlagCommand) != 0;
     BOOL shiftPressed = (flags & NSEventModifierFlagShift) != 0;
-    BOOL isZ = [chars isEqualToString:@"z"];
 
-    // Cmd+Shift+Z = Redo (check first since it also has Cmd)
-    if (cmdPressed && shiftPressed && isZ) {
+    NSLog(@"[KEY] SCTimelineView performKeyEquivalent: chars='%@' cmd=%d shift=%d", chars, cmdPressed, shiftPressed);
+
+    // Cmd+Q = Quit (close sheet first, then terminate to avoid bonk)
+    if (cmdPressed && !shiftPressed && [chars isEqualToString:@"q"]) {
+        NSLog(@"[KEY] Handling Cmd+Q - closing sheet then terminate");
+        NSWindow *sheet = self.window;
+        NSWindow *parent = sheet.sheetParent;
+        if (parent) {
+            [parent endSheet:sheet];
+        }
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [NSApp terminate:nil];
+        });
+        return YES;
+    }
+
+    // Cmd+W = Close sheet
+    if (cmdPressed && !shiftPressed && [chars isEqualToString:@"w"]) {
+        NSWindowController *controller = self.window.windowController;
+        if ([controller respondsToSelector:@selector(cancelClicked:)]) {
+            [controller performSelector:@selector(cancelClicked:) withObject:nil];
+            return YES;
+        }
+    }
+
+    // Cmd+Shift+Z = Redo
+    if (cmdPressed && shiftPressed && [chars isEqualToString:@"z"]) {
         if ([self.undoManager canRedo]) {
             [self.undoManager redo];
             return YES;
         }
     }
 
-    // Cmd+Z = Undo (without shift)
-    if (cmdPressed && !shiftPressed && isZ) {
+    // Cmd+Z = Undo
+    if (cmdPressed && !shiftPressed && [chars isEqualToString:@"z"]) {
         if ([self.undoManager canUndo]) {
             [self.undoManager undo];
             return YES;
         }
     }
 
-    return [super performKeyEquivalent:event];
+    // Let other key equivalents propagate
+    return NO;
 }
 
 - (void)addBlockWithUndo:(SCTimeRange *)block {
@@ -733,6 +759,9 @@ static const CGFloat kDragThreshold = 5.0;  // Pixels to move before starting dr
 @property (nonatomic, strong) NSDatePicker *endTimePicker;
 @property (nonatomic, assign) NSInteger editingBlockIndex;
 
+// Event monitor for click-outside-to-close
+@property (nonatomic, strong) id clickOutsideMonitor;
+
 @end
 
 @implementation SCDayScheduleEditorController
@@ -1225,11 +1254,65 @@ static const CGFloat kDragThreshold = 5.0;  // Pixels to move before starting dr
     [self.timelineView removeBlockAtIndexWithUndo:blockIndex];
 }
 
+#pragma mark - Click Outside Handling
+
+- (void)setupClickOutsideMonitor {
+    __weak typeof(self) weakSelf = self;
+    self.clickOutsideMonitor = [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskLeftMouseDown
+                                                                     handler:^NSEvent *(NSEvent *event) {
+        typeof(self) strongSelf = weakSelf;
+        if (!strongSelf) return event;
+
+        NSWindow *eventWindow = event.window;
+
+        // Don't close if click is in our window
+        if (eventWindow == strongSelf.window) {
+            return event;
+        }
+
+        // Don't close if click is in a popover (time input, edit block)
+        if (strongSelf.timeInputPopover.isShown || strongSelf.editBlockPopover.isShown) {
+            return event;
+        }
+
+        // Don't close if click is in an alert
+        if ([eventWindow.className containsString:@"Alert"]) {
+            return event;
+        }
+
+        // Click is in parent window (the background) - close editor
+        if (eventWindow == strongSelf.window.sheetParent) {
+            [strongSelf cancelClicked:nil];
+            return nil; // Consume the event
+        }
+
+        return event;
+    }];
+}
+
+- (void)removeClickOutsideMonitor {
+    if (self.clickOutsideMonitor) {
+        [NSEvent removeMonitor:self.clickOutsideMonitor];
+        self.clickOutsideMonitor = nil;
+    }
+}
+
+- (void)dealloc {
+    [self removeClickOutsideMonitor];
+}
+
 #pragma mark - Sheet Presentation
 
 - (void)beginSheetModalForWindow:(NSWindow *)parentWindow
                completionHandler:(void (^)(NSModalResponse))handler {
-    [parentWindow beginSheet:self.window completionHandler:handler];
+    [self setupClickOutsideMonitor];
+
+    [parentWindow beginSheet:self.window completionHandler:^(NSModalResponse response) {
+        [self removeClickOutsideMonitor];
+        if (handler) {
+            handler(response);
+        }
+    }];
 }
 
 @end
