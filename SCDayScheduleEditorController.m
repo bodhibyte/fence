@@ -22,6 +22,7 @@ static const CGFloat kDragThreshold = 5.0;  // Pixels to move before starting dr
 @property (nonatomic, strong) NSColor *bundleColor;
 @property (nonatomic, assign) BOOL isCommitted;
 @property (nonatomic, copy, nullable) void (^onWindowsChanged)(void);
+@property (nonatomic, copy, nullable) void (^onDragEnded)(void);  // Called after drag completes (for live merge)
 @property (nonatomic, copy, nullable) void (^onRequestTimeInput)(NSInteger suggestedMinutes);
 @property (nonatomic, copy, nullable) void (^onRequestEditBlock)(NSInteger blockIndex);
 @property (nonatomic, copy, nullable) void (^onRequestDeleteBlock)(NSInteger blockIndex);
@@ -538,7 +539,30 @@ static const CGFloat kDragThreshold = 5.0;  // Pixels to move before starting dr
 
     SCTimeRange *window = self.allowedWindows[self.draggingWindowIndex];
 
-    if (self.draggingStartEdge) {
+    if (self.isCreatingNewBlock) {
+        // ANCHOR PATTERN - use swap like SCCalendarGridView (lines 640-649)
+        // Block creation when committed
+        if (self.isCommitted) return;
+
+        NSInteger anchor = self.dragStartMinutes;
+        NSInteger current = minutes;
+
+        // Swap if dragging backwards (upward)
+        NSInteger start = MIN(anchor, current);
+        NSInteger end   = MAX(anchor, current);
+
+        // Enforce minimum 15-minute duration
+        if (end - start < 15) {
+            if (current < anchor) {
+                start = end - 15;  // Dragging up - move start up
+            } else {
+                end = start + 15;  // Dragging down - move end down
+            }
+        }
+
+        window.startTime = [self timeStringFromMinutes:start];
+        window.endTime   = [self timeStringFromMinutes:end];
+    } else if (self.draggingStartEdge) {
         // Block all resizing when committed
         if (self.isCommitted) return;
 
@@ -640,6 +664,9 @@ static const CGFloat kDragThreshold = 5.0;  // Pixels to move before starting dr
 
     [self setNeedsDisplay:YES];
     if (self.onWindowsChanged) self.onWindowsChanged();
+
+    // Trigger live merge after drag completes
+    if (self.onDragEnded) self.onDragEnded();
 }
 
 - (void)updateTrackingAreas {
@@ -844,6 +871,11 @@ static const CGFloat kDragThreshold = 5.0;  // Pixels to move before starting dr
     self.timelineView.onWindowsChanged = ^{
         [weakSelf timelineWindowsChanged];
     };
+    self.timelineView.onDragEnded = ^{
+        // Live merge overlapping blocks (silent, like SCCalendarGridView)
+        [weakSelf mergeOverlappingBlocks];
+        [weakSelf timelineWindowsChanged];  // Update schedule with merged result
+    };
     self.timelineView.onRequestTimeInput = ^(NSInteger suggestedMinutes) {
         [weakSelf showTimeInputPopoverAtMinutes:suggestedMinutes];
     };
@@ -887,25 +919,13 @@ static const CGFloat kDragThreshold = 5.0;  // Pixels to move before starting dr
 #pragma mark - Actions
 
 - (void)doneClicked:(id)sender {
+    // Merge any overlapping blocks silently (live merge happens on drag, but also handle popover edits)
+    if ([self hasOverlappingBlocks]) {
+        [self mergeOverlappingBlocks];
+    }
+
     // Save the current timeline state
     [self timelineWindowsChanged];
-
-    // Check for overlapping blocks
-    if ([self hasOverlappingBlocks]) {
-        NSAlert *alert = [[NSAlert alloc] init];
-        alert.messageText = @"Overlapping Time Blocks";
-        alert.informativeText = @"Some time blocks overlap. They will be merged when you save.";
-        [alert addButtonWithTitle:@"Merge & Save"];
-        [alert addButtonWithTitle:@"Cancel"];
-        alert.alertStyle = NSAlertStyleWarning;
-
-        if ([alert runModal] == NSAlertFirstButtonReturn) {
-            [self mergeOverlappingBlocks];
-            [self timelineWindowsChanged];
-        } else {
-            return;  // User cancelled
-        }
-    }
 
     [self.delegate dayScheduleEditor:self didSaveSchedule:self.workingSchedule forDay:self.day];
     [self.window.sheetParent endSheet:self.window returnCode:NSModalResponseOK];
