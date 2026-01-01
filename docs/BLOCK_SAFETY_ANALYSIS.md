@@ -395,6 +395,7 @@ If both daemon and emergency.sh fail, users with root access can still:
 
 ## Related Documentation
 
+- [REBOOT_SAFETY_ANALYSIS.md](REBOOT_SAFETY_ANALYSIS.md) - Daemon reboot/restart persistence mechanisms
 - [BLOCKING_MECHANISM.md](BLOCKING_MECHANISM.md) - How blocking works technically
 - [SYSTEM_ARCHITECTURE.md](../SYSTEM_ARCHITECTURE.md) - Overall system design
 - [dictionary/committed-state.md](dictionary/committed-state.md) - Commitment terminology
