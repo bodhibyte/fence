@@ -146,8 +146,11 @@ static const CGFloat kDimmedOpacity = 0.2;
 @property (nonatomic, copy, nullable) void (^onEmptyAreaClicked)(void);
 @property (nonatomic, copy, nullable) void (^onBlockDoubleClicked)(SCBlockBundle *bundle);
 @property (nonatomic, copy, nullable) void (^onNoFocusInteraction)(void);  // Warning when interacting without bundle focus
+@property (nonatomic, copy, nullable) void (^onColumnClicked)(void);  // Any click in the column
+@property (nonatomic, copy, nullable) void (^onBlockSelected)(void);  // Block was selected (for clearing other selections)
 
 - (void)reloadBlocks;
+- (void)clearSelection;
 - (CGFloat)yFromMinutes:(NSInteger)minutes;
 - (NSInteger)minutesFromY:(CGFloat)y;
 
@@ -274,6 +277,14 @@ static const CGFloat kDimmedOpacity = 0.2;
         [line stroke];
     }
 
+    // Right edge separator line (day column divider)
+    [[NSColor colorWithWhite:0.3 alpha:1.0] setStroke];
+    NSBezierPath *separator = [NSBezierPath bezierPath];
+    [separator moveToPoint:NSMakePoint(self.bounds.size.width - 0.5, 0)];
+    [separator lineToPoint:NSMakePoint(self.bounds.size.width - 0.5, self.bounds.size.height)];
+    separator.lineWidth = 1.0;
+    [separator stroke];
+
     // NOW line (if today)
     if (self.isToday) {
         NSCalendar *calendar = [NSCalendar currentCalendar];
@@ -292,9 +303,20 @@ static const CGFloat kDimmedOpacity = 0.2;
     }
 }
 
+- (void)clearSelection {
+    self.selectedBlockIndex = -1;
+    self.selectedBundleID = nil;
+    [self reloadBlocks];
+}
+
 #pragma mark - Mouse Events
 
 - (void)mouseDown:(NSEvent *)event {
+    // Notify that this column was clicked (for tracking last clicked day)
+    if (self.onColumnClicked) {
+        self.onColumnClicked();
+    }
+
     if (self.isCommitted) return;
 
     NSPoint loc = [self convertPoint:event.locationInWindow fromView:nil];
@@ -315,7 +337,10 @@ static const CGFloat kDimmedOpacity = 0.2;
                 return;
             }
 
-            // Single click on block - select it and prepare for drag/resize
+            // Single click on block - clear all other selections first, then select this one
+            if (self.onBlockSelected) {
+                self.onBlockSelected();  // Parent will clear ALL selections
+            }
             self.selectedBundleID = blockBundleID;
 
             // Find index in this bundle's schedule
@@ -486,7 +511,49 @@ static const CGFloat kDimmedOpacity = 0.2;
     self.draggingBundleID = nil;
 }
 
+- (void)mouseMoved:(NSEvent *)event {
+    if (self.isCommitted) {
+        [[NSCursor arrowCursor] set];
+        return;
+    }
+
+    NSPoint loc = [self convertPoint:event.locationInWindow fromView:nil];
+
+    // Check if over any block
+    for (SCAllowBlockView *blockView in _blockViews) {
+        if (NSPointInRect(loc, blockView.frame)) {
+            CGFloat relY = loc.y - blockView.frame.origin.y;
+
+            // Near top or bottom edge = resize cursor
+            if (relY < kEdgeDetectionZone || relY > blockView.frame.size.height - kEdgeDetectionZone) {
+                [[NSCursor resizeUpDownCursor] set];
+            } else {
+                // Middle of block = grab cursor
+                [[NSCursor openHandCursor] set];
+            }
+            return;
+        }
+    }
+
+    // Not over a block = arrow cursor
+    [[NSCursor arrowCursor] set];
+}
+
 - (void)keyDown:(NSEvent *)event {
+    // Escape key - progressive: first clear selection, then clear focus
+    if (event.keyCode == 53) {  // Escape
+        if (self.selectedBlockIndex >= 0) {
+            // First: clear block selection
+            self.selectedBlockIndex = -1;
+            self.selectedBundleID = nil;
+            [self reloadBlocks];
+        } else if (self.onEmptyAreaClicked) {
+            // Second: clear bundle focus
+            self.onEmptyAreaClicked();
+        }
+        return;
+    }
+
     if (self.isCommitted) return;
 
     // Delete key removes selected block
@@ -569,6 +636,11 @@ static const CGFloat kDimmedOpacity = 0.2;
 @property (nonatomic, strong) NSView *columnsContainer;
 @property (nonatomic, strong) NSMutableArray<SCCalendarDayColumn *> *dayColumns;
 @property (nonatomic, strong) NSMutableArray<NSTextField *> *dayLabels;
+
+// Copy/paste state
+@property (nonatomic, strong, nullable) SCTimeRange *copiedBlock;
+@property (nonatomic, copy, nullable) NSString *copiedBundleID;
+@property (nonatomic, assign) SCDayOfWeek lastClickedDay;
 
 @end
 
@@ -709,22 +781,36 @@ static const CGFloat kDimmedOpacity = 0.2;
 
         // Set callbacks
         __weak typeof(self) weakSelf = self;
+        SCDayOfWeek capturedDay = day;  // Capture day for callbacks
         column.onScheduleUpdated = ^(NSString *bundleID, SCWeeklySchedule *schedule) {
+            weakSelf.lastClickedDay = capturedDay;
             [weakSelf handleScheduleUpdate:schedule forBundleID:bundleID];
         };
         column.onEmptyAreaClicked = ^{
+            weakSelf.lastClickedDay = capturedDay;
             if ([weakSelf.delegate respondsToSelector:@selector(calendarGridDidClickEmptyArea:)]) {
                 [weakSelf.delegate calendarGridDidClickEmptyArea:weakSelf];
             }
         };
         column.onBlockDoubleClicked = ^(SCBlockBundle *bundle) {
+            weakSelf.lastClickedDay = capturedDay;
             if ([weakSelf.delegate respondsToSelector:@selector(calendarGrid:didRequestEditBundle:forDay:)]) {
                 [weakSelf.delegate calendarGrid:weakSelf didRequestEditBundle:bundle forDay:day];
             }
         };
         column.onNoFocusInteraction = ^{
+            weakSelf.lastClickedDay = capturedDay;
             if ([weakSelf.delegate respondsToSelector:@selector(calendarGridDidAttemptInteractionWithoutFocus:)]) {
                 [weakSelf.delegate calendarGridDidAttemptInteractionWithoutFocus:weakSelf];
+            }
+        };
+        column.onColumnClicked = ^{
+            weakSelf.lastClickedDay = capturedDay;
+        };
+        column.onBlockSelected = ^{
+            // Clear selection in ALL columns (single selection only)
+            for (SCCalendarDayColumn *col in weakSelf.dayColumns) {
+                [col clearSelection];
             }
         };
 
@@ -807,11 +893,86 @@ static const CGFloat kDimmedOpacity = 0.2;
         }
     }
 
+    // Cmd+C = Copy selected block
+    if (cmdPressed && !shiftPressed && [chars isEqualToString:@"c"]) {
+        // Find the selected block from any day column
+        for (SCCalendarDayColumn *column in self.dayColumns) {
+            if (column.selectedBundleID && column.selectedBlockIndex >= 0) {
+                SCWeeklySchedule *schedule = self.schedules[column.selectedBundleID];
+                NSArray *windows = [schedule allowedWindowsForDay:column.day];
+                if (column.selectedBlockIndex < (NSInteger)windows.count) {
+                    self.copiedBlock = [windows[column.selectedBlockIndex] copy];
+                    self.copiedBundleID = column.selectedBundleID;
+                    return YES;
+                }
+            }
+        }
+    }
+
+    // Cmd+V = Paste block to focused bundle on last clicked day
+    if (cmdPressed && !shiftPressed && [chars isEqualToString:@"v"]) {
+        if (self.copiedBlock && self.focusedBundleID) {
+            // Paste to the last clicked day column
+            for (SCCalendarDayColumn *column in self.dayColumns) {
+                if (column.day == self.lastClickedDay) {
+                    SCWeeklySchedule *schedule = [self.schedules[self.focusedBundleID] copy];
+                    if (!schedule) {
+                        schedule = [SCWeeklySchedule emptyScheduleForBundleID:self.focusedBundleID];
+                    }
+
+                    NSMutableArray *windows = [[schedule allowedWindowsForDay:column.day] mutableCopy];
+                    if (!windows) windows = [NSMutableArray array];
+
+                    // Add copied block
+                    [windows addObject:[self.copiedBlock copy]];
+                    [schedule setAllowedWindows:windows forDay:column.day];
+
+                    if (column.onScheduleUpdated) {
+                        column.onScheduleUpdated(self.focusedBundleID, schedule);
+                    }
+                    return YES;
+                }
+            }
+        }
+    }
+
     return [super performKeyEquivalent:event];
+}
+
+- (void)keyDown:(NSEvent *)event {
+    NSLog(@"SCCalendarGridView keyDown: keyCode=%hu, focusedBundleID=%@, delegate=%@",
+          event.keyCode, self.focusedBundleID, self.delegate);
+
+    // Escape key - progressive: first clear selection, THEN clear focus
+    if (event.keyCode == 53) {  // Escape key
+        if ([self hasSelectedBlock]) {
+            [self clearAllSelections];
+        } else if (self.focusedBundleID) {
+            [self.delegate calendarGridDidClickEmptyArea:self];
+        }
+        return;
+    }
+
+    [super keyDown:event];
 }
 
 - (BOOL)acceptsFirstResponder {
     return YES;
+}
+
+- (BOOL)hasSelectedBlock {
+    for (SCCalendarDayColumn *column in self.dayColumns) {
+        if (column.selectedBlockIndex >= 0) {
+            return YES;
+        }
+    }
+    return NO;
+}
+
+- (void)clearAllSelections {
+    for (SCCalendarDayColumn *column in self.dayColumns) {
+        [column clearSelection];
+    }
 }
 
 @end
