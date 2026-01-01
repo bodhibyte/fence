@@ -259,10 +259,21 @@
     // Returns just the "till X" part - caller adds "blocked"/"allowed"
     NSDate *nextChange = [self nextStateChangeDate];
     if (nextChange) {
+        NSCalendar *calendar = [NSCalendar currentCalendar];
+
+        // When currently allowed, show the last allowed minute (subtract 1 min)
+        // nextStateChangeDate returns first minute of NEXT state, but users expect
+        // "allowed till X" where X is the last allowed minute, not first blocked minute
+        if ([self isAllowedNow]) {
+            nextChange = [calendar dateByAddingUnit:NSCalendarUnitMinute
+                                              value:-1
+                                             toDate:nextChange
+                                            options:0];
+        }
+
         NSDateFormatter *formatter = [[NSDateFormatter alloc] init];
 
         // Check if next change is today - if so, just show time; otherwise include day
-        NSCalendar *calendar = [NSCalendar currentCalendar];
         if ([calendar isDateInToday:nextChange]) {
             formatter.dateFormat = @"h:mma";  // Just time: "5:00pm"
         } else {
