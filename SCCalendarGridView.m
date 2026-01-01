@@ -1074,6 +1074,7 @@ static const CGFloat kDimmedOpacity = 0.2;
 
     self.columnsContainer = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, availableWidth, timelineHeight)];
     self.columnsContainer.wantsLayer = YES;
+    self.columnsContainer.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
     self.scrollView.documentView = self.columnsContainer;
     [self addSubview:self.scrollView];
 
@@ -1142,10 +1143,14 @@ static const CGFloat kDimmedOpacity = 0.2;
 
     if (days.count == 0) return;
 
-    // Calculate column width
+    // Calculate column width and timeline height from scrollView (source of truth for available space)
     CGFloat availableWidth = self.headerContainer.bounds.size.width;
     CGFloat columnWidth = availableWidth / days.count;
-    CGFloat timelineHeight = self.columnsContainer.bounds.size.height;
+    CGFloat timelineHeight = self.scrollView.contentSize.height;
+
+    // Update hour label container and labels for new height
+    self.hourLabelContainer.frame = NSMakeRect(0, 0, kHourLabelWidth, timelineHeight);
+    [self setupHourLabels];
 
     // Determine today's day
     SCDayOfWeek today = [SCWeeklySchedule today];
