@@ -268,6 +268,35 @@ static const CGFloat kDimmedOpacity = 0.2;
         laneIndex++;
     }
 
+    // Render creation preview block (not in schedule yet)
+    if (self.isCreatingBlock && self.draggingRange && self.draggingBundleID) {
+        NSInteger previewLaneIndex = 0;
+        SCBlockBundle *previewBundle = nil;
+        for (SCBlockBundle *bundle in self.bundles) {
+            if ([bundle.bundleID isEqualToString:self.draggingBundleID]) {
+                previewBundle = bundle;
+                break;
+            }
+            previewLaneIndex++;
+        }
+
+        if (previewBundle) {
+            CGFloat laneX = kLanePadding + previewLaneIndex * laneWidth;
+            CGFloat y = [self yFromMinutes:[self.draggingRange startMinutes]];
+            CGFloat height = [self yFromMinutes:[self.draggingRange endMinutes]] - y;
+
+            NSRect blockFrame = NSMakeRect(laneX, y, laneWidth - kLanePadding, height);
+            SCAllowBlockView *blockView = [[SCAllowBlockView alloc] initWithFrame:blockFrame];
+            blockView.timeRange = self.draggingRange;
+            blockView.color = previewBundle.color;
+            blockView.bundleID = previewBundle.bundleID;
+            blockView.isCommitted = NO;
+
+            [self addSubview:blockView];
+            [_blockViews addObject:blockView];
+        }
+    }
+
     [self setNeedsDisplay:YES];
 }
 
