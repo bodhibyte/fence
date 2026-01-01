@@ -476,7 +476,7 @@ typedef NS_ENUM(NSInteger, SCTestBlockState) {
         @"IsTestBlock": @YES,
         @"ClearCaches": @NO,
         @"AllowLocalNetworks": @YES,
-        @"EvaluateCommonSubdomains": @NO,
+        @"EvaluateCommonSubdomains": @YES,
         @"IncludeLinkedDomains": @NO,
         @"BlockSoundShouldPlay": @NO,
         @"EnableErrorReporting": @NO

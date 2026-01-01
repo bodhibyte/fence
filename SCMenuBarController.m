@@ -205,7 +205,7 @@
 
     // Try Test Block - always show when not committed, grey out if block active
     if (!manager.isCommitted) {
-        NSMenuItem *testBlockMenuItem = [[NSMenuItem alloc] initWithTitle:@"Try Test Block..."
+        NSMenuItem *testBlockMenuItem = [[NSMenuItem alloc] initWithTitle:@"Try Test Block"
                                                                action:@selector(tryTestBlockClicked:)
                                                         keyEquivalent:@""];
         testBlockMenuItem.target = self;
