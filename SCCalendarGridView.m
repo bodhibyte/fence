@@ -247,7 +247,9 @@ static const CGFloat kDimmedOpacity = 0.2;
 }
 
 - (NSInteger)snapToGrid:(NSInteger)minutes {
-    return (NSInteger)(round(minutes / kSnapMinutes) * kSnapMinutes);
+    // Use lround and integer multiplication to avoid floating-point truncation errors
+    // (e.g., round(47.0) * 15.0 = 704.9999... truncates to 704 instead of 705)
+    return (NSInteger)lround(minutes / kSnapMinutes) * (NSInteger)kSnapMinutes;
 }
 
 - (void)reloadBlocks {
@@ -517,7 +519,8 @@ static const CGFloat kDimmedOpacity = 0.2;
             self.draggingRange = [blockView.timeRange copy];
             self.originalDragRange = [blockView.timeRange copy];
             self.dragStartY = loc.y;
-            self.dragStartMinutes = [self minutesFromY:loc.y];
+            // MUST snap dragStartMinutes so delta calculations stay on 15-min grid
+            self.dragStartMinutes = [self snapToGrid:[self minutesFromY:loc.y]];
 
             NSLog(@"[DRAG] mouseDown on block: isDragging=%d isMoving=%d isResizeTop=%d isResizeBot=%d bundleID=%@ selIdx=%ld",
                   self.isDragging, self.isMovingBlock, self.isResizingTop, self.isResizingBottom,
