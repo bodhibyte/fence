@@ -469,6 +469,15 @@ static const CGFloat kDimmedOpacity = 0.2;
         return;
     }
 
+    // Double-click on empty area with focused bundle - open editor
+    if (event.clickCount == 2) {
+        SCBlockBundle *bundle = [self bundleForID:self.focusedBundleID];
+        if (bundle && self.onBlockDoubleClicked) {
+            self.onBlockDoubleClicked(bundle);
+        }
+        return;
+    }
+
     // Empty area click with focus - record position for potential drag-to-create
     // (Don't create block yet - wait for drag threshold)
     // Clear selection in other columns when clicking empty area

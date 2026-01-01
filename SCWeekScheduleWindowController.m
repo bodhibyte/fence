@@ -920,8 +920,12 @@ static BOOL const kUseCalendarUI = YES;
 
     toast.alphaValue = 0;
 
-    // Add label with clearer message
-    NSTextField *label = [NSTextField labelWithString:@"To create allow block — select a bundle first"];
+    // Add label with contextual message
+    SCScheduleManager *manager = [SCScheduleManager sharedManager];
+    NSString *message = (manager.bundles.count == 0)
+        ? @"To create allow block — create a bundle first"
+        : @"To create allow block — select a bundle first";
+    NSTextField *label = [NSTextField labelWithString:message];
     label.font = [NSFont systemFontOfSize:11 weight:NSFontWeightMedium];
     label.textColor = [NSColor secondaryLabelColor];
     label.alignment = NSTextAlignmentCenter;
