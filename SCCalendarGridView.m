@@ -579,6 +579,9 @@ static const CGFloat kDimmedOpacity = 0.2;
             self.draggingBundleID = self.focusedBundleID;
             self.draggingRange = [SCTimeRange rangeWithStart:[self timeStringFromMinutes:self.dragStartMinutes]
                                                          end:[self timeStringFromMinutes:self.dragStartMinutes + 60]];
+
+            // Make this column first responder so ESC key works after block creation
+            [self.window makeFirstResponder:self];
         } else {
             return;  // Not yet past threshold
         }
