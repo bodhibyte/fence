@@ -150,30 +150,18 @@ static const NSTimeInterval kEmergencyTestBlockDurationSeconds = 300.0; // 5 min
 
                     [self reportProgress:@"Ensuring clean state..." progress:0.09];
 
-                    // DEBUG: Log state before clearing
-                    NSLog(@"[SafetyCheck] === RUN START === BlockEndDate=%@ BlockIsRunning=%@",
-                          [[SCSettings sharedSettings] valueForKey:@"BlockEndDate"],
-                          [[SCSettings sharedSettings] valueForKey:@"BlockIsRunning"]);
-
                     // Clear any stale block state before starting tests.
                     // This handles: previous Phase 2 leftovers, emergency.sh not clearing
                     // in-memory SCSettings cache (rm deletes file but doesn't notify cfprefsd),
                     // crashes, force-quits, etc.
                     [self.xpc clearBlockForDebug:^(NSError* error) {
                         // Ignore errors (e.g. "no block active") - goal is clean slate
-                        NSLog(@"[SafetyCheck] clearBlockForDebug returned error=%@", error);
-                        NSLog(@"[SafetyCheck] Pre-reload BlockEndDate=%@",
-                              [[SCSettings sharedSettings] valueForKey:@"BlockEndDate"]);
-
                         // Force reload app's settings from disk to pick up daemon's cleared state.
                         // Note: We use forceReloadFromDisk instead of reloadSettings because
                         // reloadSettings compares version numbers and may refuse to update if
                         // the app's in-memory version is higher than disk (can happen after
                         // daemon restart).
                         [[SCSettings sharedSettings] forceReloadFromDisk];
-
-                        NSLog(@"[SafetyCheck] Post-reload BlockEndDate=%@",
-                              [[SCSettings sharedSettings] valueForKey:@"BlockEndDate"]);
 
                         [self reportProgress:@"Starting test block..." progress:0.10];
                         [self startTestBlock];
@@ -367,19 +355,11 @@ static const NSTimeInterval kEmergencyTestBlockDurationSeconds = 300.0; // 5 min
 
     if (!blockEndDate) {
         // Block already expired or wasn't set
-        NSLog(@"[SafetyCheck] waitForExpiry: BlockEndDate=(null), proceeding to verify");
         [self verifyUnblockingWithBlockingResults:blockingResults];
         return;
     }
 
     NSTimeInterval remaining = [blockEndDate timeIntervalSinceNow];
-
-    // Log on first call and when remaining is suspiciously high (> 60s for 30s test block)
-    static NSDate* lastLogTime = nil;
-    if (!lastLogTime || [[NSDate date] timeIntervalSinceDate:lastLogTime] > 10.0 || remaining > 60.0) {
-        NSLog(@"[SafetyCheck] waitForExpiry: BlockEndDate=%@ remaining=%.1fs", blockEndDate, remaining);
-        lastLogTime = [NSDate date];
-    }
 
     if (remaining <= 0) {
         // Block expired
@@ -501,8 +481,6 @@ static const NSTimeInterval kEmergencyTestBlockDurationSeconds = 300.0; // 5 min
         }
 
         NSLog(@"SCStartupSafetyCheck: Phase 2 - Block started, verifying before emergency.sh...");
-        NSLog(@"[SafetyCheck] Phase 2 block started. BlockEndDate=%@",
-              [[SCSettings sharedSettings] valueForKey:@"BlockEndDate"]);
         [self reportProgress:@"Verifying block active..." progress:0.70];
 
         // Wait for block to take effect
@@ -581,16 +559,11 @@ static const NSTimeInterval kEmergencyTestBlockDurationSeconds = 300.0; // 5 min
     }
 
     NSLog(@"SCStartupSafetyCheck: Phase 2 - emergency.sh completed");
-    NSLog(@"[SafetyCheck] emergency.sh done. Pre-reload BlockEndDate=%@",
-          [[SCSettings sharedSettings] valueForKey:@"BlockEndDate"]);
 
     // Force reload settings to pick up the cleared state from emergency.sh.
     // emergency.sh deletes the plist and stops the daemon.
     // Use forceReloadFromDisk to bypass version number checking.
     [[SCSettings sharedSettings] forceReloadFromDisk];
-
-    NSLog(@"[SafetyCheck] emergency.sh done. Post-reload BlockEndDate=%@",
-          [[SCSettings sharedSettings] valueForKey:@"BlockEndDate"]);
 
     [self reportProgress:@"Verifying emergency cleanup..." progress:0.85];
 
@@ -725,9 +698,6 @@ static const NSTimeInterval kEmergencyTestBlockDurationSeconds = 300.0; // 5 min
 - (void)finishWithResult:(SCSafetyCheckResult*)result {
     [self reportProgress:result.passed ? @"Safety check passed!" : @"Safety check failed" progress:1.0];
 
-    NSLog(@"[SafetyCheck] === RUN END === BlockEndDate=%@ BlockIsRunning=%@",
-          [[SCSettings sharedSettings] valueForKey:@"BlockEndDate"],
-          [[SCSettings sharedSettings] valueForKey:@"BlockIsRunning"]);
     NSLog(@"SCStartupSafetyCheck: Finished - %@", result.passed ? @"PASSED" : @"FAILED");
     if (!result.passed) {
         NSLog(@"SCStartupSafetyCheck: Issues: %@", result.issues);

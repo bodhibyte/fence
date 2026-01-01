@@ -868,13 +868,11 @@ static BOOL const kUseCalendarUI = YES;
 
 - (void)calendarGridDidClickEmptyArea:(SCCalendarGridView *)grid {
     // Clear focus - return to All-Up state
-    NSLog(@"[ESC] WindowController: calendarGridDidClickEmptyArea called, clearing focusedBundleID=%@", self.focusedBundleID);
     self.focusedBundleID = nil;
     self.bundleSidebar.selectedBundleID = nil;
     [self.bundleSidebar reloadData];
     self.calendarGridView.focusedBundleID = nil;
     [self.calendarGridView reloadData];
-    NSLog(@"[ESC] WindowController: focus cleared");
 }
 
 - (void)calendarGrid:(SCCalendarGridView *)grid didRequestEditBundle:(SCBlockBundle *)bundle forDay:(SCDayOfWeek)day {
@@ -1039,17 +1037,10 @@ static BOOL const kUseCalendarUI = YES;
 
 - (void)cancelOperation:(id)sender {
     // Escape key - progressive: first clear selection, then clear focus
-    BOOL hasSel = [self.calendarGridView hasSelectedBlock];
-    NSLog(@"[ESC] WindowController.cancelOperation: hasSel=%d focusedBundle=%@ firstResp=%@",
-          hasSel, self.focusedBundleID, self.window.firstResponder);
-    if (hasSel) {
-        NSLog(@"[ESC] WindowController: clearing all selections");
+    if ([self.calendarGridView hasSelectedBlock]) {
         [self.calendarGridView clearAllSelections];
     } else if (self.focusedBundleID) {
-        NSLog(@"[ESC] WindowController: clearing focus");
         [self calendarGridDidClickEmptyArea:self.calendarGridView];
-    } else {
-        NSLog(@"[ESC] WindowController: UNHANDLED - no selection, no focus!");
     }
 }
 

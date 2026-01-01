@@ -260,16 +260,7 @@ static const CGFloat kDimmedOpacity = 0.2;
     [_blockViews removeAllObjects];
 
     if (self.bundles.count == 0) {
-        NSLog(@"[RELOAD] day=%ld bundles=0, skipping", (long)self.day);
         return;
-    }
-
-    // Log what we're about to render
-    for (SCBlockBundle *bundle in self.bundles) {
-        SCWeeklySchedule *schedule = self.schedules[bundle.bundleID];
-        NSArray *windows = [schedule allowedWindowsForDay:self.day];
-        NSLog(@"[RELOAD] day=%ld bundle=%@ schedule=%@ windows=%lu",
-              (long)self.day, bundle.bundleID, schedule, (unsigned long)windows.count);
     }
 
     CGFloat totalWidth = self.bounds.size.width;
@@ -522,10 +513,6 @@ static const CGFloat kDimmedOpacity = 0.2;
             // MUST snap dragStartMinutes so delta calculations stay on 15-min grid
             self.dragStartMinutes = [self snapToGrid:[self minutesFromY:loc.y]];
 
-            NSLog(@"[DRAG] mouseDown on block: isDragging=%d isMoving=%d isResizeTop=%d isResizeBot=%d bundleID=%@ selIdx=%ld",
-                  self.isDragging, self.isMovingBlock, self.isResizingTop, self.isResizingBottom,
-                  self.draggingBundleID, (long)self.selectedBlockIndex);
-
             [self reloadBlocks];
 
             // Make grid view first responder so it receives keyboard events (for Delete key)
@@ -616,9 +603,6 @@ static const CGFloat kDimmedOpacity = 0.2;
 
     NSPoint loc = [self convertPoint:event.locationInWindow fromView:nil];
 
-    NSLog(@"[DRAG] mouseDragged: isDragging=%d isMoving=%d isResizeTop=%d isResizeBot=%d isCreating=%d",
-          self.isDragging, self.isMovingBlock, self.isResizingTop, self.isResizingBottom, self.isCreatingBlock);
-
     // Check if we should start drag-to-create from a pending empty area click
     if (self.hasPendingEmptyAreaClick && !self.isDragging) {
         // Check if mouse has moved past threshold
@@ -641,9 +625,7 @@ static const CGFloat kDimmedOpacity = 0.2;
             while (gridView && ![gridView isKindOfClass:[SCCalendarGridView class]]) {
                 gridView = gridView.superview;
             }
-            NSLog(@"[DRAG] Making GridView first responder for drag-to-create");
-            BOOL success = [self.window makeFirstResponder:gridView ?: self];
-            NSLog(@"[DRAG] makeFirstResponder success=%d, firstResponder now=%@", success, self.window.firstResponder);
+            [self.window makeFirstResponder:gridView ?: self];
         } else {
             return;  // Not yet past threshold
         }
@@ -700,9 +682,6 @@ static const CGFloat kDimmedOpacity = 0.2;
     }
 
     // Update visual preview
-    NSLog(@"[DRAG] Updating preview: draggingRange=%@-%@ bundleID=%@ selIdx=%ld",
-          self.draggingRange.startTime, self.draggingRange.endTime,
-          self.draggingBundleID, (long)self.selectedBlockIndex);
     [self reloadBlocks];
 }
 
@@ -717,9 +696,6 @@ static const CGFloat kDimmedOpacity = 0.2;
     SCTimeRange *range = self.draggingRange;
     BOOL wasCreating = self.isCreatingBlock;
     NSInteger selectedIdx = self.selectedBlockIndex;
-
-    NSLog(@"[MOUSEUP] Captured: bundleID=%@ range=%@-%@ wasCreating=%d selectedIdx=%ld",
-          bundleID, range.startTime, range.endTime, wasCreating, (long)selectedIdx);
 
     // Reset drag state BEFORE calling callback
     // This ensures reloadBlocks (called inside handleScheduleUpdate) sees isDragging=NO
@@ -756,19 +732,10 @@ static const CGFloat kDimmedOpacity = 0.2;
 
         [schedule setAllowedWindows:windows forDay:self.day];
 
-        NSLog(@"[MOUSEUP] Built schedule with %lu windows for day %ld, calling callback=%d",
-              (unsigned long)[[schedule allowedWindowsForDay:self.day] count], (long)self.day,
-              self.onScheduleUpdated != nil);
-
         if (self.onScheduleUpdated) {
             self.onScheduleUpdated(bundleID, schedule);
         }
-    } else {
-        NSLog(@"[MOUSEUP] SKIPPED: bundleID=%@ range=%@ rangeValid=%d",
-              bundleID, range, range ? [range isValid] : NO);
     }
-
-    NSLog(@"[DRAG] mouseUp complete - firstResponder=%@", self.window.firstResponder);
 }
 
 - (void)mouseMoved:(NSEvent *)event {
@@ -802,22 +769,14 @@ static const CGFloat kDimmedOpacity = 0.2;
 - (void)keyDown:(NSEvent *)event {
     // Escape key - progressive: first clear selection, then clear focus
     if (event.keyCode == 53) {  // Escape
-        NSLog(@"[ESC] DayColumn: day=%ld selIdx=%ld selBundle=%@ hasCallback=%d focusedBundle=%@",
-              (long)self.day, (long)self.selectedBlockIndex, self.selectedBundleID,
-              self.onEmptyAreaClicked != nil, self.focusedBundleID);
         if (self.selectedBlockIndex >= 0) {
             // First: clear block selection
-            NSLog(@"[ESC] DayColumn: clearing selection (selIdx=%ld)", (long)self.selectedBlockIndex);
             self.selectedBlockIndex = -1;
             self.selectedBundleID = nil;
             [self reloadBlocks];
         } else if (self.onEmptyAreaClicked) {
             // Second: clear bundle focus
-            NSLog(@"[ESC] DayColumn: clearing focus via callback NOW");
             self.onEmptyAreaClicked();
-            NSLog(@"[ESC] DayColumn: callback completed");
-        } else {
-            NSLog(@"[ESC] DayColumn: UNHANDLED - no selection, no callback!");
         }
         return;
     }
@@ -1270,22 +1229,14 @@ static const CGFloat kDimmedOpacity = 0.2;
         __weak typeof(self) weakSelf = self;
         SCDayOfWeek capturedDay = day;  // Capture day for callbacks
         column.onScheduleUpdated = ^(NSString *bundleID, SCWeeklySchedule *schedule) {
-            NSLog(@"[CALLBACK] onScheduleUpdated: weakSelf=%@ bundleID=%@", weakSelf, bundleID);
-            if (!weakSelf) {
-                NSLog(@"[CALLBACK] ERROR: weakSelf is nil!");
-                return;
-            }
+            if (!weakSelf) return;
             weakSelf.lastClickedDay = capturedDay;
             [weakSelf handleScheduleUpdate:schedule forBundleID:bundleID];
         };
         column.onEmptyAreaClicked = ^{
             weakSelf.lastClickedDay = capturedDay;
-            NSLog(@"[ESC] onEmptyAreaClicked callback: delegate=%@, respondsToSelector=%d",
-                  weakSelf.delegate, [weakSelf.delegate respondsToSelector:@selector(calendarGridDidClickEmptyArea:)]);
             if ([weakSelf.delegate respondsToSelector:@selector(calendarGridDidClickEmptyArea:)]) {
                 [weakSelf.delegate calendarGridDidClickEmptyArea:weakSelf];
-            } else {
-                NSLog(@"[ESC] WARNING: delegate does not respond to calendarGridDidClickEmptyArea:");
             }
         };
         column.onBlockDoubleClicked = ^(SCBlockBundle *bundle) {
@@ -1348,9 +1299,6 @@ static const CGFloat kDimmedOpacity = 0.2;
 }
 
 - (void)handleScheduleUpdate:(SCWeeklySchedule *)schedule forBundleID:(NSString *)bundleID {
-    NSLog(@"[HANDLE] handleScheduleUpdate called: bundleID=%@ schedule=%@ dayColumns=%lu",
-          bundleID, schedule, (unsigned long)self.dayColumns.count);
-
     // Update internal schedules dictionary
     NSMutableDictionary *newSchedules = [self.schedules mutableCopy];
     newSchedules[bundleID] = schedule;
@@ -1364,9 +1312,6 @@ static const CGFloat kDimmedOpacity = 0.2;
 
     // Update empty state visibility
     [self updateEmptyStateVisibility];
-
-    NSLog(@"[HANDLE] Reloaded %lu columns, notifying delegate=%@",
-          (unsigned long)self.dayColumns.count, self.delegate);
 
     // Notify delegate
     if ([self.delegate respondsToSelector:@selector(calendarGrid:didUpdateSchedule:forBundleID:)]) {
@@ -1494,17 +1439,10 @@ static const CGFloat kDimmedOpacity = 0.2;
 - (void)keyDown:(NSEvent *)event {
     // Escape key - progressive: first clear selection, THEN clear focus
     if (event.keyCode == 53) {  // Escape key
-        BOOL hasSel = [self hasSelectedBlock];
-        NSLog(@"[ESC] GridView: hasSel=%d focusedBundle=%@ firstResp=%@",
-              hasSel, self.focusedBundleID, self.window.firstResponder);
-        if (hasSel) {
-            NSLog(@"[ESC] GridView: clearing all selections");
+        if ([self hasSelectedBlock]) {
             [self clearAllSelections];
         } else if (self.focusedBundleID) {
-            NSLog(@"[ESC] GridView: clearing focus");
             [self.delegate calendarGridDidClickEmptyArea:self];
-        } else {
-            NSLog(@"[ESC] GridView: UNHANDLED - no selection, no focus!");
         }
         return;
     }

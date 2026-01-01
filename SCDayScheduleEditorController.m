@@ -72,7 +72,6 @@ static const CGFloat kDragThreshold = 5.0;  // Pixels to move before starting dr
 
 - (void)keyDown:(NSEvent *)event {
     unichar key = [[event charactersIgnoringModifiers] characterAtIndex:0];
-    NSLog(@"[KEY] SCTimelineView keyDown: key=%d ('%c') modifiers=%lu", key, key, (unsigned long)[event modifierFlags]);
 
     // Handle Escape key - close the editor
     if (key == 27) { // ESC key
@@ -105,11 +104,8 @@ static const CGFloat kDragThreshold = 5.0;  // Pixels to move before starting dr
     BOOL cmdPressed = (flags & NSEventModifierFlagCommand) != 0;
     BOOL shiftPressed = (flags & NSEventModifierFlagShift) != 0;
 
-    NSLog(@"[KEY] SCTimelineView performKeyEquivalent: chars='%@' cmd=%d shift=%d", chars, cmdPressed, shiftPressed);
-
     // Cmd+Q = Quit (close sheet first, then terminate to avoid bonk)
     if (cmdPressed && !shiftPressed && [chars isEqualToString:@"q"]) {
-        NSLog(@"[KEY] Handling Cmd+Q - closing sheet then terminate");
         NSWindow *sheet = self.window;
         NSWindow *parent = sheet.sheetParent;
         if (parent) {
