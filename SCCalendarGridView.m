@@ -376,6 +376,8 @@ static const CGFloat kDimmedOpacity = 0.2;
         if (self.onNoFocusInteraction) {
             self.onNoFocusInteraction();
         }
+        // Make grid view first responder so ESC still works
+        [self.window makeFirstResponder:self.superview];
         return;
     }
 
@@ -542,14 +544,21 @@ static const CGFloat kDimmedOpacity = 0.2;
 - (void)keyDown:(NSEvent *)event {
     // Escape key - progressive: first clear selection, then clear focus
     if (event.keyCode == 53) {  // Escape
+        NSLog(@"[ESC] DayColumn: day=%ld selIdx=%ld selBundle=%@ hasCallback=%d",
+              (long)self.day, (long)self.selectedBlockIndex, self.selectedBundleID,
+              self.onEmptyAreaClicked != nil);
         if (self.selectedBlockIndex >= 0) {
             // First: clear block selection
+            NSLog(@"[ESC] DayColumn: clearing selection");
             self.selectedBlockIndex = -1;
             self.selectedBundleID = nil;
             [self reloadBlocks];
         } else if (self.onEmptyAreaClicked) {
             // Second: clear bundle focus
+            NSLog(@"[ESC] DayColumn: clearing focus via callback");
             self.onEmptyAreaClicked();
+        } else {
+            NSLog(@"[ESC] DayColumn: UNHANDLED - no selection, no callback!");
         }
         return;
     }
@@ -940,15 +949,19 @@ static const CGFloat kDimmedOpacity = 0.2;
 }
 
 - (void)keyDown:(NSEvent *)event {
-    NSLog(@"SCCalendarGridView keyDown: keyCode=%hu, focusedBundleID=%@, delegate=%@",
-          event.keyCode, self.focusedBundleID, self.delegate);
-
     // Escape key - progressive: first clear selection, THEN clear focus
     if (event.keyCode == 53) {  // Escape key
-        if ([self hasSelectedBlock]) {
+        BOOL hasSel = [self hasSelectedBlock];
+        NSLog(@"[ESC] GridView: hasSel=%d focusedBundle=%@ firstResp=%@",
+              hasSel, self.focusedBundleID, self.window.firstResponder);
+        if (hasSel) {
+            NSLog(@"[ESC] GridView: clearing all selections");
             [self clearAllSelections];
         } else if (self.focusedBundleID) {
+            NSLog(@"[ESC] GridView: clearing focus");
             [self.delegate calendarGridDidClickEmptyArea:self];
+        } else {
+            NSLog(@"[ESC] GridView: UNHANDLED - no selection, no focus!");
         }
         return;
     }
