@@ -95,6 +95,9 @@ typedef NS_ENUM(NSInteger, SCDayOfWeek) {
 /// Checks if a day has any allowed windows
 - (BOOL)hasAllowedWindowsForDay:(SCDayOfWeek)day;
 
+/// Checks if any day has any allowed windows
+- (BOOL)hasAnyWindows;
+
 #pragma mark - Copy Operations
 
 /// Copies schedule from one day to another

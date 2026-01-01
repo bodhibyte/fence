@@ -286,6 +286,15 @@
     return [self allowedWindowsForDay:day].count > 0;
 }
 
+- (BOOL)hasAnyWindows {
+    for (NSInteger day = SCDayOfWeekSunday; day <= SCDayOfWeekSaturday; day++) {
+        if ([self hasAllowedWindowsForDay:day]) {
+            return YES;
+        }
+    }
+    return NO;
+}
+
 #pragma mark - Copy Operations
 
 - (void)copyDay:(SCDayOfWeek)fromDay toDay:(SCDayOfWeek)toDay {

@@ -1026,6 +1026,9 @@ static const CGFloat kDimmedOpacity = 0.2;
 @property (nonatomic, copy, nullable) NSString *copiedBundleID;
 @property (nonatomic, assign) SCDayOfWeek lastClickedDay;
 
+// Empty state hint
+@property (nonatomic, strong) NSTextField *emptyStateLabel;
+
 @end
 
 @implementation SCCalendarGridView
@@ -1073,6 +1076,18 @@ static const CGFloat kDimmedOpacity = 0.2;
     self.columnsContainer.wantsLayer = YES;
     self.scrollView.documentView = self.columnsContainer;
     [self addSubview:self.scrollView];
+
+    // Empty state hint label (centered in columns container)
+    self.emptyStateLabel = [[NSTextField alloc] initWithFrame:NSZeroRect];
+    self.emptyStateLabel.stringValue = @"Select bundle and drag to create allow block";
+    self.emptyStateLabel.font = [NSFont systemFontOfSize:14 weight:NSFontWeightMedium];
+    self.emptyStateLabel.textColor = [NSColor tertiaryLabelColor];
+    self.emptyStateLabel.bezeled = NO;
+    self.emptyStateLabel.editable = NO;
+    self.emptyStateLabel.drawsBackground = NO;
+    self.emptyStateLabel.alignment = NSTextAlignmentCenter;
+    [self.emptyStateLabel sizeToFit];
+    [self.columnsContainer addSubview:self.emptyStateLabel];
 
     [self setupHourLabels];
 }
@@ -1214,6 +1229,34 @@ static const CGFloat kDimmedOpacity = 0.2;
 
     // Update columns container size
     self.columnsContainer.frame = NSMakeRect(0, 0, availableWidth, timelineHeight);
+
+    // Update empty state visibility
+    [self updateEmptyStateVisibility];
+}
+
+- (void)updateEmptyStateVisibility {
+    // Check if any schedules have any windows
+    BOOL hasAnyBlocks = NO;
+    for (NSString *bundleID in self.schedules) {
+        SCWeeklySchedule *schedule = self.schedules[bundleID];
+        if ([schedule hasAnyWindows]) {
+            hasAnyBlocks = YES;
+            break;
+        }
+    }
+
+    self.emptyStateLabel.hidden = hasAnyBlocks;
+    if (!hasAnyBlocks) {
+        // Center the label in the columns container
+        CGFloat containerWidth = self.columnsContainer.bounds.size.width;
+        CGFloat containerHeight = self.columnsContainer.bounds.size.height;
+        CGFloat labelWidth = self.emptyStateLabel.frame.size.width;
+        CGFloat labelHeight = self.emptyStateLabel.frame.size.height;
+        CGFloat x = (containerWidth - labelWidth) / 2;
+        CGFloat y = (containerHeight - labelHeight) / 2;
+        self.emptyStateLabel.frame = NSMakeRect(x, y, labelWidth, labelHeight);
+        [self.emptyStateLabel.superview addSubview:self.emptyStateLabel positioned:NSWindowAbove relativeTo:nil];
+    }
 }
 
 - (void)handleScheduleUpdate:(SCWeeklySchedule *)schedule forBundleID:(NSString *)bundleID {
@@ -1230,6 +1273,9 @@ static const CGFloat kDimmedOpacity = 0.2;
         column.schedules = self.schedules;
         [column reloadBlocks];
     }
+
+    // Update empty state visibility
+    [self updateEmptyStateVisibility];
 
     NSLog(@"[HANDLE] Reloaded %lu columns, notifying delegate=%@",
           (unsigned long)self.dayColumns.count, self.delegate);
