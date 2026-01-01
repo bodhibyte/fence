@@ -20,6 +20,23 @@ static const CGFloat kDragThreshold = 5.0;  // Pixels to move before starting dr
 // Opacity for non-focused bundles
 static const CGFloat kDimmedOpacity = 0.2;
 
+#pragma mark - SCBlockLayoutInfo (Private)
+
+/// Holds computed layout information for a single allow block
+@interface SCBlockLayoutInfo : NSObject
+@property (nonatomic, assign) NSInteger bundleIndex;
+@property (nonatomic, assign) NSInteger windowIndex;
+@property (nonatomic, assign) NSInteger startMinutes;
+@property (nonatomic, assign) NSInteger endMinutes;
+@property (nonatomic, assign) NSInteger maxOverlap;      // Max concurrent blocks (including self)
+@property (nonatomic, assign) NSInteger laneSlot;        // 0-based horizontal slot
+@property (nonatomic, assign) NSInteger bundleDisplayOrder;
+@property (nonatomic, copy) NSString *bundleID;
+@end
+
+@implementation SCBlockLayoutInfo
+@end
+
 #pragma mark - SCAllowBlockView (Private)
 
 @interface SCAllowBlockView : NSView
@@ -212,33 +229,59 @@ static const CGFloat kDimmedOpacity = 0.2;
 
     if (self.bundles.count == 0) return;
 
-    // Calculate lane width for each bundle
     CGFloat totalWidth = self.bounds.size.width;
-    CGFloat laneWidth = (totalWidth - kLanePadding * 2) / self.bundles.count;
 
-    NSInteger laneIndex = 0;
+    // During drag operations, compute layout for EXISTING blocks only (not the dragging one)
+    // The dragged/created block will be overlaid on top
+    // This prevents other blocks from shifting during drag
+    BOOL isDraggingExistingBlock = self.isDragging && !self.isCreatingBlock && self.draggingBundleID;
+    BOOL isCreatingNewBlock = self.isCreatingBlock && self.draggingRange && self.draggingBundleID;
+
+    // Compute layouts for all blocks (excluding the one being dragged if applicable)
+    NSArray<SCBlockLayoutInfo *> *layouts = [self computeBlockLayoutsIncludingDragRange:nil
+                                                                            forBundleID:nil
+                                                                            windowIndex:-1
+                                                                             isNewBlock:NO];
+
+    // Build lookup: "bundleID:windowIndex" -> layout
+    NSMutableDictionary<NSString *, SCBlockLayoutInfo *> *layoutLookup = [NSMutableDictionary dictionary];
+    for (SCBlockLayoutInfo *layout in layouts) {
+        NSString *key = [NSString stringWithFormat:@"%@:%ld", layout.bundleID, (long)layout.windowIndex];
+        layoutLookup[key] = layout;
+    }
+
+    // Render existing blocks using computed layouts
     for (SCBlockBundle *bundle in self.bundles) {
         SCWeeklySchedule *schedule = self.schedules[bundle.bundleID];
         if (!schedule) continue;
 
         NSArray<SCTimeRange *> *windows = [schedule allowedWindowsForDay:self.day];
-        CGFloat laneX = kLanePadding + laneIndex * laneWidth;
 
         for (NSInteger i = 0; i < (NSInteger)windows.count; i++) {
             SCTimeRange *range = windows[i];
 
-            // Use draggingRange for the block being dragged (live preview)
-            BOOL shouldUseDragRange = self.isDragging &&
+            // Skip rendering the block being dragged here - it will be rendered as overlay
+            BOOL isTheDraggedBlock = isDraggingExistingBlock &&
                 [bundle.bundleID isEqualToString:self.draggingBundleID] &&
-                i == self.selectedBlockIndex &&
-                self.draggingRange != nil;
+                i == self.selectedBlockIndex;
 
-            if (shouldUseDragRange) {
-                NSLog(@"[DRAG] reloadBlocks: USING draggingRange for bundle=%@ idx=%ld", bundle.bundleID, (long)i);
-                range = self.draggingRange;
-            } else if (self.isDragging) {
-                NSLog(@"[DRAG] reloadBlocks: NOT using draggingRange - bundle=%@ (want %@) idx=%ld (want %ld) hasRange=%d",
-                      bundle.bundleID, self.draggingBundleID, (long)i, (long)self.selectedBlockIndex, self.draggingRange != nil);
+            if (isTheDraggedBlock) {
+                continue;  // Will render as overlay below
+            }
+
+            // Get layout info for this block
+            NSString *key = [NSString stringWithFormat:@"%@:%ld", bundle.bundleID, (long)i];
+            SCBlockLayoutInfo *layout = layoutLookup[key];
+
+            // Calculate position and size using dynamic layout
+            CGFloat laneWidth, laneX;
+            if (layout && layout.maxOverlap > 0) {
+                laneWidth = (totalWidth - kLanePadding * 2) / layout.maxOverlap;
+                laneX = kLanePadding + layout.laneSlot * laneWidth;
+            } else {
+                // Fallback: full width if no layout info
+                laneWidth = totalWidth - kLanePadding * 2;
+                laneX = kLanePadding;
             }
 
             CGFloat y = [self yFromMinutes:[range startMinutes]];
@@ -248,7 +291,7 @@ static const CGFloat kDimmedOpacity = 0.2;
             SCAllowBlockView *blockView = [[SCAllowBlockView alloc] initWithFrame:blockFrame];
             blockView.timeRange = range;
             blockView.color = bundle.color;
-            blockView.bundleID = bundle.bundleID;  // Track which bundle owns this block
+            blockView.bundleID = bundle.bundleID;
             blockView.isCommitted = self.isCommitted;
 
             // Dimmed if not focused bundle (and we have a focused bundle)
@@ -264,24 +307,40 @@ static const CGFloat kDimmedOpacity = 0.2;
             [self addSubview:blockView];
             [_blockViews addObject:blockView];
         }
-
-        laneIndex++;
     }
 
-    // Render creation preview block (not in schedule yet)
-    if (self.isCreatingBlock && self.draggingRange && self.draggingBundleID) {
-        NSInteger previewLaneIndex = 0;
-        SCBlockBundle *previewBundle = nil;
-        for (SCBlockBundle *bundle in self.bundles) {
-            if ([bundle.bundleID isEqualToString:self.draggingBundleID]) {
-                previewBundle = bundle;
-                break;
-            }
-            previewLaneIndex++;
-        }
+    // Render dragged existing block as overlay (during move/resize)
+    if (isDraggingExistingBlock && self.draggingRange) {
+        SCBlockBundle *dragBundle = [self bundleForID:self.draggingBundleID];
+        if (dragBundle) {
+            // During drag, show at full width as overlay
+            CGFloat laneWidth = totalWidth - kLanePadding * 2;
+            CGFloat laneX = kLanePadding;
 
+            CGFloat y = [self yFromMinutes:[self.draggingRange startMinutes]];
+            CGFloat height = [self yFromMinutes:[self.draggingRange endMinutes]] - y;
+
+            NSRect blockFrame = NSMakeRect(laneX, y, laneWidth - kLanePadding, height);
+            SCAllowBlockView *blockView = [[SCAllowBlockView alloc] initWithFrame:blockFrame];
+            blockView.timeRange = self.draggingRange;
+            blockView.color = dragBundle.color;
+            blockView.bundleID = dragBundle.bundleID;
+            blockView.isCommitted = NO;
+            blockView.isSelected = YES;  // Highlight the dragging block
+
+            [self addSubview:blockView];
+            [_blockViews addObject:blockView];
+        }
+    }
+
+    // Render creation preview block (drag-to-create new block)
+    if (isCreatingNewBlock) {
+        SCBlockBundle *previewBundle = [self bundleForID:self.draggingBundleID];
         if (previewBundle) {
-            CGFloat laneX = kLanePadding + previewLaneIndex * laneWidth;
+            // During creation, show at full width as overlay
+            CGFloat laneWidth = totalWidth - kLanePadding * 2;
+            CGFloat laneX = kLanePadding;
+
             CGFloat y = [self yFromMinutes:[self.draggingRange startMinutes]];
             CGFloat height = [self yFromMinutes:[self.draggingRange endMinutes]] - y;
 
@@ -362,12 +421,19 @@ static const CGFloat kDimmedOpacity = 0.2;
 
     NSPoint loc = [self convertPoint:event.locationInWindow fromView:nil];
 
-    // FIRST: Check if clicking on an existing block (allow even in All-Up/no focus state)
+    // FIRST: Check if clicking on an existing block
     for (SCAllowBlockView *blockView in _blockViews) {
         if (NSPointInRect(loc, blockView.frame)) {
             // Get the bundle this block belongs to
             NSString *blockBundleID = blockView.bundleID;
             if (!blockBundleID) continue;
+
+            // If a bundle is focused and this block belongs to a different bundle,
+            // ignore the click - user needs to interact with focused bundle only
+            if (self.focusedBundleID && ![blockBundleID isEqualToString:self.focusedBundleID]) {
+                // Treat as empty area click - could start drag-to-create on top of dimmed block
+                break;  // Fall through to empty area handling
+            }
 
             if (event.clickCount == 2) {
                 // Double-click: open editor for THIS block's bundle
@@ -738,6 +804,161 @@ static const CGFloat kDimmedOpacity = 0.2;
         }
     }
     return nil;
+}
+
+#pragma mark - Dynamic Layout Computation
+
+/// Computes layout info for all blocks, optionally including a drag preview range
+- (NSArray<SCBlockLayoutInfo *> *)computeBlockLayoutsIncludingDragRange:(SCTimeRange *)dragRange
+                                                            forBundleID:(NSString *)dragBundleID
+                                                            windowIndex:(NSInteger)dragWindowIndex
+                                                           isNewBlock:(BOOL)isNewBlock {
+    NSMutableArray<SCBlockLayoutInfo *> *blocks = [NSMutableArray array];
+
+    // Step 1: Collect all blocks from all bundles
+    for (NSInteger bundleIndex = 0; bundleIndex < self.bundles.count; bundleIndex++) {
+        SCBlockBundle *bundle = self.bundles[bundleIndex];
+        SCWeeklySchedule *schedule = self.schedules[bundle.bundleID];
+        if (!schedule) continue;
+
+        NSArray<SCTimeRange *> *windows = [schedule allowedWindowsForDay:self.day];
+
+        for (NSInteger windowIndex = 0; windowIndex < windows.count; windowIndex++) {
+            SCTimeRange *range = windows[windowIndex];
+
+            // Use drag override if this is the block being dragged/resized
+            if (!isNewBlock && dragRange &&
+                [bundle.bundleID isEqualToString:dragBundleID] &&
+                windowIndex == dragWindowIndex) {
+                range = dragRange;
+            }
+
+            SCBlockLayoutInfo *info = [[SCBlockLayoutInfo alloc] init];
+            info.bundleIndex = bundleIndex;
+            info.windowIndex = windowIndex;
+            info.startMinutes = [range startMinutes];
+            info.endMinutes = [range endMinutes];
+            info.maxOverlap = 1;
+            info.laneSlot = 0;
+            info.bundleDisplayOrder = bundle.displayOrder;
+            info.bundleID = bundle.bundleID;
+
+            [blocks addObject:info];
+        }
+    }
+
+    // Add preview block for new block creation
+    if (isNewBlock && dragRange && dragBundleID) {
+        SCBlockBundle *previewBundle = [self bundleForID:dragBundleID];
+        if (previewBundle) {
+            SCBlockLayoutInfo *previewInfo = [[SCBlockLayoutInfo alloc] init];
+            previewInfo.bundleIndex = -1;  // Special marker for preview
+            previewInfo.windowIndex = -1;
+            previewInfo.startMinutes = [dragRange startMinutes];
+            previewInfo.endMinutes = [dragRange endMinutes];
+            previewInfo.maxOverlap = 1;
+            previewInfo.laneSlot = 0;
+            previewInfo.bundleDisplayOrder = previewBundle.displayOrder;
+            previewInfo.bundleID = dragBundleID;
+
+            [blocks addObject:previewInfo];
+        }
+    }
+
+    if (blocks.count == 0) return blocks;
+
+    // Step 2: Sweep-line algorithm to compute maxOverlap for each block
+    [self computeMaxOverlapForBlocks:blocks];
+
+    // Step 3: Greedy packing to assign lane slots
+    [self assignLaneSlotsUsingGreedyPacking:blocks];
+
+    return blocks;
+}
+
+/// Sweep-line algorithm to compute maxOverlap for each block
+- (void)computeMaxOverlapForBlocks:(NSMutableArray<SCBlockLayoutInfo *> *)blocks {
+    // Build sweep events
+    NSMutableArray *events = [NSMutableArray array];
+    for (SCBlockLayoutInfo *block in blocks) {
+        [events addObject:@{@"time": @(block.startMinutes), @"type": @(0), @"block": block}];  // 0 = START
+        [events addObject:@{@"time": @(block.endMinutes), @"type": @(1), @"block": block}];    // 1 = END
+    }
+
+    // Sort: by time, then END (1) before START (0) at same time
+    // This ensures adjacent blocks (one ends when another starts) don't count as overlapping
+    [events sortUsingComparator:^NSComparisonResult(NSDictionary *a, NSDictionary *b) {
+        NSComparisonResult timeCompare = [a[@"time"] compare:b[@"time"]];
+        if (timeCompare != NSOrderedSame) return timeCompare;
+        // END (1) before START (0) at same time
+        return [b[@"type"] compare:a[@"type"]];
+    }];
+
+    // Sweep through events
+    NSMutableSet<SCBlockLayoutInfo *> *activeBlocks = [NSMutableSet set];
+
+    for (NSDictionary *event in events) {
+        SCBlockLayoutInfo *block = event[@"block"];
+        NSInteger type = [event[@"type"] integerValue];
+
+        if (type == 0) {  // START
+            [activeBlocks addObject:block];
+            NSInteger overlapCount = activeBlocks.count;
+            // Update maxOverlap for all currently active blocks
+            for (SCBlockLayoutInfo *active in activeBlocks) {
+                if (active.maxOverlap < overlapCount) {
+                    active.maxOverlap = overlapCount;
+                }
+            }
+        } else {  // END
+            [activeBlocks removeObject:block];
+        }
+    }
+}
+
+/// Greedy packing algorithm to assign lane slots respecting displayOrder
+- (void)assignLaneSlotsUsingGreedyPacking:(NSMutableArray<SCBlockLayoutInfo *> *)blocks {
+    // Sort blocks by displayOrder (primary), then startMinutes (secondary)
+    NSArray *sortedBlocks = [blocks sortedArrayUsingComparator:^NSComparisonResult(SCBlockLayoutInfo *a, SCBlockLayoutInfo *b) {
+        if (a.bundleDisplayOrder != b.bundleDisplayOrder) {
+            return a.bundleDisplayOrder < b.bundleDisplayOrder ? NSOrderedAscending : NSOrderedDescending;
+        }
+        if (a.startMinutes != b.startMinutes) {
+            return a.startMinutes < b.startMinutes ? NSOrderedAscending : NSOrderedDescending;
+        }
+        return NSOrderedSame;
+    }];
+
+    // Each lane is a list of blocks that don't overlap
+    NSMutableArray<NSMutableArray<SCBlockLayoutInfo *> *> *lanes = [NSMutableArray array];
+
+    for (SCBlockLayoutInfo *block in sortedBlocks) {
+        NSInteger assignedLane = -1;
+
+        // Try to fit into existing lanes
+        for (NSInteger i = 0; i < lanes.count; i++) {
+            BOOL overlapsAny = NO;
+            for (SCBlockLayoutInfo *placed in lanes[i]) {
+                // Check time overlap: a.start < b.end && b.start < a.end
+                if (block.startMinutes < placed.endMinutes && placed.startMinutes < block.endMinutes) {
+                    overlapsAny = YES;
+                    break;
+                }
+            }
+            if (!overlapsAny) {
+                [lanes[i] addObject:block];
+                block.laneSlot = i;
+                assignedLane = i;
+                break;
+            }
+        }
+
+        // Create new lane if needed
+        if (assignedLane == -1) {
+            [lanes addObject:[NSMutableArray arrayWithObject:block]];
+            block.laneSlot = lanes.count - 1;
+        }
+    }
 }
 
 @end
