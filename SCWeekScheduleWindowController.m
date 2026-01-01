@@ -909,28 +909,41 @@ static BOOL const kUseCalendarUI = YES;
     if (isShowingWarning) return;
     isShowingWarning = YES;
 
-    // Create thin frosted glass toast (like status pills but grey)
-    CGFloat toastWidth = 280;
-    CGFloat toastHeight = 28;
+    // Create frosted glass toast (like status pills but grey)
+    CGFloat toastWidth = 420;
+    CGFloat toastHeight = 42;
 
-    NSVisualEffectView *toast = [[NSVisualEffectView alloc] initWithFrame:NSMakeRect(0, 0, toastWidth, toastHeight)];
+    // Container view holds the shadow (decoupled from blur clipping)
+    NSView *toastContainer = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, toastWidth, toastHeight)];
+    toastContainer.wantsLayer = YES;
+    toastContainer.layer.backgroundColor = [NSColor clearColor].CGColor;
+    toastContainer.layer.masksToBounds = NO;  // Allow shadow to render outside bounds
+
+    // Pill-shaped shadow on container
+    toastContainer.layer.shadowColor = [NSColor blackColor].CGColor;
+    toastContainer.layer.shadowOpacity = 0.5;
+    toastContainer.layer.shadowOffset = CGSizeMake(0, -4);
+    toastContainer.layer.shadowRadius = 15;
+    CGPathRef shadowPath = CGPathCreateWithRoundedRect(toastContainer.bounds, toastHeight / 2, toastHeight / 2, NULL);
+    toastContainer.layer.shadowPath = shadowPath;
+    CGPathRelease(shadowPath);
+
+    toastContainer.alphaValue = 0;
+
+    // Visual effect view (the pill itself) - clips blur to rounded corners
+    NSVisualEffectView *toast = [[NSVisualEffectView alloc] initWithFrame:toastContainer.bounds];
     toast.blendingMode = NSVisualEffectBlendingModeBehindWindow;
-    toast.material = NSVisualEffectMaterialToolTip;  // Lighter, more translucent
+    toast.material = NSVisualEffectMaterialToolTip;
     toast.state = NSVisualEffectStateActive;
     toast.wantsLayer = YES;
-    toast.layer.cornerRadius = toastHeight / 2;  // Pill shape like status pills
+    toast.layer.cornerRadius = toastHeight / 2;
+    toast.layer.masksToBounds = YES;  // Clip blur to pill shape
 
-    // Add subtle border for definition (like status pills)
+    // Add subtle border for definition
     toast.layer.borderWidth = 1.0;
     toast.layer.borderColor = [[NSColor grayColor] colorWithAlphaComponent:0.3].CGColor;
 
-    // Add shadow for floating effect
-    toast.shadow = [[NSShadow alloc] init];
-    toast.shadow.shadowColor = [[NSColor blackColor] colorWithAlphaComponent:0.25];
-    toast.shadow.shadowOffset = NSMakeSize(0, -2);
-    toast.shadow.shadowBlurRadius = 8;
-
-    toast.alphaValue = 0;
+    [toastContainer addSubview:toast];
 
     // Add label with contextual message
     SCScheduleManager *manager = [SCScheduleManager sharedManager];
@@ -938,20 +951,20 @@ static BOOL const kUseCalendarUI = YES;
         ? @"To create allow block — create a bundle first"
         : @"To create allow block — select a bundle first";
     NSTextField *label = [NSTextField labelWithString:message];
-    label.font = [NSFont systemFontOfSize:11 weight:NSFontWeightMedium];
-    label.textColor = [NSColor secondaryLabelColor];
+    label.font = [NSFont systemFontOfSize:17 weight:NSFontWeightMedium];
+    label.textColor = [NSColor labelColor];
     label.alignment = NSTextAlignmentCenter;
-    label.frame = NSMakeRect(0, (toastHeight - 16) / 2, toastWidth, 16);
+    label.frame = NSMakeRect(0, (toastHeight - 24) / 2, toastWidth, 24);
     [toast addSubview:label];
 
     // Position toast near top center of calendar grid
     NSRect gridFrame = self.calendarGridView.frame;
-    toast.frame = NSMakeRect(
+    toastContainer.frame = NSMakeRect(
         gridFrame.origin.x + (gridFrame.size.width - toastWidth) / 2,
         gridFrame.origin.y + gridFrame.size.height - 50,
         toastWidth, toastHeight
     );
-    [self.calendarGridView.superview addSubview:toast positioned:NSWindowAbove relativeTo:self.calendarGridView];
+    [self.calendarGridView.superview addSubview:toastContainer positioned:NSWindowAbove relativeTo:self.calendarGridView];
 
     // Flash calendar border red
     CALayer *flashLayer = [CALayer layer];
@@ -967,7 +980,7 @@ static BOOL const kUseCalendarUI = YES;
     // Animate toast in, hold, then out
     [NSAnimationContext runAnimationGroup:^(NSAnimationContext *context) {
         context.duration = 0.4;
-        toast.animator.alphaValue = 1.0;
+        toastContainer.animator.alphaValue = 1.0;
         flashLayer.opacity = 0.8;
     } completionHandler:^{
         // Flash out
@@ -980,9 +993,9 @@ static BOOL const kUseCalendarUI = YES;
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
             [NSAnimationContext runAnimationGroup:^(NSAnimationContext *context) {
                 context.duration = 0.3;
-                toast.animator.alphaValue = 0;
+                toastContainer.animator.alphaValue = 0;
             } completionHandler:^{
-                [toast removeFromSuperview];
+                [toastContainer removeFromSuperview];
                 [flashLayer removeFromSuperlayer];
                 isShowingWarning = NO;
             }];

@@ -5,13 +5,13 @@
 
 #import "SCDayScheduleEditorController.h"
 
-// Constants for timeline view
-static const CGFloat kTimelineHeight = 400.0;  // 33% larger for better visibility
-static const CGFloat kTimelineWidth = 60.0;
+// Constants for timeline view (scaled 33% larger)
+static const CGFloat kTimelineHeight = 533.0;  // 400 * 1.33
+static const CGFloat kTimelineWidth = 80.0;    // 60 * 1.33 - width for time labels
 static const CGFloat kSnapMinutes = 15.0;
-static const CGFloat kEdgeDetectionZone = 10.0; // Pixels near edge for resize detection
-static const CGFloat kTimelinePaddingTop = 12.0;    // Padding so 12am label isn't cut off
-static const CGFloat kTimelinePaddingBottom = 12.0; // Padding so bottom 12am label isn't cut off
+static const CGFloat kEdgeDetectionZone = 13.0; // Pixels near edge for resize detection
+static const CGFloat kTimelinePaddingTop = 16.0;    // Padding so 12am label isn't cut off
+static const CGFloat kTimelinePaddingBottom = 16.0; // Padding so bottom 12am label isn't cut off
 static const CGFloat kDragThreshold = 5.0;  // Pixels to move before starting drag-to-create
 
 #pragma mark - SCTimelineView (Private)
@@ -265,7 +265,7 @@ static const CGFloat kDragThreshold = 5.0;  // Pixels to move before starting dr
     CGFloat dashPattern[] = {4, 4};
     [nowPath setLineDash:dashPattern count:2 phase:0];
     [nowPath setLineWidth:2.0];
-    [nowPath moveToPoint:NSMakePoint(30, nowY)];
+    [nowPath moveToPoint:NSMakePoint(40, nowY)];
     [nowPath lineToPoint:NSMakePoint(self.bounds.size.width, nowY)];
     [nowPath stroke];
 
@@ -291,7 +291,7 @@ static const CGFloat kDragThreshold = 5.0;  // Pixels to move before starting dr
         CGFloat y = [self yFromMinutes:hour * 60];
 
         // Line
-        [path moveToPoint:NSMakePoint(30, y)];
+        [path moveToPoint:NSMakePoint(40, y)];
         [path lineToPoint:NSMakePoint(self.bounds.size.width, y)];
 
         // Label
@@ -317,7 +317,7 @@ static const CGFloat kDragThreshold = 5.0;  // Pixels to move before starting dr
     CGFloat endY = [self yFromMinutes:[window endMinutes]];
     CGFloat height = endY - startY;
 
-    NSRect windowRect = NSMakeRect(35, startY, self.bounds.size.width - 40, height);
+    NSRect windowRect = NSMakeRect(47, startY, self.bounds.size.width - 53, height);
 
     BOOL isSelected = (self.selectedBlockIndex == (NSInteger)index);
 
@@ -414,7 +414,7 @@ static const CGFloat kDragThreshold = 5.0;  // Pixels to move before starting dr
         SCTimeRange *window = self.allowedWindows[i];
         CGFloat startY = [self yFromMinutes:[window startMinutes]];
         CGFloat endY = [self yFromMinutes:[window endMinutes]];
-        NSRect windowRect = NSMakeRect(35, startY, self.bounds.size.width - 40, endY - startY);
+        NSRect windowRect = NSMakeRect(47, startY, self.bounds.size.width - 53, endY - startY);
         if (NSPointInRect(point, windowRect)) {
             return i;
         }
@@ -664,7 +664,7 @@ static const CGFloat kDragThreshold = 5.0;  // Pixels to move before starting dr
         CGFloat startY = [self yFromMinutes:[window startMinutes]];
         CGFloat endY = [self yFromMinutes:[window endMinutes]];
 
-        NSRect windowRect = NSMakeRect(35, startY, self.bounds.size.width - 40, endY - startY);
+        NSRect windowRect = NSMakeRect(47, startY, self.bounds.size.width - 53, endY - startY);
         if (!NSPointInRect(point, windowRect)) continue;
 
         // Near top or bottom edge - resize cursor
@@ -765,8 +765,8 @@ static const CGFloat kDragThreshold = 5.0;  // Pixels to move before starting dr
 - (instancetype)initWithBundle:(SCBlockBundle *)bundle
                       schedule:(SCWeeklySchedule *)schedule
                            day:(SCDayOfWeek)day {
-    // Create window programmatically - 600 height for larger timeline
-    NSRect frame = NSMakeRect(0, 0, 300, 600);
+    // Create window programmatically - 800 height for larger timeline (33% larger than original)
+    NSRect frame = NSMakeRect(0, 0, 400, 800);
     NSWindow *window = [[NSWindow alloc] initWithContentRect:frame
                                                    styleMask:NSWindowStyleMaskTitled
                                                      backing:NSBackingStoreBuffered
@@ -791,25 +791,25 @@ static const CGFloat kDragThreshold = 5.0;  // Pixels to move before starting dr
     NSView *contentView = self.window.contentView;
     contentView.wantsLayer = YES;
 
-    CGFloat y = contentView.bounds.size.height - 10;
-    CGFloat padding = 12;
+    CGFloat y = contentView.bounds.size.height - 13;
+    CGFloat padding = 16;
 
     // Title
-    y -= 30;
-    self.titleLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(padding, y, 200, 24)];
+    y -= 40;
+    self.titleLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(padding, y, 267, 32)];
     self.titleLabel.stringValue = [NSString stringWithFormat:@"%@ - %@",
                                     self.bundle.name,
                                     [SCWeeklySchedule displayNameForDay:self.day]];
-    self.titleLabel.font = [NSFont systemFontOfSize:16 weight:NSFontWeightSemibold];
+    self.titleLabel.font = [NSFont systemFontOfSize:21 weight:NSFontWeightSemibold];
     self.titleLabel.bezeled = NO;
     self.titleLabel.editable = NO;
     self.titleLabel.drawsBackground = NO;
     [contentView addSubview:self.titleLabel];
 
     // Legend - colored blocks = allowed time
-    NSTextField *legendLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(padding + 200, y + 4, 80, 16)];
+    NSTextField *legendLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(padding + 267, y + 6, 100, 20)];
     legendLabel.stringValue = @"■ = Allowed";
-    legendLabel.font = [NSFont systemFontOfSize:10];
+    legendLabel.font = [NSFont systemFontOfSize:13];
     legendLabel.textColor = self.bundle.color;
     legendLabel.bezeled = NO;
     legendLabel.editable = NO;
@@ -817,15 +817,15 @@ static const CGFloat kDragThreshold = 5.0;  // Pixels to move before starting dr
     [contentView addSubview:legendLabel];
 
     // Add time block button ("+") - use SF Symbol for cleaner appearance
-    y -= 35;
-    self.addTimeBlockButton = [[NSButton alloc] initWithFrame:NSMakeRect(padding, y - 2, 34, 24)];
+    y -= 47;
+    self.addTimeBlockButton = [[NSButton alloc] initWithFrame:NSMakeRect(padding, y - 2, 45, 32)];
     if (@available(macOS 11.0, *)) {
         NSImage *plusImage = [NSImage imageWithSystemSymbolName:@"plus" accessibilityDescription:@"Add"];
-        NSImageSymbolConfiguration *config = [NSImageSymbolConfiguration configurationWithPointSize:14 weight:NSFontWeightMedium];
+        NSImageSymbolConfiguration *config = [NSImageSymbolConfiguration configurationWithPointSize:18 weight:NSFontWeightMedium];
         self.addTimeBlockButton.image = [plusImage imageWithSymbolConfiguration:config];
     } else {
         self.addTimeBlockButton.title = @"+";
-        self.addTimeBlockButton.font = [NSFont systemFontOfSize:18 weight:NSFontWeightLight];
+        self.addTimeBlockButton.font = [NSFont systemFontOfSize:24 weight:NSFontWeightLight];
     }
     self.addTimeBlockButton.bezelStyle = NSBezelStyleRounded;
     self.addTimeBlockButton.target = self;
@@ -833,9 +833,9 @@ static const CGFloat kDragThreshold = 5.0;  // Pixels to move before starting dr
     self.addTimeBlockButton.toolTip = @"Add time block with specific times";
     [contentView addSubview:self.addTimeBlockButton];
 
-    // Timeline view - 400pt height for better visibility
-    y -= 420;
-    self.timelineView = [[SCTimelineView alloc] initWithFrame:NSMakeRect(padding, y, 276, 400)];
+    // Timeline view - 533pt height for better visibility (33% larger)
+    y -= 560;
+    self.timelineView = [[SCTimelineView alloc] initWithFrame:NSMakeRect(padding, y, 368, 533)];
     self.timelineView.bundleColor = self.bundle.color;
     self.timelineView.allowedWindows = [[self.workingSchedule allowedWindowsForDay:self.day] mutableCopy];
     self.timelineView.isCommitted = self.isCommitted;
@@ -855,22 +855,22 @@ static const CGFloat kDragThreshold = 5.0;  // Pixels to move before starting dr
     };
 
     self.timelineView.wantsLayer = YES;
-    self.timelineView.layer.cornerRadius = 8;
+    self.timelineView.layer.cornerRadius = 10;
     self.timelineView.layer.masksToBounds = YES;
     self.timelineView.layer.borderWidth = 1.0;
     self.timelineView.layer.borderColor = [[NSColor separatorColor] CGColor];
     [contentView addSubview:self.timelineView];
 
     // Buttons
-    y -= 45;
-    self.cancelButton = [[NSButton alloc] initWithFrame:NSMakeRect(padding, y, 80, 30)];
+    y -= 60;
+    self.cancelButton = [[NSButton alloc] initWithFrame:NSMakeRect(padding, y, 106, 40)];
     self.cancelButton.title = @"Cancel";
     self.cancelButton.bezelStyle = NSBezelStyleRounded;
     self.cancelButton.target = self;
     self.cancelButton.action = @selector(cancelClicked:);
     [contentView addSubview:self.cancelButton];
 
-    self.doneButton = [[NSButton alloc] initWithFrame:NSMakeRect(200, y, 80, 30)];
+    self.doneButton = [[NSButton alloc] initWithFrame:NSMakeRect(278, y, 106, 40)];
     self.doneButton.title = @"Done";
     self.doneButton.bezelStyle = NSBezelStyleRounded;
     self.doneButton.keyEquivalent = @"\r";
@@ -1175,7 +1175,7 @@ static const CGFloat kDragThreshold = 5.0;  // Pixels to move before starting dr
     CGFloat startY = [self.timelineView yFromMinutes:[block startMinutes]];
     CGFloat endY = [self.timelineView yFromMinutes:[block endMinutes]];
     CGFloat midY = (startY + endY) / 2;
-    NSRect blockRect = NSMakeRect(35, midY - 10, self.timelineView.bounds.size.width - 40, 20);
+    NSRect blockRect = NSMakeRect(47, midY - 13, self.timelineView.bounds.size.width - 53, 26);
 
     [self.editBlockPopover showRelativeToRect:blockRect
                                        ofView:self.timelineView
