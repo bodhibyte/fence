@@ -72,6 +72,12 @@ didRequestEditBundle:(SCBlockBundle *)bundle
 /// Undo manager for undo/redo support
 @property (nonatomic, strong) NSUndoManager *undoManager;
 
+/// Check if any block is currently selected
+- (BOOL)hasSelectedBlock;
+
+/// Clear all block selections
+- (void)clearAllSelections;
+
 @end
 
 NS_ASSUME_NONNULL_END

@@ -224,7 +224,23 @@ static const CGFloat kDimmedOpacity = 0.2;
         NSArray<SCTimeRange *> *windows = [schedule allowedWindowsForDay:self.day];
         CGFloat laneX = kLanePadding + laneIndex * laneWidth;
 
-        for (SCTimeRange *range in windows) {
+        for (NSInteger i = 0; i < (NSInteger)windows.count; i++) {
+            SCTimeRange *range = windows[i];
+
+            // Use draggingRange for the block being dragged (live preview)
+            BOOL shouldUseDragRange = self.isDragging &&
+                [bundle.bundleID isEqualToString:self.draggingBundleID] &&
+                i == self.selectedBlockIndex &&
+                self.draggingRange != nil;
+
+            if (shouldUseDragRange) {
+                NSLog(@"[DRAG] reloadBlocks: USING draggingRange for bundle=%@ idx=%ld", bundle.bundleID, (long)i);
+                range = self.draggingRange;
+            } else if (self.isDragging) {
+                NSLog(@"[DRAG] reloadBlocks: NOT using draggingRange - bundle=%@ (want %@) idx=%ld (want %ld) hasRange=%d",
+                      bundle.bundleID, self.draggingBundleID, (long)i, (long)self.selectedBlockIndex, self.draggingRange != nil);
+            }
+
             CGFloat y = [self yFromMinutes:[range startMinutes]];
             CGFloat height = [self yFromMinutes:[range endMinutes]] - y;
 
@@ -241,12 +257,8 @@ static const CGFloat kDimmedOpacity = 0.2;
             }
 
             // Selected state
-            if ([bundle.bundleID isEqualToString:self.selectedBundleID]) {
-                NSArray *bundleWindows = [schedule allowedWindowsForDay:self.day];
-                NSInteger idx = [bundleWindows indexOfObject:range];
-                if (idx == self.selectedBlockIndex) {
-                    blockView.isSelected = YES;
-                }
+            if ([bundle.bundleID isEqualToString:self.selectedBundleID] && i == self.selectedBlockIndex) {
+                blockView.isSelected = YES;
             }
 
             [self addSubview:blockView];
@@ -365,7 +377,51 @@ static const CGFloat kDimmedOpacity = 0.2;
             self.dragStartY = loc.y;
             self.dragStartMinutes = [self minutesFromY:loc.y];
 
+            NSLog(@"[DRAG] mouseDown on block: isDragging=%d isMoving=%d isResizeTop=%d isResizeBot=%d bundleID=%@ selIdx=%ld",
+                  self.isDragging, self.isMovingBlock, self.isResizingTop, self.isResizingBottom,
+                  self.draggingBundleID, (long)self.selectedBlockIndex);
+
             [self reloadBlocks];
+
+            // Tracking loop - captures all drag events, prevents NSScrollView from stealing them
+            BOOL didActuallyDrag = NO;
+            NSPoint startPoint = loc;
+
+            while (YES) {
+                @autoreleasepool {
+                    NSEvent *nextEvent = [self.window nextEventMatchingMask:(NSEventMaskLeftMouseDragged | NSEventMaskLeftMouseUp)
+                                                                  untilDate:[NSDate distantFuture]
+                                                                     inMode:NSEventTrackingRunLoopMode
+                                                                    dequeue:YES];
+                    if (!nextEvent) continue;
+
+                    if (nextEvent.type == NSEventTypeLeftMouseUp) {
+                        if (didActuallyDrag) {
+                            // Real drag - apply changes
+                            [self mouseUp:nextEvent];
+                        } else {
+                            // Simple click - just reset drag state, keep selection
+                            self.isDragging = NO;
+                            self.isMovingBlock = NO;
+                            self.isResizingTop = NO;
+                            self.isResizingBottom = NO;
+                            self.draggingRange = nil;
+                            self.originalDragRange = nil;
+                            self.draggingBundleID = nil;
+                        }
+                        break;
+                    } else if (nextEvent.type == NSEventTypeLeftMouseDragged) {
+                        // Hysteresis check - ignore jitters
+                        NSPoint currentPoint = [self convertPoint:nextEvent.locationInWindow fromView:nil];
+                        CGFloat distance = hypot(currentPoint.x - startPoint.x, currentPoint.y - startPoint.y);
+
+                        if (distance > kDragThreshold) {
+                            didActuallyDrag = YES;
+                            [self mouseDragged:nextEvent];
+                        }
+                    }
+                }
+            }
             return;
         }
     }
@@ -383,6 +439,10 @@ static const CGFloat kDimmedOpacity = 0.2;
 
     // Empty area click with focus - record position for potential drag-to-create
     // (Don't create block yet - wait for drag threshold)
+    // Clear selection in other columns when clicking empty area
+    if (self.onBlockSelected) {
+        self.onBlockSelected();
+    }
     self.hasPendingEmptyAreaClick = YES;
     self.mouseDownPoint = loc;
     self.dragStartY = loc.y;
@@ -393,6 +453,9 @@ static const CGFloat kDimmedOpacity = 0.2;
     if (self.isCommitted) return;
 
     NSPoint loc = [self convertPoint:event.locationInWindow fromView:nil];
+
+    NSLog(@"[DRAG] mouseDragged: isDragging=%d isMoving=%d isResizeTop=%d isResizeBot=%d isCreating=%d",
+          self.isDragging, self.isMovingBlock, self.isResizingTop, self.isResizingBottom, self.isCreatingBlock);
 
     // Check if we should start drag-to-create from a pending empty area click
     if (self.hasPendingEmptyAreaClick && !self.isDragging) {
@@ -465,6 +528,9 @@ static const CGFloat kDimmedOpacity = 0.2;
     }
 
     // Update visual preview
+    NSLog(@"[DRAG] Updating preview: draggingRange=%@-%@ bundleID=%@ selIdx=%ld",
+          self.draggingRange.startTime, self.draggingRange.endTime,
+          self.draggingBundleID, (long)self.selectedBlockIndex);
     [self reloadBlocks];
 }
 

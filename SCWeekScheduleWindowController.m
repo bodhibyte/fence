@@ -1017,4 +1017,22 @@ static BOOL const kUseCalendarUI = YES;
     [NSApp activateIgnoringOtherApps:YES];
 }
 
+#pragma mark - Keyboard Handling
+
+- (void)cancelOperation:(id)sender {
+    // Escape key - progressive: first clear selection, then clear focus
+    BOOL hasSel = [self.calendarGridView hasSelectedBlock];
+    NSLog(@"[ESC] WindowController.cancelOperation: hasSel=%d focusedBundle=%@ firstResp=%@",
+          hasSel, self.focusedBundleID, self.window.firstResponder);
+    if (hasSel) {
+        NSLog(@"[ESC] WindowController: clearing all selections");
+        [self.calendarGridView clearAllSelections];
+    } else if (self.focusedBundleID) {
+        NSLog(@"[ESC] WindowController: clearing focus");
+        [self calendarGridDidClickEmptyArea:self.calendarGridView];
+    } else {
+        NSLog(@"[ESC] WindowController: UNHANDLED - no selection, no focus!");
+    }
+}
+
 @end
