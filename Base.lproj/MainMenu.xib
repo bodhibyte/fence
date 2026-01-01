@@ -213,12 +213,6 @@
                     <modifierMask key="keyEquivalentModifierMask"/>
                     <menu key="submenu" title="Help" systemMenu="help" id="900">
                         <items>
-                            <menuItem title="Get Started" id="908">
-                                <modifierMask key="keyEquivalentModifierMask"/>
-                                <connections>
-                                    <action selector="showGetStartedWindow:" target="469" id="910"/>
-                                </connections>
-                            </menuItem>
                             <menuItem title="Support Hub" id="sDg-De-b0b">
                                 <modifierMask key="keyEquivalentModifierMask"/>
                                 <connections>
