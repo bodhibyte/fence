@@ -103,7 +103,8 @@ static BOOL const kUseCalendarUI = YES;
     [contentView addSubview:frostedBackground positioned:NSWindowBelow relativeTo:nil];
 
     CGFloat padding = 16;
-    CGFloat y = contentView.bounds.size.height - padding;
+    CGFloat topPadding = 32; // Extra space below traffic lights
+    CGFloat y = contentView.bounds.size.height - topPadding;
 
     // Title
     y -= 30;
@@ -153,7 +154,7 @@ static BOOL const kUseCalendarUI = YES;
     [contentView addSubview:self.nextWeekButton];
 
     // Status view - use semi-transparent background to work with frosted glass
-    y -= 55; // 50px height + 5px gap
+    y -= 66; // 50px height + 16px gap
     self.statusView = [[NSView alloc] initWithFrame:NSMakeRect(padding, y, contentView.bounds.size.width - padding * 2, 50)];
     self.statusView.wantsLayer = YES;
     self.statusView.layer.backgroundColor = [[NSColor.whiteColor colorWithAlphaComponent:0.1] CGColor];
@@ -173,7 +174,8 @@ static BOOL const kUseCalendarUI = YES;
 
     // Main content area - either old grid or new calendar UI
     CGFloat bottomControlsHeight = 85; // Space for buttons at bottom
-    CGFloat mainAreaHeight = y - bottomControlsHeight;
+    CGFloat gapBelowStatus = 16; // Space between status bar and content
+    CGFloat mainAreaHeight = y - bottomControlsHeight - gapBelowStatus;
     CGFloat sidebarWidth = 180;
 
     if (kUseCalendarUI) {

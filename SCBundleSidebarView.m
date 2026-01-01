@@ -191,8 +191,9 @@ static const CGFloat kHeaderHeight = 30.0;
 - (void)setupUI {
     self.wantsLayer = YES;
 
-    // Semi-transparent background
+    // Semi-transparent background with rounded corners (matches status bar)
     self.layer.backgroundColor = [[NSColor.whiteColor colorWithAlphaComponent:0.05] CGColor];
+    self.layer.cornerRadius = 8.0;
 
     CGFloat y = self.bounds.size.height - kPadding;
 
