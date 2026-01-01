@@ -820,9 +820,40 @@ static BOOL const kUseCalendarUI = YES;
 #pragma mark - SCCalendarGridViewDelegate
 
 - (void)calendarGrid:(SCCalendarGridView *)grid didUpdateSchedule:(SCWeeklySchedule *)schedule forBundleID:(NSString *)bundleID {
-    // Save the updated schedule to the manager
     SCScheduleManager *manager = [SCScheduleManager sharedManager];
+
+    // Capture old schedule for undo
+    SCWeeklySchedule *oldSchedule = [manager scheduleForBundleID:bundleID weekOffset:self.currentWeekOffset];
+    NSInteger weekOffset = self.currentWeekOffset;
+
+    // Register undo action
+    [[grid.undoManager prepareWithInvocationTarget:self] restoreSchedule:oldSchedule
+                                                             forBundleID:bundleID
+                                                              weekOffset:weekOffset
+                                                            calendarGrid:grid];
+
+    // Save the updated schedule to the manager
     [manager updateSchedule:schedule forWeekOffset:self.currentWeekOffset];
+}
+
+- (void)restoreSchedule:(SCWeeklySchedule *)schedule
+            forBundleID:(NSString *)bundleID
+             weekOffset:(NSInteger)weekOffset
+           calendarGrid:(SCCalendarGridView *)grid {
+    SCScheduleManager *manager = [SCScheduleManager sharedManager];
+
+    // Capture current state for redo
+    SCWeeklySchedule *currentSchedule = [manager scheduleForBundleID:bundleID weekOffset:weekOffset];
+    [[grid.undoManager prepareWithInvocationTarget:self] restoreSchedule:currentSchedule
+                                                             forBundleID:bundleID
+                                                              weekOffset:weekOffset
+                                                            calendarGrid:grid];
+
+    // Restore the old schedule
+    [manager updateSchedule:schedule forWeekOffset:weekOffset];
+
+    // Refresh the UI
+    [self reloadData];
 }
 
 - (void)calendarGridDidClickEmptyArea:(SCCalendarGridView *)grid {
@@ -852,6 +883,93 @@ static BOOL const kUseCalendarUI = YES;
     self.dayEditorController.isCommitted = [manager isCommittedForWeekOffset:self.editingWeekOffset];
 
     [self.dayEditorController beginSheetModalForWindow:self.window completionHandler:nil];
+}
+
+- (void)calendarGridDidAttemptInteractionWithoutFocus:(SCCalendarGridView *)grid {
+    [self showSelectBundleWarning];
+}
+
+#pragma mark - Warning UI
+
+- (void)showSelectBundleWarning {
+    // Don't show multiple warnings at once
+    static BOOL isShowingWarning = NO;
+    if (isShowingWarning) return;
+    isShowingWarning = YES;
+
+    // Create thin frosted glass toast (like status pills but grey)
+    CGFloat toastWidth = 280;
+    CGFloat toastHeight = 28;
+
+    NSVisualEffectView *toast = [[NSVisualEffectView alloc] initWithFrame:NSMakeRect(0, 0, toastWidth, toastHeight)];
+    toast.blendingMode = NSVisualEffectBlendingModeBehindWindow;
+    toast.material = NSVisualEffectMaterialToolTip;  // Lighter, more translucent
+    toast.state = NSVisualEffectStateActive;
+    toast.wantsLayer = YES;
+    toast.layer.cornerRadius = toastHeight / 2;  // Pill shape like status pills
+
+    // Add subtle border for definition (like status pills)
+    toast.layer.borderWidth = 1.0;
+    toast.layer.borderColor = [[NSColor grayColor] colorWithAlphaComponent:0.3].CGColor;
+
+    // Add shadow for floating effect
+    toast.shadow = [[NSShadow alloc] init];
+    toast.shadow.shadowColor = [[NSColor blackColor] colorWithAlphaComponent:0.25];
+    toast.shadow.shadowOffset = NSMakeSize(0, -2);
+    toast.shadow.shadowBlurRadius = 8;
+
+    toast.alphaValue = 0;
+
+    // Add label with clearer message
+    NSTextField *label = [NSTextField labelWithString:@"To create allow block — select a bundle first"];
+    label.font = [NSFont systemFontOfSize:11 weight:NSFontWeightMedium];
+    label.textColor = [NSColor secondaryLabelColor];
+    label.alignment = NSTextAlignmentCenter;
+    label.frame = NSMakeRect(0, (toastHeight - 16) / 2, toastWidth, 16);
+    [toast addSubview:label];
+
+    // Position toast near top center of calendar grid
+    NSRect gridFrame = self.calendarGridView.frame;
+    toast.frame = NSMakeRect(
+        gridFrame.origin.x + (gridFrame.size.width - toastWidth) / 2,
+        gridFrame.origin.y + gridFrame.size.height - 50,
+        toastWidth, toastHeight
+    );
+    [self.calendarGridView.superview addSubview:toast positioned:NSWindowAbove relativeTo:self.calendarGridView];
+
+    // Flash calendar border red
+    CALayer *flashLayer = [CALayer layer];
+    flashLayer.frame = self.calendarGridView.bounds;
+    flashLayer.borderColor = [NSColor systemRedColor].CGColor;
+    flashLayer.borderWidth = 2.0;
+    flashLayer.cornerRadius = 4.0;
+    flashLayer.opacity = 0;
+    [self.calendarGridView.layer addSublayer:flashLayer];
+
+    // Animate toast in, hold, then out
+    [NSAnimationContext runAnimationGroup:^(NSAnimationContext *context) {
+        context.duration = 0.2;
+        toast.animator.alphaValue = 1.0;
+        flashLayer.opacity = 0.8;
+    } completionHandler:^{
+        // Flash out
+        [NSAnimationContext runAnimationGroup:^(NSAnimationContext *context) {
+            context.duration = 0.3;
+            flashLayer.opacity = 0;
+        } completionHandler:nil];
+
+        // Hold then fade out toast
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            [NSAnimationContext runAnimationGroup:^(NSAnimationContext *context) {
+                context.duration = 0.3;
+                toast.animator.alphaValue = 0;
+            } completionHandler:^{
+                [toast removeFromSuperview];
+                [flashLayer removeFromSuperlayer];
+                isShowingWarning = NO;
+            }];
+        });
+    }];
 }
 
 #pragma mark - SCDayScheduleEditorDelegate

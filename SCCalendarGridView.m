@@ -15,6 +15,7 @@ static const CGFloat kSnapMinutes = 15.0;  // Snap to 15-min grid
 static const CGFloat kMinBlockDuration = 30.0;  // Minimum 30 min block
 static const CGFloat kEdgeDetectionZone = 8.0;  // Pixels for resize detection
 static const CGFloat kLanePadding = 2.0;
+static const CGFloat kDragThreshold = 5.0;  // Pixels to move before starting drag-to-create
 
 // Opacity for non-focused bundles
 static const CGFloat kDimmedOpacity = 0.2;
@@ -25,6 +26,7 @@ static const CGFloat kDimmedOpacity = 0.2;
 
 @property (nonatomic, strong) SCTimeRange *timeRange;
 @property (nonatomic, strong) NSColor *color;
+@property (nonatomic, copy) NSString *bundleID;  // Track which bundle owns this block
 @property (nonatomic, assign) BOOL isSelected;
 @property (nonatomic, assign) BOOL isDimmed;
 @property (nonatomic, assign) BOOL isCommitted;
@@ -127,8 +129,10 @@ static const CGFloat kDimmedOpacity = 0.2;
 @property (nonatomic, assign) BOOL isResizingTop;
 @property (nonatomic, assign) BOOL isResizingBottom;
 @property (nonatomic, assign) BOOL isMovingBlock;
+@property (nonatomic, assign) BOOL hasPendingEmptyAreaClick;  // Waiting for drag threshold
 @property (nonatomic, assign) CGFloat dragStartY;
 @property (nonatomic, assign) NSInteger dragStartMinutes;
+@property (nonatomic, assign) NSPoint mouseDownPoint;  // For drag threshold detection
 @property (nonatomic, strong, nullable) SCTimeRange *draggingRange;
 @property (nonatomic, strong, nullable) SCTimeRange *originalDragRange;
 @property (nonatomic, copy, nullable) NSString *draggingBundleID;
@@ -141,6 +145,7 @@ static const CGFloat kDimmedOpacity = 0.2;
 @property (nonatomic, copy, nullable) void (^onScheduleUpdated)(NSString *bundleID, SCWeeklySchedule *schedule);
 @property (nonatomic, copy, nullable) void (^onEmptyAreaClicked)(void);
 @property (nonatomic, copy, nullable) void (^onBlockDoubleClicked)(SCBlockBundle *bundle);
+@property (nonatomic, copy, nullable) void (^onNoFocusInteraction)(void);  // Warning when interacting without bundle focus
 
 - (void)reloadBlocks;
 - (CGFloat)yFromMinutes:(NSInteger)minutes;
@@ -224,6 +229,7 @@ static const CGFloat kDimmedOpacity = 0.2;
             SCAllowBlockView *blockView = [[SCAllowBlockView alloc] initWithFrame:blockFrame];
             blockView.timeRange = range;
             blockView.color = bundle.color;
+            blockView.bundleID = bundle.bundleID;  // Track which bundle owns this block
             blockView.isCommitted = self.isCommitted;
 
             // Dimmed if not focused bundle (and we have a focused bundle)
@@ -290,32 +296,30 @@ static const CGFloat kDimmedOpacity = 0.2;
 
 - (void)mouseDown:(NSEvent *)event {
     if (self.isCommitted) return;
-    if (!self.focusedBundleID) {
-        // No bundle focused - click goes to empty area handler
-        if (self.onEmptyAreaClicked) {
-            self.onEmptyAreaClicked();
-        }
-        return;
-    }
 
     NSPoint loc = [self convertPoint:event.locationInWindow fromView:nil];
 
-    // Check if clicking on an existing block
+    // FIRST: Check if clicking on an existing block (allow even in All-Up/no focus state)
     for (SCAllowBlockView *blockView in _blockViews) {
         if (NSPointInRect(loc, blockView.frame)) {
+            // Get the bundle this block belongs to
+            NSString *blockBundleID = blockView.bundleID;
+            if (!blockBundleID) continue;
+
             if (event.clickCount == 2) {
-                // Double-click: open editor
-                SCBlockBundle *bundle = [self bundleForID:self.focusedBundleID];
+                // Double-click: open editor for THIS block's bundle
+                SCBlockBundle *bundle = [self bundleForID:blockBundleID];
                 if (bundle && self.onBlockDoubleClicked) {
                     self.onBlockDoubleClicked(bundle);
                 }
                 return;
             }
 
-            // Single click on block - select it and check for resize handles
-            self.selectedBundleID = self.focusedBundleID;
-            // Find index
-            SCWeeklySchedule *schedule = self.schedules[self.focusedBundleID];
+            // Single click on block - select it and prepare for drag/resize
+            self.selectedBundleID = blockBundleID;
+
+            // Find index in this bundle's schedule
+            SCWeeklySchedule *schedule = self.schedules[blockBundleID];
             NSArray *windows = [schedule allowedWindowsForDay:self.day];
             self.selectedBlockIndex = [windows indexOfObject:blockView.timeRange];
 
@@ -330,7 +334,7 @@ static const CGFloat kDimmedOpacity = 0.2;
             }
 
             self.isDragging = YES;
-            self.draggingBundleID = self.focusedBundleID;
+            self.draggingBundleID = blockBundleID;
             self.draggingRange = [blockView.timeRange copy];
             self.originalDragRange = [blockView.timeRange copy];
             self.dragStartY = loc.y;
@@ -341,24 +345,50 @@ static const CGFloat kDimmedOpacity = 0.2;
         }
     }
 
-    // Clicking empty area - start creating new block
-    self.isCreatingBlock = YES;
-    self.isDragging = YES;
-    self.draggingBundleID = self.focusedBundleID;
+    // SECOND: Clicking on empty area - requires bundle focus to create blocks
+    if (!self.focusedBundleID) {
+        // No bundle focused - show warning
+        if (self.onNoFocusInteraction) {
+            self.onNoFocusInteraction();
+        }
+        return;
+    }
 
-    NSInteger startMinutes = [self snapToGrid:[self minutesFromY:loc.y]];
-    self.draggingRange = [SCTimeRange rangeWithStart:[self timeStringFromMinutes:startMinutes]
-                                                 end:[self timeStringFromMinutes:startMinutes + 60]];
+    // Empty area click with focus - record position for potential drag-to-create
+    // (Don't create block yet - wait for drag threshold)
+    self.hasPendingEmptyAreaClick = YES;
+    self.mouseDownPoint = loc;
     self.dragStartY = loc.y;
-    self.dragStartMinutes = startMinutes;
-
-    [self reloadBlocks];
+    self.dragStartMinutes = [self snapToGrid:[self minutesFromY:loc.y]];
 }
 
 - (void)mouseDragged:(NSEvent *)event {
-    if (!self.isDragging || self.isCommitted) return;
+    if (self.isCommitted) return;
 
     NSPoint loc = [self convertPoint:event.locationInWindow fromView:nil];
+
+    // Check if we should start drag-to-create from a pending empty area click
+    if (self.hasPendingEmptyAreaClick && !self.isDragging) {
+        // Check if mouse has moved past threshold
+        CGFloat dx = loc.x - self.mouseDownPoint.x;
+        CGFloat dy = loc.y - self.mouseDownPoint.y;
+        CGFloat distance = sqrt(dx * dx + dy * dy);
+
+        if (distance >= kDragThreshold) {
+            // Start creating new block via drag
+            self.hasPendingEmptyAreaClick = NO;
+            self.isCreatingBlock = YES;
+            self.isDragging = YES;
+            self.draggingBundleID = self.focusedBundleID;
+            self.draggingRange = [SCTimeRange rangeWithStart:[self timeStringFromMinutes:self.dragStartMinutes]
+                                                         end:[self timeStringFromMinutes:self.dragStartMinutes + 60]];
+        } else {
+            return;  // Not yet past threshold
+        }
+    }
+
+    if (!self.isDragging) return;
+
     NSInteger currentMinutes = [self snapToGrid:[self minutesFromY:loc.y]];
 
     if (self.isCreatingBlock) {
@@ -407,11 +437,14 @@ static const CGFloat kDimmedOpacity = 0.2;
                                                      end:[self timeStringFromMinutes:MIN(1440, newEnd)]];
     }
 
-    // Update visual preview (would need to refresh block views with preview)
-    [self setNeedsDisplay:YES];
+    // Update visual preview
+    [self reloadBlocks];
 }
 
 - (void)mouseUp:(NSEvent *)event {
+    // Reset pending empty area click state
+    self.hasPendingEmptyAreaClick = NO;
+
     if (!self.isDragging) return;
 
     // Apply the change
@@ -689,6 +722,11 @@ static const CGFloat kDimmedOpacity = 0.2;
                 [weakSelf.delegate calendarGrid:weakSelf didRequestEditBundle:bundle forDay:day];
             }
         };
+        column.onNoFocusInteraction = ^{
+            if ([weakSelf.delegate respondsToSelector:@selector(calendarGridDidAttemptInteractionWithoutFocus:)]) {
+                [weakSelf.delegate calendarGridDidAttemptInteractionWithoutFocus:weakSelf];
+            }
+        };
 
         [column reloadBlocks];
         [self.columnsContainer addSubview:column];
@@ -744,6 +782,36 @@ static const CGFloat kDimmedOpacity = 0.2;
         }
     }
     return nil;
+}
+
+#pragma mark - Keyboard Handling
+
+- (BOOL)performKeyEquivalent:(NSEvent *)event {
+    NSString *chars = [[event charactersIgnoringModifiers] lowercaseString];
+    BOOL cmdPressed = (event.modifierFlags & NSEventModifierFlagCommand) != 0;
+    BOOL shiftPressed = (event.modifierFlags & NSEventModifierFlagShift) != 0;
+
+    // Cmd+Shift+Z = Redo
+    if (cmdPressed && shiftPressed && [chars isEqualToString:@"z"]) {
+        if ([self.undoManager canRedo]) {
+            [self.undoManager redo];
+            return YES;
+        }
+    }
+
+    // Cmd+Z = Undo
+    if (cmdPressed && !shiftPressed && [chars isEqualToString:@"z"]) {
+        if ([self.undoManager canUndo]) {
+            [self.undoManager undo];
+            return YES;
+        }
+    }
+
+    return [super performKeyEquivalent:event];
+}
+
+- (BOOL)acceptsFirstResponder {
+    return YES;
 }
 
 @end

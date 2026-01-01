@@ -29,6 +29,12 @@ NS_ASSUME_NONNULL_BEGIN
 didRequestEditBundle:(SCBlockBundle *)bundle
               forDay:(SCDayOfWeek)day;
 
+@optional
+
+/// Called when user tries to interact with empty area without a bundle selected
+/// Use this to show a "select a bundle first" warning
+- (void)calendarGridDidAttemptInteractionWithoutFocus:(SCCalendarGridView *)grid;
+
 @end
 
 @interface SCCalendarGridView : NSView

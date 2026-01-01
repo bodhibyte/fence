@@ -1,4 +1,4 @@
-# [SelfControl][website]
+# Fence
 
 <p align="center">
     <img src="./.github/docs/screenshot.png" />
@@ -6,27 +6,125 @@
 
 ## About
 
-SelfControl is a free and open-source application for macOS that lets you block **your own** access to distracting websites, your mail servers, or anything else on the Internet. Just set a period of time to block for, add sites to your blocklist, and click "Start Block". Until that timer expires, you will be unable to access those sites—even if you restart your computer or delete the application.
+**Fence** is a free and open-source macOS application that blocks distracting websites and apps on a weekly schedule. Set your blocking schedule for the entire week, commit to it once, and stick with it—no undos, no exceptions.
+
+Unlike traditional website blockers that let you disable blocking on a whim, Fence enforces your commitment. Once you start a block:
+- ✅ **Schedule for the week** - Define when sites/apps are blocked each day
+- ✅ **Commit once** - Lock in your schedule after planning
+- ✅ **No escape hatches** - Blocks persist even through reboots or app deletion
+- ✅ **Block websites AND apps** - Prevent access to both web distractions and desktop apps (Terminal, Cursor, etc.)
+
+## Support This Project
+
+If Fence helps you stay focused, consider supporting its development:
+
+<a href="https://buymeacoffee.com/vishalja1n" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 60px !important;width: 217px !important;" ></a>
 
 ## Credits
 
-Developed by [Charlie Stigler](http://charliestigler.com), [Steve Lambert](http://visitsteve.com), and [others](https://github.com/SelfControlApp/selfcontrol/graphs/contributors). Your contributions very welcome!
+Originally forked from [SelfControl](https://selfcontrolapp.com/) by [Charlie Stigler](http://charliestigler.com) and [Steve Lambert](http://visitsteve.com).
 
-SelfControl is now available in 12 languages thanks to [the fine translators credited here](https://github.com/SelfControlApp/selfcontrol/wiki/Translation-Credits).
+Fence was created and is maintained by [Vishal Jain](https://github.com/vishalja1n).
 
 ## License
 
-SelfControl is free software under the GPL. See [this file](./COPYING) for more details.
+Fence is free software under the GPL. See [this file](./COPYING) for more details.
 
-## Building For Development
+## Building and Running Fence
 
-Users should always download the latest version of SelfControl from [our website][website]. If you want to contribute to SelfControl, you'll need to learn to build it for development. This can only be done on a Mac running a modern version of macOS.
+### Prerequisites
 
-1. Clone the SelfControl repo from GitHub.
-2. Make sure you have a recent version of Xcode and the Xcode command-line tools installed.
-3. Install [CocoaPods](https://cocoapods.org/): `sudo gem install cocoapods`
-4. Install the SelfControl dependencies using CocoaPods: `pod install`
-5. Open the `selfcontrol.xcworkspace` file (**NOT** `selfcontrol.xcodeproj`)
-6. Build and run (you may need to update/remove code signing settings to make it build properly)
+- **macOS** (tested on macOS 12+)
+- **Xcode** (latest version recommended)
+- **Xcode Command Line Tools** - Install with: `xcode-select --install`
+- **CocoaPods** - Dependency manager for the project
 
-[website]: https://selfcontrolapp.com/
+### Setup Instructions
+
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/vishalja1n/fence.git
+   cd fence
+   ```
+
+2. **Install CocoaPods** (if not already installed)
+   ```bash
+   sudo gem install cocoapods
+   ```
+
+3. **Install dependencies**
+   ```bash
+   pod install
+   ```
+
+4. **Open the workspace**
+   ```bash
+   open SelfControl.xcworkspace
+   ```
+
+   ⚠️ **Important:** Always open `SelfControl.xcworkspace`, **NOT** `SelfControl.xcodeproj`. Opening the project file will cause linker errors.
+
+5. **Build and run**
+
+   **Option A: Using Xcode**
+   - Select the "SelfControl" scheme
+   - Click the Run button (⌘R)
+   - You may need to adjust code signing settings in the project settings
+
+   **Option B: Using Command Line (Debug)**
+   ```bash
+   xcodebuild -workspace SelfControl.xcworkspace \
+              -scheme SelfControl \
+              -configuration Debug
+   ```
+
+   **Option C: Using Command Line (Release)**
+   ```bash
+   xcodebuild -workspace SelfControl.xcworkspace \
+              -scheme SelfControl \
+              -configuration Release \
+              -derivedDataPath build/DerivedData \
+              -arch arm64
+   ```
+
+6. **Run the application**
+   ```bash
+   open build/Release/SelfControl.app
+   ```
+
+   Note: The app requires proper code signing to install the privileged helper tool that performs blocking.
+
+### Building a Release
+
+To create a signed, notarized release with a DMG installer:
+
+```bash
+./scripts/build-release.sh 1.0
+```
+
+This will create a distributable DMG in the `build/` directory.
+
+### Troubleshooting
+
+**Problem: "library 'Pods-SCKillerHelper' not found"**
+- **Solution:** You opened the `.xcodeproj` file instead of `.xcworkspace`. Close Xcode and open `SelfControl.xcworkspace`.
+
+**Problem: Code signing errors**
+- **Solution:** In Xcode, go to the project settings → Signing & Capabilities, and either:
+  - Sign in with your Apple ID and select your team
+  - Or disable "Automatically manage signing" and select a valid certificate
+
+**Problem: Helper tool installation fails**
+- **Solution:** This is usually a signing issue. The helper tool requires a valid Developer ID or Ad-Hoc signing to install via `SMJobBless`.
+
+### Project Structure
+
+- `SelfControl.app` - Main application (user interface)
+- `selfcontrold` - Privileged daemon that performs blocking (runs as root)
+- `SCKillerHelper` - Helper tool for terminating blocked apps
+- `Common/` - Shared code between app and daemon
+- `Block Management/` - Blocking engine (hosts file, packet filter, app blocker)
+
+### Contributing
+
+Contributions are welcome! Please feel free to submit pull requests or open issues for bugs and feature requests.
