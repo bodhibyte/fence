@@ -63,7 +63,7 @@ static BOOL const kUseCalendarUI = YES;
 @implementation SCWeekScheduleWindowController
 
 - (instancetype)init {
-    NSRect frame = NSMakeRect(0, 0, 900, 700);
+    NSRect frame = NSMakeRect(0, 0, 1440, 1116);
     NSWindow *window = [[NSWindow alloc] initWithContentRect:frame
                                                    styleMask:(NSWindowStyleMaskTitled |
                                                              NSWindowStyleMaskClosable |
