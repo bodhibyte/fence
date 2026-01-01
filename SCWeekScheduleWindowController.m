@@ -55,6 +55,9 @@ static BOOL const kUseCalendarUI = YES;
 @property (nonatomic, strong, nullable) SCBundleEditorController *bundleEditorController;
 @property (nonatomic, strong, nullable) SCLicenseWindowController *licenseWindowController;
 
+// Flag to prevent redundant reloadData when grid updates schedule
+@property (nonatomic, assign) BOOL isUpdatingFromGrid;
+
 @end
 
 @implementation SCWeekScheduleWindowController
@@ -745,6 +748,10 @@ static BOOL const kUseCalendarUI = YES;
 #pragma mark - Notifications
 
 - (void)scheduleDidChange:(NSNotification *)note {
+    // Skip redundant reload when the grid itself triggered the update
+    // (the grid already refreshes via handleScheduleUpdate)
+    if (self.isUpdatingFromGrid) return;
+
     dispatch_async(dispatch_get_main_queue(), ^{
         [self reloadData];
     });
@@ -833,7 +840,10 @@ static BOOL const kUseCalendarUI = YES;
                                                             calendarGrid:grid];
 
     // Save the updated schedule to the manager
+    // Set flag to prevent redundant reloadData (grid already updated itself)
+    self.isUpdatingFromGrid = YES;
     [manager updateSchedule:schedule forWeekOffset:self.currentWeekOffset];
+    self.isUpdatingFromGrid = NO;
 }
 
 - (void)restoreSchedule:(SCWeeklySchedule *)schedule
@@ -858,11 +868,13 @@ static BOOL const kUseCalendarUI = YES;
 
 - (void)calendarGridDidClickEmptyArea:(SCCalendarGridView *)grid {
     // Clear focus - return to All-Up state
+    NSLog(@"[ESC] WindowController: calendarGridDidClickEmptyArea called, clearing focusedBundleID=%@", self.focusedBundleID);
     self.focusedBundleID = nil;
     self.bundleSidebar.selectedBundleID = nil;
     [self.bundleSidebar reloadData];
     self.calendarGridView.focusedBundleID = nil;
     [self.calendarGridView reloadData];
+    NSLog(@"[ESC] WindowController: focus cleared");
 }
 
 - (void)calendarGrid:(SCCalendarGridView *)grid didRequestEditBundle:(SCBlockBundle *)bundle forDay:(SCDayOfWeek)day {
@@ -943,7 +955,9 @@ static BOOL const kUseCalendarUI = YES;
 
     // Flash calendar border red
     CALayer *flashLayer = [CALayer layer];
-    flashLayer.frame = self.calendarGridView.bounds;
+    flashLayer.frame = self.calendarGridView.layer.bounds;
+    flashLayer.autoresizingMask = kCALayerWidthSizable | kCALayerHeightSizable;
+    flashLayer.zPosition = 1000;  // Stay on top of grid content
     flashLayer.borderColor = [NSColor systemRedColor].CGColor;
     flashLayer.borderWidth = 2.0;
     flashLayer.cornerRadius = 4.0;
@@ -952,13 +966,13 @@ static BOOL const kUseCalendarUI = YES;
 
     // Animate toast in, hold, then out
     [NSAnimationContext runAnimationGroup:^(NSAnimationContext *context) {
-        context.duration = 0.2;
+        context.duration = 0.4;
         toast.animator.alphaValue = 1.0;
         flashLayer.opacity = 0.8;
     } completionHandler:^{
         // Flash out
         [NSAnimationContext runAnimationGroup:^(NSAnimationContext *context) {
-            context.duration = 0.3;
+            context.duration = 0.6;
             flashLayer.opacity = 0;
         } completionHandler:nil];
 
