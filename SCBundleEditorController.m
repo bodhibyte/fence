@@ -230,7 +230,7 @@
     [contentView addSubview:self.cancelButton];
 
     // Warning label for committed state (hidden by default)
-    self.committedWarningLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(padding + 90, y - 5, 380, 32)];
+    self.committedWarningLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(padding + 90, y - 20, 190, 60)];
     self.committedWarningLabel.stringValue = @"Locked - Bundle used in active schedule. Additional entries will take effect immediately.";
     self.committedWarningLabel.font = [NSFont systemFontOfSize:10];
     self.committedWarningLabel.textColor = [NSColor systemRedColor];
@@ -239,7 +239,7 @@
     self.committedWarningLabel.drawsBackground = NO;
     self.committedWarningLabel.lineBreakMode = NSLineBreakByWordWrapping;
     self.committedWarningLabel.usesSingleLineMode = NO;
-    self.committedWarningLabel.maximumNumberOfLines = 2;
+    self.committedWarningLabel.maximumNumberOfLines = 4;
     self.committedWarningLabel.hidden = YES;
     [contentView addSubview:self.committedWarningLabel];
 }
