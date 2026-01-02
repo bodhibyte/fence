@@ -622,6 +622,9 @@ static BOOL const kUseCalendarUI = YES;
         if (returnCode == NSAlertFirstButtonReturn) {
             [manager commitToWeekWithOffset:weekOffset];
             [self reloadData];
+            // Restore focus after auth dialog closes
+            [self.window makeKeyAndOrderFront:nil];
+            [NSApp activateIgnoringOtherApps:YES];
         }
     }];
 }
