@@ -524,7 +524,8 @@ static const CGFloat kDimmedOpacity = 0.2;
                 self.isMovingBlock = YES;
             }
 
-            self.isDragging = YES;
+            // Don't set isDragging yet - wait until actual drag detected (threshold exceeded)
+            // This prevents blocks from going full-width on simple click-to-select
             self.draggingBundleID = blockBundleID;
             self.draggingRange = [blockView.timeRange copy];
             self.originalDragRange = [blockView.timeRange copy];
@@ -576,6 +577,13 @@ static const CGFloat kDimmedOpacity = 0.2;
 
                         if (distance > kDragThreshold) {
                             didActuallyDrag = YES;
+
+                            // Set isDragging and trigger full-width only when actual drag starts
+                            if (!self.isDragging) {
+                                self.isDragging = YES;
+                                [self reloadBlocks];  // Now triggers full-width overlay
+                            }
+
                             [self mouseDragged:nextEvent];
                         }
                     }
