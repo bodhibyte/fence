@@ -6,6 +6,45 @@
 #import "SCBundleEditorController.h"
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 
+#pragma mark - SCBundleEditorContentView (Private)
+
+// Custom content view that handles Cmd+Q to quit even when sheet is modal
+@interface SCBundleEditorContentView : NSView
+@end
+
+@implementation SCBundleEditorContentView
+
+- (BOOL)acceptsFirstResponder {
+    return YES;
+}
+
+- (BOOL)performKeyEquivalent:(NSEvent *)event {
+    NSEventModifierFlags flags = [event modifierFlags];
+    NSString *chars = [[event charactersIgnoringModifiers] lowercaseString];
+
+    BOOL cmdPressed = (flags & NSEventModifierFlagCommand) != 0;
+    BOOL shiftPressed = (flags & NSEventModifierFlagShift) != 0;
+
+    // Cmd+Q = Quit (close sheet first, then terminate to avoid bonk)
+    if (cmdPressed && !shiftPressed && [chars isEqualToString:@"q"]) {
+        NSWindow *sheet = self.window;
+        NSWindow *parent = sheet.sheetParent;
+        if (parent) {
+            [parent endSheet:sheet];
+        }
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [NSApp terminate:nil];
+        });
+        return YES;
+    }
+
+    return [super performKeyEquivalent:event];
+}
+
+@end
+
+#pragma mark - SCBundleEditorController
+
 @interface SCBundleEditorController () <NSTableViewDataSource, NSTableViewDelegate, NSWindowDelegate>
 
 @property (nonatomic, strong, nullable) SCBlockBundle *bundle;
@@ -44,6 +83,10 @@
                                                        defer:NO];
     window.title = @"New Bundle";
 
+    // Use custom content view that handles Cmd+Q
+    SCBundleEditorContentView *customContentView = [[SCBundleEditorContentView alloc] initWithFrame:frame];
+    window.contentView = customContentView;
+
     self = [super initWithWindow:window];
     if (self) {
         _bundle = nil;
@@ -64,6 +107,10 @@
                                                      backing:NSBackingStoreBuffered
                                                        defer:NO];
     window.title = @"Edit Bundle";
+
+    // Use custom content view that handles Cmd+Q
+    SCBundleEditorContentView *customContentView = [[SCBundleEditorContentView alloc] initWithFrame:frame];
+    window.contentView = customContentView;
 
     self = [super initWithWindow:window];
     if (self) {

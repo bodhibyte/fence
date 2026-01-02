@@ -58,6 +58,9 @@ static BOOL const kUseCalendarUI = YES;
 // Flag to prevent redundant reloadData when grid updates schedule
 @property (nonatomic, assign) BOOL isUpdatingFromGrid;
 
+// Event monitor for Cmd+Q during alert sheets
+@property (nonatomic, strong) id cmdQMonitor;
+
 @end
 
 @implementation SCWeekScheduleWindowController
@@ -617,8 +620,13 @@ static BOOL const kUseCalendarUI = YES;
     [alert addButtonWithTitle:@"Commit"];
     [alert addButtonWithTitle:@"Cancel"];
 
+    // Setup Cmd+Q monitor so user can quit during alert
+    [self setupCmdQMonitor];
+
     NSInteger weekOffset = self.currentWeekOffset;
     [alert beginSheetModalForWindow:self.window completionHandler:^(NSModalResponse returnCode) {
+        [self removeCmdQMonitor];
+
         if (returnCode == NSAlertFirstButtonReturn) {
             [manager commitToWeekWithOffset:weekOffset];
             [self reloadData];
@@ -627,6 +635,42 @@ static BOOL const kUseCalendarUI = YES;
             [NSApp activateIgnoringOtherApps:YES];
         }
     }];
+}
+
+#pragma mark - Cmd+Q Monitor for Alert Sheets
+
+- (void)setupCmdQMonitor {
+    if (self.cmdQMonitor) return;  // Already set up
+
+    __weak typeof(self) weakSelf = self;
+    self.cmdQMonitor = [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskKeyDown
+                                                             handler:^NSEvent *(NSEvent *event) {
+        NSEventModifierFlags flags = [event modifierFlags];
+        NSString *chars = [[event charactersIgnoringModifiers] lowercaseString];
+
+        BOOL cmdPressed = (flags & NSEventModifierFlagCommand) != 0;
+        BOOL shiftPressed = (flags & NSEventModifierFlagShift) != 0;
+
+        // Cmd+Q = Quit (close sheet first, then terminate)
+        if (cmdPressed && !shiftPressed && [chars isEqualToString:@"q"]) {
+            typeof(self) strongSelf = weakSelf;
+            if (strongSelf && strongSelf.window.attachedSheet) {
+                [strongSelf.window endSheet:strongSelf.window.attachedSheet];
+            }
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [NSApp terminate:nil];
+            });
+            return nil;  // Consume the event
+        }
+        return event;
+    }];
+}
+
+- (void)removeCmdQMonitor {
+    if (self.cmdQMonitor) {
+        [NSEvent removeMonitor:self.cmdQMonitor];
+        self.cmdQMonitor = nil;
+    }
 }
 
 #pragma mark - License
@@ -669,7 +713,12 @@ static BOOL const kUseCalendarUI = YES;
     [alert addButtonWithTitle:@"Unlock"];
     [alert addButtonWithTitle:@"Cancel"];
 
+    // Setup Cmd+Q monitor so user can quit during alert
+    [self setupCmdQMonitor];
+
     [alert beginSheetModalForWindow:self.window completionHandler:^(NSModalResponse returnCode) {
+        [self removeCmdQMonitor];
+
         if (returnCode == NSAlertFirstButtonReturn) {
             [self performEmergencyUnlock];
         }
