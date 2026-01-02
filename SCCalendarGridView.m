@@ -235,6 +235,25 @@ static const CGFloat kDimmedOpacity = 0.2;
     return YES;  // Origin at top = midnight
 }
 
+- (NSView *)hitTest:(NSPoint)point {
+    // Let default implementation find the deepest subview
+    NSView *hitView = [super hitTest:point];
+
+    // If we hit a block view from a DIFFERENT bundle than the focused one,
+    // return self (the DayColumn) instead. This makes non-focused blocks
+    // "transparent" to clicks, allowing drag-to-create for the focused bundle.
+    // Without this, NSScrollView steals drag events because the original hit
+    // target (block view) didn't enter a tracking loop.
+    if ([hitView isKindOfClass:[SCAllowBlockView class]]) {
+        SCAllowBlockView *blockView = (SCAllowBlockView *)hitView;
+        if (self.focusedBundleID && ![blockView.bundleID isEqualToString:self.focusedBundleID]) {
+            return self;  // Treat as click on DayColumn background
+        }
+    }
+
+    return hitView;
+}
+
 - (CGFloat)yFromMinutes:(NSInteger)minutes {
     // Map 0-1440 minutes to 0-timelineHeight
     return (minutes / 1440.0) * self.timelineHeight;
