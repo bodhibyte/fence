@@ -299,16 +299,7 @@ static BOOL const kUseCalendarUI = YES;
     if (kUseCalendarUI) {
         // NEW CALENDAR UI: Update sidebar and calendar
 
-        // Update sidebar
-        self.bundleSidebar.bundles = manager.bundles;
-        self.bundleSidebar.selectedBundleID = self.focusedBundleID;
-        self.bundleSidebar.isCommitted = isCommitted;
-        [self.bundleSidebar reloadData];
-
-        // Update calendar grid
-        self.calendarGridView.bundles = manager.bundles;
-
-        // Build schedules dictionary
+        // Build schedules dictionary (used by both sidebar and calendar)
         NSMutableDictionary *scheduleDict = [NSMutableDictionary dictionary];
         for (SCBlockBundle *bundle in manager.bundles) {
             SCWeeklySchedule *schedule = [manager scheduleForBundleID:bundle.bundleID weekOffset:self.currentWeekOffset];
@@ -316,6 +307,16 @@ static BOOL const kUseCalendarUI = YES;
                 scheduleDict[bundle.bundleID] = schedule;
             }
         }
+
+        // Update sidebar - grey out bundles that have schedules for this week
+        self.bundleSidebar.bundles = manager.bundles;
+        self.bundleSidebar.selectedBundleID = self.focusedBundleID;
+        self.bundleSidebar.schedules = scheduleDict;
+        self.bundleSidebar.isCommitted = isCommitted;
+        [self.bundleSidebar reloadData];
+
+        // Update calendar grid
+        self.calendarGridView.bundles = manager.bundles;
         self.calendarGridView.schedules = scheduleDict;
 
         self.calendarGridView.focusedBundleID = self.focusedBundleID;
@@ -388,6 +389,9 @@ static BOOL const kUseCalendarUI = YES;
     for (SCBlockBundle *bundle in manager.bundles) {
         BOOL allowed = [manager wouldBundleBeAllowed:bundle.bundleID];
         NSString *statusStr = [manager statusStringForBundleID:bundle.bundleID];
+
+        // Skip bundles with no schedule for current week
+        if (statusStr.length == 0) continue;
 
         // Create pill container
         NSView *pill = [[NSView alloc] init];
@@ -539,10 +543,10 @@ static BOOL const kUseCalendarUI = YES;
 #pragma mark - Actions
 
 - (void)addBundleClicked:(id)sender {
-    SCScheduleManager *manager = [SCScheduleManager sharedManager];
     self.bundleEditorController = [[SCBundleEditorController alloc] initForNewBundle];
     self.bundleEditorController.delegate = self;
-    self.bundleEditorController.isCommitted = [manager isCommittedForWeekOffset:self.currentWeekOffset];
+    // New bundles have no schedule yet, so never locked
+    self.bundleEditorController.isCommitted = NO;
     [self.bundleEditorController beginSheetModalForWindow:self.window completionHandler:nil];
 }
 
@@ -795,7 +799,12 @@ static BOOL const kUseCalendarUI = YES;
     SCScheduleManager *manager = [SCScheduleManager sharedManager];
     self.bundleEditorController = [[SCBundleEditorController alloc] initWithBundle:bundle];
     self.bundleEditorController.delegate = self;
-    self.bundleEditorController.isCommitted = [manager isCommittedForWeekOffset:self.currentWeekOffset];
+
+    // Lock editor only if current week is committed AND this bundle has a schedule for current week
+    BOOL currentWeekCommitted = [manager isCommittedForWeekOffset:0];
+    SCWeeklySchedule *scheduleForCurrentWeek = [manager scheduleForBundleID:bundle.bundleID weekOffset:0];
+    self.bundleEditorController.isCommitted = (currentWeekCommitted && scheduleForCurrentWeek != nil);
+
     [self.bundleEditorController beginSheetModalForWindow:self.window completionHandler:nil];
 }
 
@@ -822,7 +831,12 @@ static BOOL const kUseCalendarUI = YES;
     SCScheduleManager *manager = [SCScheduleManager sharedManager];
     self.bundleEditorController = [[SCBundleEditorController alloc] initWithBundle:bundle];
     self.bundleEditorController.delegate = self;
-    self.bundleEditorController.isCommitted = [manager isCommittedForWeekOffset:self.currentWeekOffset];
+
+    // Lock editor only if current week is committed AND this bundle has a schedule for current week
+    BOOL currentWeekCommitted = [manager isCommittedForWeekOffset:0];
+    SCWeeklySchedule *scheduleForCurrentWeek = [manager scheduleForBundleID:bundle.bundleID weekOffset:0];
+    self.bundleEditorController.isCommitted = (currentWeekCommitted && scheduleForCurrentWeek != nil);
+
     [self.bundleEditorController beginSheetModalForWindow:self.window completionHandler:nil];
 }
 

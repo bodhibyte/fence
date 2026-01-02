@@ -814,13 +814,7 @@ static const NSInteger kDefaultEmergencyUnlockCredits = 5;
 - (NSString *)statusStringForBundleID:(NSString *)bundleID {
     SCWeeklySchedule *schedule = [self scheduleForBundleID:bundleID weekOffset:0];
     if (!schedule) {
-        // No schedule: if committed show commitment end, otherwise empty
-        if (self.isCommitted) {
-            NSDate *commitmentEnd = [self commitmentEndDateForWeekOffset:0];
-            if (commitmentEnd) {
-                return [self formatStatusStringForDate:commitmentEnd];
-            }
-        }
+        // No schedule for current week = not active, return empty
         return @"";
     }
 
@@ -854,8 +848,8 @@ static const NSInteger kDefaultEmergencyUnlockCredits = 5;
 - (BOOL)wouldBundleBeAllowed:(NSString *)bundleID {
     SCWeeklySchedule *schedule = [self scheduleForBundleID:bundleID weekOffset:0];
     if (!schedule) {
-        // No schedule: committed = blocked (safe default), not committed = allowed
-        return !self.isCommitted;
+        // No schedule for current week = not active = allowed
+        return YES;
     }
     return [schedule isAllowedNow];
 }

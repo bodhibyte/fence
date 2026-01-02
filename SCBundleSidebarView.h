@@ -10,6 +10,7 @@
 
 @class SCBlockBundle;
 @class SCBundleSidebarView;
+@class SCWeeklySchedule;
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -39,6 +40,9 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// Whether editing is locked (committed state)
 @property (nonatomic, assign) BOOL isCommitted;
+
+/// Schedules dictionary for determining which bundles are active (bundleID -> schedule)
+@property (nonatomic, copy, nullable) NSDictionary<NSString *, SCWeeklySchedule *> *schedules;
 
 /// Reload the sidebar display
 - (void)reloadData;

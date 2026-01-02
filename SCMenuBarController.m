@@ -105,6 +105,10 @@
         for (SCBlockBundle *bundle in manager.bundles) {
             BOOL allowed = [manager wouldBundleBeAllowed:bundle.bundleID];
             NSString *statusStr = [manager statusStringForBundleID:bundle.bundleID];
+
+            // Skip bundles with no schedule for current week
+            if (statusStr.length == 0) continue;
+
             NSString *statusWord = allowed ? @"allowed" : @"blocked";
             NSColor *statusColor = allowed ? [NSColor systemGreenColor] : [NSColor systemRedColor];
 

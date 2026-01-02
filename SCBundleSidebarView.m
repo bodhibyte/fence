@@ -5,6 +5,7 @@
 
 #import "SCBundleSidebarView.h"
 #import "Block Management/SCBlockBundle.h"
+#import "Block Management/SCWeeklySchedule.h"
 
 static const CGFloat kSidebarWidth = 180.0;
 static const CGFloat kPillHeight = 36.0;
@@ -254,7 +255,10 @@ static const CGFloat kHeaderHeight = 30.0;
         pill.action = @selector(pillClicked:);
         pill.doubleClickAction = @selector(pillDoubleClicked:);
         pill.isSelected = [bundle.bundleID isEqualToString:self.selectedBundleID];
-        pill.isCommitted = self.isCommitted;
+
+        // Grey out bundles that have a schedule for this week (actively blocking)
+        SCWeeklySchedule *schedule = self.schedules[bundle.bundleID];
+        pill.isCommitted = (schedule != nil);
 
         [self.pillContainer addSubview:pill];
         [self.pillViews addObject:pill];
