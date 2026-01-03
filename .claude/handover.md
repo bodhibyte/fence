@@ -128,9 +128,46 @@ codesign -dvvv /Applications/Fence.app
 codesign -dvvv "/Applications/Fence.app/Contents/Frameworks/Sparkle.framework/Versions/A/Resources/Autoupdate.app/Contents/MacOS/fileop"
 ```
 
+## Root Cause Found: Sparkle Ad-Hoc Signature
+
+The Sparkle framework's `fileop` binary has an **ad-hoc signature** (no real signature, no timestamp):
+
+```bash
+$ codesign -dvvv ".../Sparkle.framework/.../fileop"
+Signature=adhoc
+```
+
+**Current Sparkle version**: 1.24.0 with git hash suffix (likely a dev build, not official release)
+
+### Fix: Update to Official Sparkle 2.x
+
+Download properly signed Sparkle from GitHub:
+
+```bash
+# Backup old
+mv Sparkle.framework Sparkle.framework.backup
+
+# Download Sparkle 2.6.4 (latest as of Jan 2026)
+curl -L -o /tmp/Sparkle.tar.xz https://github.com/sparkle-project/Sparkle/releases/download/2.6.4/Sparkle-2.6.4.tar.xz
+cd /tmp && tar -xf Sparkle.tar.xz
+cp -R /tmp/Sparkle.framework /Users/vishaljain/selfcontrol/
+
+# Verify new signature has timestamp
+codesign -dvvv "/Users/vishaljain/selfcontrol/Sparkle.framework/Versions/A/Resources/Autoupdate.app/Contents/MacOS/fileop" 2>&1 | grep Timestamp
+```
+
+**Note**: Sparkle 2.x has API changes from 1.x. May need code updates in:
+- `AppController.m` or wherever `SUUpdater` is used
+- Check Sparkle 2.x migration guide: https://sparkle-project.org/documentation/upgrading/
+
+### Alternative: Keep Using build-release.sh
+
+The script already works because it re-signs everything with `--timestamp` flag. Xcode Direct Distribution is optional.
+
 ## Summary
 
 - **License storage**: Fixed - now uses iCloud key-value storage
 - **build-release.sh**: Works - manually signs everything with timestamps
-- **Xcode Direct Distribution**: Fails on Sparkle timestamp - needs investigation
-- **Recommendation**: Either fix Sparkle signing or continue using `build-release.sh`
+- **Xcode Direct Distribution**: Fails because Sparkle 1.24 has ad-hoc signed binaries
+- **Recommended fix**: Update to Sparkle 2.6.4 (official release with proper signatures)
+- **Alternative**: Continue using `build-release.sh` which handles signing correctly
