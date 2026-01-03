@@ -41,25 +41,25 @@ echo "→ Signing app components..."
 # Sign Sparkle framework internals first (deepest first)
 find "$APP_PATH/Contents/Frameworks/Sparkle.framework" -type f \( -name "*.app" -o -perm +111 \) | while read binary; do
     echo "  Signing: $binary"
-    codesign --force --sign "$DEVELOPER_ID" --options runtime --timestamp "$binary" 2>/dev/null || true
+    codesign --force --sign "$DEVELOPER_ID" --options runtime,library,hard,kill --timestamp "$binary" 2>/dev/null || true
 done
 
 # Sign Sparkle Autoupdate.app bundle
 if [ -d "$APP_PATH/Contents/Frameworks/Sparkle.framework/Versions/A/Resources/Autoupdate.app" ]; then
     echo "  Signing: Autoupdate.app"
-    codesign --force --sign "$DEVELOPER_ID" --options runtime --timestamp \
+    codesign --force --sign "$DEVELOPER_ID" --options runtime,library,hard,kill --timestamp \
         "$APP_PATH/Contents/Frameworks/Sparkle.framework/Versions/A/Resources/Autoupdate.app"
 fi
 
 # Sign Sparkle framework
 echo "  Signing: Sparkle.framework"
-codesign --force --sign "$DEVELOPER_ID" --options runtime --timestamp \
+codesign --force --sign "$DEVELOPER_ID" --options runtime,library,hard,kill --timestamp \
     "$APP_PATH/Contents/Frameworks/Sparkle.framework"
 
 # Sign the privileged helper/daemon
 if [ -f "$APP_PATH/Contents/Library/LaunchServices/org.eyebeam.selfcontrold" ]; then
     echo "  Signing: org.eyebeam.selfcontrold"
-    codesign --force --sign "$DEVELOPER_ID" --options runtime --timestamp \
+    codesign --force --sign "$DEVELOPER_ID" --options runtime,library,hard,kill --timestamp \
         "$APP_PATH/Contents/Library/LaunchServices/org.eyebeam.selfcontrold"
 fi
 
@@ -67,14 +67,13 @@ fi
 for helper in "$APP_PATH/Contents/MacOS/"*; do
     if [ -f "$helper" ] && [ -x "$helper" ]; then
         echo "  Signing: $(basename "$helper")"
-        codesign --force --sign "$DEVELOPER_ID" --options runtime --timestamp "$helper"
+        codesign --force --sign "$DEVELOPER_ID" --options runtime,library,hard,kill --timestamp "$helper"
     fi
 done
 
-# Finally sign the main app bundle (with entitlements!)
+# Finally sign the main app bundle
 echo "  Signing: Fence.app"
-codesign --force --sign "$DEVELOPER_ID" --options runtime --timestamp \
-    --entitlements "$PROJECT_DIR/SelfControl.entitlements" "$APP_PATH"
+codesign --force --sign "$DEVELOPER_ID" --options runtime,library,hard,kill --timestamp "$APP_PATH"
 
 # Verify signature
 echo "→ Verifying signature..."
