@@ -144,6 +144,13 @@
 #pragma mark - License
 
 - (void)showLicenseModalWithCompletion:(void(^)(void))completion {
+    // Don't open multiple license windows - bring existing to front
+    if (self.licenseWindowController) {
+        [initialWindow_ makeKeyAndOrderFront:nil];
+        [NSApp activateIgnoringOtherApps:YES];
+        return;
+    }
+
     self.licenseWindowController = [[SCLicenseWindowController alloc] init];
     self.licenseWindowController.onLicenseActivated = ^{
         self.licenseWindowController = nil;

@@ -498,6 +498,16 @@
 }
 
 - (void)enterLicenseClicked:(id)sender {
+    // Don't open multiple license windows - bring existing to front
+    if (self.licenseWindowController) {
+        NSWindow *parentWindow = self.licenseWindowController.window.sheetParent;
+        if (parentWindow) {
+            [parentWindow makeKeyAndOrderFront:nil];
+            [NSApp activateIgnoringOtherApps:YES];
+        }
+        return;
+    }
+
     // Get a window to present the sheet - use the schedule window if available
     NSWindow *parentWindow = nil;
     for (NSWindow *window in [NSApp windows]) {
@@ -520,6 +530,7 @@
 }
 
 - (void)showLicenseWindow {
+    // Guard handled in showLicenseWindowWithParent:
     NSWindow *parentWindow = nil;
     for (NSWindow *window in [NSApp windows]) {
         if (window.isVisible && window.canBecomeKeyWindow) {
@@ -533,6 +544,16 @@
 }
 
 - (void)showLicenseWindowWithParent:(NSWindow *)parentWindow {
+    // Don't open multiple license windows - bring existing to front
+    if (self.licenseWindowController) {
+        NSWindow *sheetParent = self.licenseWindowController.window.sheetParent;
+        if (sheetParent) {
+            [sheetParent makeKeyAndOrderFront:nil];
+            [NSApp activateIgnoringOtherApps:YES];
+        }
+        return;
+    }
+
     self.licenseWindowController = [[SCLicenseWindowController alloc] init];
     self.licenseWindowController.onLicenseActivated = ^{
         self.licenseWindowController = nil;
