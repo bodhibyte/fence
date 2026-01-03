@@ -437,6 +437,15 @@
         NSLog(@"[AppController] Trial sync complete - %ld days remaining", (long)daysRemaining);
     }];
 
+    // Attempt license recovery (if keychain storage failed previously but server has record)
+    [[SCLicenseManager sharedManager] attemptLicenseRecoveryWithCompletion:^(BOOL recovered) {
+        if (recovered) {
+            NSLog(@"[AppController] License recovered from server!");
+            // Refresh UI to reflect licensed state
+            [[NSNotificationCenter defaultCenter] postNotificationName:@"SCLicenseStatusChanged" object:nil];
+        }
+    }];
+
     // start up our daemon XPC
     self.xpc = [SCXPCClient new];
     [self.xpc connectToHelperTool];

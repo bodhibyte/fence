@@ -314,7 +314,7 @@ typedef NS_ENUM(NSInteger, SCLicenseErrorCode) {
         if (error) {
             *error = [NSError errorWithDomain:SCLicenseErrorDomain
                                          code:SCLicenseErrorKeychainFailure
-                                     userInfo:@{NSLocalizedDescriptionKey: @"Failed to save license. Please try again."}];
+                                     userInfo:@{NSLocalizedDescriptionKey: @"Please enable iCloud Keychain in System Settings and restart."}];
         }
         return NO;
     }
@@ -496,7 +496,7 @@ typedef NS_ENUM(NSInteger, SCLicenseErrorCode) {
                 if (stored) {
                     completion(YES, nil);  // Offline activation succeeded
                 } else {
-                    completion(NO, @"Failed to save license");
+                    completion(NO, @"Please enable iCloud Keychain in System Settings and restart");
                 }
             });
             return;
@@ -515,7 +515,7 @@ typedef NS_ENUM(NSInteger, SCLicenseErrorCode) {
                 if (stored) {
                     completion(YES, nil);
                 } else {
-                    completion(NO, @"License validated but failed to save");
+                    completion(NO, @"Please enable iCloud Keychain in System Settings and restart");
                 }
             });
         } else if (httpResponse.statusCode == 409) {
@@ -601,6 +601,93 @@ typedef NS_ENUM(NSInteger, SCLicenseErrorCode) {
         NSInteger daysRemaining = [json[@"daysRemaining"] integerValue];
         dispatch_async(dispatch_get_main_queue(), ^{
             completion(daysRemaining);
+        });
+    }];
+
+    [task resume];
+}
+
+#pragma mark - License Recovery
+
+- (void)attemptLicenseRecoveryWithCompletion:(void(^)(BOOL recovered))completion {
+    // Only attempt recovery if no local license exists
+    NSString *existingLicense = [self retrieveLicenseFromKeychain];
+    if (existingLicense) {
+        NSLog(@"[SCLicenseManager] Recovery skipped - license already in keychain");
+        dispatch_async(dispatch_get_main_queue(), ^{
+            completion(NO);
+        });
+        return;
+    }
+
+    NSString *deviceId = [SCDeviceIdentifier deviceIdentifier];
+    NSString *urlStr = [NSString stringWithFormat:@"%@/api/recover?deviceId=%@", kLicenseAPIBaseURL, deviceId];
+    NSURL *url = [NSURL URLWithString:urlStr];
+
+    NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:url];
+    request.HTTPMethod = @"GET";
+    request.timeoutInterval = 10.0;
+
+    NSLog(@"[SCLicenseManager] Attempting license recovery for device: %@", deviceId);
+
+    NSURLSessionDataTask *task = [self.apiSession dataTaskWithRequest:request
+        completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+
+        if (error) {
+            NSLog(@"[SCLicenseManager] Recovery failed (network): %@", error);
+            dispatch_async(dispatch_get_main_queue(), ^{
+                completion(NO);
+            });
+            return;
+        }
+
+        NSHTTPURLResponse *httpResponse = (NSHTTPURLResponse *)response;
+        if (httpResponse.statusCode == 404) {
+            NSLog(@"[SCLicenseManager] Recovery: no license found for this device");
+            dispatch_async(dispatch_get_main_queue(), ^{
+                completion(NO);
+            });
+            return;
+        }
+
+        if (httpResponse.statusCode != 200 || !data) {
+            NSLog(@"[SCLicenseManager] Recovery failed (status: %ld)", (long)httpResponse.statusCode);
+            dispatch_async(dispatch_get_main_queue(), ^{
+                completion(NO);
+            });
+            return;
+        }
+
+        NSDictionary *json = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
+        NSString *code = json[@"code"];
+
+        if (!code) {
+            NSLog(@"[SCLicenseManager] Recovery failed: no code in response");
+            dispatch_async(dispatch_get_main_queue(), ^{
+                completion(NO);
+            });
+            return;
+        }
+
+        // Validate the recovered code
+        if (![self validateLicenseCode:code error:nil]) {
+            NSLog(@"[SCLicenseManager] Recovery failed: recovered code is invalid");
+            dispatch_async(dispatch_get_main_queue(), ^{
+                completion(NO);
+            });
+            return;
+        }
+
+        // Try to store in keychain
+        BOOL stored = [self storeLicenseInKeychain:code];
+        if (stored) {
+            NSLog(@"[SCLicenseManager] Recovery successful - license restored to keychain");
+        } else {
+            NSLog(@"[SCLicenseManager] Recovery: found license but keychain storage still failing");
+        }
+
+        dispatch_async(dispatch_get_main_queue(), ^{
+            completion(stored);
         });
     }];
 

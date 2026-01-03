@@ -81,6 +81,13 @@ typedef NS_ENUM(NSInteger, SCLicenseStatus) {
 /// @param completion Called with days remaining (-1 if offline/error, uses cached)
 - (void)syncTrialStatusWithCompletion:(void(^)(NSInteger daysRemaining))completion;
 
+#pragma mark - License Recovery
+
+/// Attempts to recover a license from the server if keychain storage previously failed.
+/// Call this on app launch when no local license is found.
+/// @param completion Called with YES if license was recovered and stored successfully
+- (void)attemptLicenseRecoveryWithCompletion:(void(^)(BOOL recovered))completion;
+
 #pragma mark - Debug/Testing
 
 /// Clears the stored license from Keychain (for testing)
