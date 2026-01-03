@@ -71,9 +71,10 @@ for helper in "$APP_PATH/Contents/MacOS/"*; do
     fi
 done
 
-# Finally sign the main app bundle
+# Finally sign the main app bundle (with entitlements!)
 echo "  Signing: Fence.app"
-codesign --force --sign "$DEVELOPER_ID" --options runtime --timestamp "$APP_PATH"
+codesign --force --sign "$DEVELOPER_ID" --options runtime --timestamp \
+    --entitlements "$PROJECT_DIR/SelfControl.entitlements" "$APP_PATH"
 
 # Verify signature
 echo "→ Verifying signature..."
