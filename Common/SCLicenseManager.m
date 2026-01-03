@@ -20,10 +20,9 @@ static NSString * const kCachedTrialExpiryKey = @"FenceCachedServerTrialExpiry";
 
 static NSString * const kLicenseAPIBaseURL = @"https://fence-api-cli-production.up.railway.app";
 
-#pragma mark - Keychain Constants
+#pragma mark - iCloud Storage Constants
 
-static NSString * const kKeychainService = @"app.usefence.license";
-static NSString * const kKeychainAccount = @"license";
+static NSString * const kLicenseStorageKey = @"FenceLicenseCode";
 
 #pragma mark - License Validation Constants
 
@@ -168,7 +167,7 @@ typedef NS_ENUM(NSInteger, SCLicenseErrorCode) {
 
 - (SCLicenseStatus)currentStatus {
     // Check for valid license FIRST (takes priority over trial)
-    NSString *storedCode = [self retrieveLicenseFromKeychain];
+    NSString *storedCode = [self retrieveLicenseFromStorage];
     if (storedCode && [self validateLicenseCode:storedCode error:nil]) {
         NSLog(@"[SCLicenseManager] currentStatus = SCLicenseStatusValid (valid license)");
         return SCLicenseStatusValid;
@@ -308,13 +307,13 @@ typedef NS_ENUM(NSInteger, SCLicenseErrorCode) {
         return NO;
     }
 
-    // Store in Keychain
-    BOOL stored = [self storeLicenseInKeychain:code];
+    // Store in iCloud
+    BOOL stored = [self storeLicenseIniCloud:code];
     if (!stored) {
         if (error) {
             *error = [NSError errorWithDomain:SCLicenseErrorDomain
                                          code:SCLicenseErrorKeychainFailure
-                                     userInfo:@{NSLocalizedDescriptionKey: @"Please enable iCloud Keychain in System Settings and restart."}];
+                                     userInfo:@{NSLocalizedDescriptionKey: @"Failed to store license. Please ensure iCloud is enabled."}];
         }
         return NO;
     }
@@ -323,7 +322,7 @@ typedef NS_ENUM(NSInteger, SCLicenseErrorCode) {
 }
 
 - (NSString *)storedLicenseEmail {
-    NSString *code = [self retrieveLicenseFromKeychain];
+    NSString *code = [self retrieveLicenseFromStorage];
     if (!code) return nil;
 
     // Validate first to ensure it's still valid
@@ -337,7 +336,7 @@ typedef NS_ENUM(NSInteger, SCLicenseErrorCode) {
 }
 
 - (NSString *)storedLicenseCode {
-    return [self retrieveLicenseFromKeychain];
+    return [self retrieveLicenseFromStorage];
 }
 
 - (NSDictionary *)extractPayloadFromCode:(NSString *)code {
@@ -369,65 +368,56 @@ typedef NS_ENUM(NSInteger, SCLicenseErrorCode) {
     return [NSJSONSerialization JSONObjectWithData:payloadData options:0 error:nil];
 }
 
-#pragma mark - Keychain Operations
+#pragma mark - iCloud Storage Operations
 
-- (BOOL)storeLicenseInKeychain:(NSString *)code {
-    // Delete existing first
-    [self deleteLicenseFromKeychain];
+- (BOOL)storeLicenseIniCloud:(NSString *)code {
+    NSUbiquitousKeyValueStore *store = [NSUbiquitousKeyValueStore defaultStore];
+    [store setString:code forKey:kLicenseStorageKey];
+    BOOL synced = [store synchronize];
 
-    NSData *codeData = [code dataUsingEncoding:NSUTF8StringEncoding];
-
-    NSDictionary *query = @{
-        (__bridge id)kSecClass: (__bridge id)kSecClassGenericPassword,
-        (__bridge id)kSecAttrService: kKeychainService,
-        (__bridge id)kSecAttrAccount: kKeychainAccount,
-        (__bridge id)kSecValueData: codeData,
-        (__bridge id)kSecAttrSynchronizable: @YES,  // iCloud Keychain sync
-        (__bridge id)kSecAttrAccessible: (__bridge id)kSecAttrAccessibleAfterFirstUnlock
-    };
-
-    OSStatus status = SecItemAdd((__bridge CFDictionaryRef)query, NULL);
-
-    if (status != errSecSuccess) {
-        CFStringRef errorMessage = SecCopyErrorMessageString(status, NULL);
-        NSLog(@"[SCLicenseManager] Failed to store license in Keychain: %d (%@)",
-              (int)status, (__bridge NSString *)errorMessage);
-        if (errorMessage) CFRelease(errorMessage);
+    if (synced) {
+        NSLog(@"[SCLicenseManager] License stored in iCloud key-value storage");
+    } else {
+        NSLog(@"[SCLicenseManager] Warning: iCloud sync may be pending");
     }
 
-    return status == errSecSuccess;
+    // Also store locally as backup
+    [[NSUserDefaults standardUserDefaults] setObject:code forKey:kLicenseStorageKey];
+    [[NSUserDefaults standardUserDefaults] synchronize];
+
+    return YES;  // Always return YES - iCloud will sync eventually
 }
 
-- (NSString *)retrieveLicenseFromKeychain {
-    NSDictionary *query = @{
-        (__bridge id)kSecClass: (__bridge id)kSecClassGenericPassword,
-        (__bridge id)kSecAttrService: kKeychainService,
-        (__bridge id)kSecAttrAccount: kKeychainAccount,
-        (__bridge id)kSecReturnData: @YES,
-        (__bridge id)kSecAttrSynchronizable: @YES,
-        (__bridge id)kSecMatchLimit: (__bridge id)kSecMatchLimitOne
-    };
+- (NSString *)retrieveLicenseFromStorage {
+    // Try iCloud first
+    NSUbiquitousKeyValueStore *store = [NSUbiquitousKeyValueStore defaultStore];
+    NSString *code = [store stringForKey:kLicenseStorageKey];
 
-    CFDataRef dataRef = NULL;
-    OSStatus status = SecItemCopyMatching((__bridge CFDictionaryRef)query, (CFTypeRef *)&dataRef);
-
-    if (status == errSecSuccess && dataRef) {
-        NSData *data = (__bridge_transfer NSData *)dataRef;
-        return [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+    if (code) {
+        NSLog(@"[SCLicenseManager] License retrieved from iCloud");
+        return code;
     }
 
-    return nil;
+    // Fall back to local storage
+    code = [[NSUserDefaults standardUserDefaults] stringForKey:kLicenseStorageKey];
+    if (code) {
+        NSLog(@"[SCLicenseManager] License retrieved from local storage (iCloud unavailable)");
+    }
+
+    return code;
 }
 
-- (void)deleteLicenseFromKeychain {
-    NSDictionary *query = @{
-        (__bridge id)kSecClass: (__bridge id)kSecClassGenericPassword,
-        (__bridge id)kSecAttrService: kKeychainService,
-        (__bridge id)kSecAttrAccount: kKeychainAccount,
-        (__bridge id)kSecAttrSynchronizable: @YES
-    };
+- (void)deleteLicenseFromStorage {
+    // Remove from iCloud
+    NSUbiquitousKeyValueStore *store = [NSUbiquitousKeyValueStore defaultStore];
+    [store removeObjectForKey:kLicenseStorageKey];
+    [store synchronize];
 
-    SecItemDelete((__bridge CFDictionaryRef)query);
+    // Remove from local storage
+    [[NSUserDefaults standardUserDefaults] removeObjectForKey:kLicenseStorageKey];
+    [[NSUserDefaults standardUserDefaults] synchronize];
+
+    NSLog(@"[SCLicenseManager] License removed from storage");
 }
 
 #pragma mark - Crypto
@@ -491,12 +481,12 @@ typedef NS_ENUM(NSInteger, SCLicenseErrorCode) {
         if (error) {
             NSLog(@"[SCLicenseManager] Online activation failed (network): %@", error);
             // Fall back to offline activation (just store locally)
-            BOOL stored = [self storeLicenseInKeychain:code];
+            BOOL stored = [self storeLicenseIniCloud:code];
             dispatch_async(dispatch_get_main_queue(), ^{
                 if (stored) {
                     completion(YES, nil);  // Offline activation succeeded
                 } else {
-                    completion(NO, @"Please enable iCloud Keychain in System Settings and restart");
+                    completion(NO, @"Failed to store license. Please ensure iCloud is enabled.");
                 }
             });
             return;
@@ -509,13 +499,13 @@ typedef NS_ENUM(NSInteger, SCLicenseErrorCode) {
         }
 
         if (httpResponse.statusCode == 200 && [json[@"success"] boolValue]) {
-            // Success - store in Keychain
-            BOOL stored = [self storeLicenseInKeychain:code];
+            // Success - store in iCloud
+            BOOL stored = [self storeLicenseIniCloud:code];
             dispatch_async(dispatch_get_main_queue(), ^{
                 if (stored) {
                     completion(YES, nil);
                 } else {
-                    completion(NO, @"Please enable iCloud Keychain in System Settings and restart");
+                    completion(NO, @"Failed to store license. Please ensure iCloud is enabled.");
                 }
             });
         } else if (httpResponse.statusCode == 409) {
@@ -611,9 +601,9 @@ typedef NS_ENUM(NSInteger, SCLicenseErrorCode) {
 
 - (void)attemptLicenseRecoveryWithCompletion:(void(^)(BOOL recovered))completion {
     // Only attempt recovery if no local license exists
-    NSString *existingLicense = [self retrieveLicenseFromKeychain];
+    NSString *existingLicense = [self retrieveLicenseFromStorage];
     if (existingLicense) {
-        NSLog(@"[SCLicenseManager] Recovery skipped - license already in keychain");
+        NSLog(@"[SCLicenseManager] Recovery skipped - license already in storage");
         dispatch_async(dispatch_get_main_queue(), ^{
             completion(NO);
         });
@@ -678,12 +668,12 @@ typedef NS_ENUM(NSInteger, SCLicenseErrorCode) {
             return;
         }
 
-        // Try to store in keychain
-        BOOL stored = [self storeLicenseInKeychain:code];
+        // Try to store in iCloud
+        BOOL stored = [self storeLicenseIniCloud:code];
         if (stored) {
-            NSLog(@"[SCLicenseManager] Recovery successful - license restored to keychain");
+            NSLog(@"[SCLicenseManager] Recovery successful - license restored to iCloud storage");
         } else {
-            NSLog(@"[SCLicenseManager] Recovery: found license but keychain storage still failing");
+            NSLog(@"[SCLicenseManager] Recovery: found license but iCloud storage still failing");
         }
 
         dispatch_async(dispatch_get_main_queue(), ^{
@@ -697,7 +687,7 @@ typedef NS_ENUM(NSInteger, SCLicenseErrorCode) {
 #pragma mark - Debug/Testing
 
 - (void)clearStoredLicense {
-    [self deleteLicenseFromKeychain];
+    [self deleteLicenseFromStorage];
 }
 
 - (void)resetTrialState {
@@ -710,8 +700,8 @@ typedef NS_ENUM(NSInteger, SCLicenseErrorCode) {
     // Force recalculation of expiry date
     NSDate *newExpiry = [self trialExpiryDate];
 
-    // Clear license from keychain
-    [self deleteLicenseFromKeychain];
+    // Clear license from storage
+    [self deleteLicenseFromStorage];
 
     NSLog(@"[SCLicenseManager] Trial reset (new expiry: %@, license removed)", newExpiry);
 }
@@ -723,8 +713,8 @@ typedef NS_ENUM(NSInteger, SCLicenseErrorCode) {
     [[NSUserDefaults standardUserDefaults] setObject:startOfToday forKey:kTrialExpiryDateKey];
     [[NSUserDefaults standardUserDefaults] synchronize];
 
-    // Clear license from keychain
-    [self deleteLicenseFromKeychain];
+    // Clear license from storage
+    [self deleteLicenseFromStorage];
 
     NSLog(@"[SCLicenseManager] Trial expired (expiry set to: %@, license removed)", startOfToday);
 }
