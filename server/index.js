@@ -161,6 +161,51 @@ app.post('/api/trial/check', async (req, res) => {
   }
 });
 
+// GET /api/recover - Recover license for a device (if keychain storage failed)
+app.get('/api/recover', async (req, res) => {
+  const { deviceId } = req.query;
+
+  if (!deviceId) {
+    return res.status(400).json({
+      success: false,
+      error: 'missing_device_id',
+      message: 'Device ID is required'
+    });
+  }
+
+  try {
+    // Find license activated by this device
+    const result = await pool.query(
+      'SELECT code, email, type FROM licenses WHERE activated_by_device = $1',
+      [deviceId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'no_license',
+        message: 'No license found for this device'
+      });
+    }
+
+    const license = result.rows[0];
+    return res.json({
+      success: true,
+      code: license.code,
+      email: license.email,
+      type: license.type
+    });
+
+  } catch (err) {
+    console.error('Recovery error:', err);
+    return res.status(500).json({
+      success: false,
+      error: 'server_error',
+      message: 'Server error during recovery'
+    });
+  }
+});
+
 // POST /api/license/store - Store a new license (called by Stripe webhook)
 app.post('/api/license/store', async (req, res) => {
   const { code, email, type, webhookSecret } = req.body;
