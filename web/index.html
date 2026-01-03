@@ -1200,9 +1200,9 @@
         <label for="student-email">Student? Verify with your university email for $5:</label>
         <div class="student-form-row">
           <input type="email" id="student-email" placeholder="you@university.edu" />
-          <button type="button" id="verify-student">Get $5 Link</button>
+          <button type="button" id="verify-student">Get Student Discount</button>
         </div>
-        <p class="form-note">We'll email you a payment link instantly.</p>
+        <p class="form-note">You'll be redirected to checkout with student pricing.</p>
         <div id="form-message" class="form-message" style="display: none;"></div>
       </div>
 
@@ -1270,13 +1270,12 @@
     const CONFIG = {
       // Stripe Payment Links (TEST MODE - switch to live when ready)
       regularPaymentLink: 'https://buy.stripe.com/test_eVq14m0ROegkgAt0kpafS00', // $49
-      studentPaymentLink: 'https://buy.stripe.com/test_9B69AS440c8c6ZTc37afS01', // $5
 
       // Download URL (update after first release)
       downloadUrl: '/updates/Fence-1.0.zip',
 
-      // API endpoint for student verification
-      apiEndpoint: '/api/verify-student',
+      // API endpoint for student checkout (creates Stripe session with validated email)
+      studentCheckoutEndpoint: '/api/create-student-checkout',
 
       // Valid student email domains
       validDomains: [
@@ -1336,10 +1335,10 @@
 
       // Disable button and show loading
       button.disabled = true;
-      button.textContent = 'Sending...';
+      button.textContent = 'Verifying...';
 
       try {
-        const response = await fetch(CONFIG.apiEndpoint, {
+        const response = await fetch(CONFIG.studentCheckoutEndpoint, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -1349,17 +1348,19 @@
 
         const data = await response.json();
 
-        if (response.ok) {
-          showMessage('Check your inbox! We sent a $5 payment link to ' + email, 'success');
-          emailInput.value = '';
+        if (response.ok && data.url) {
+          // Redirect to Stripe checkout
+          button.textContent = 'Redirecting...';
+          window.location.href = data.url;
         } else {
           showMessage(data.error || 'Something went wrong. Please try again.', 'error');
+          button.disabled = false;
+          button.textContent = 'Get Student Discount';
         }
       } catch (error) {
         showMessage('Network error. Please try again.', 'error');
-      } finally {
         button.disabled = false;
-        button.textContent = 'Get $5 Link';
+        button.textContent = 'Get Student Discount';
       }
     });
 

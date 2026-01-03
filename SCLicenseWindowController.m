@@ -8,6 +8,45 @@
 #import "SCLicenseWindowController.h"
 #import "Common/SCLicenseManager.h"
 
+#pragma mark - SCLicenseContentView (Private)
+
+// Custom content view that handles Cmd+Q to quit even when sheet is modal
+@interface SCLicenseContentView : NSView
+@end
+
+@implementation SCLicenseContentView
+
+- (BOOL)acceptsFirstResponder {
+    return YES;
+}
+
+- (BOOL)performKeyEquivalent:(NSEvent *)event {
+    NSEventModifierFlags flags = [event modifierFlags];
+    NSString *chars = [[event charactersIgnoringModifiers] lowercaseString];
+
+    BOOL cmdPressed = (flags & NSEventModifierFlagCommand) != 0;
+    BOOL shiftPressed = (flags & NSEventModifierFlagShift) != 0;
+
+    // Cmd+Q = Quit (close sheet first, then terminate to avoid bonk)
+    if (cmdPressed && !shiftPressed && [chars isEqualToString:@"q"]) {
+        NSWindow *sheet = self.window;
+        NSWindow *parent = sheet.sheetParent;
+        if (parent) {
+            [parent endSheet:sheet];
+        }
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [NSApp terminate:nil];
+        });
+        return YES;
+    }
+
+    return [super performKeyEquivalent:event];
+}
+
+@end
+
+#pragma mark - SCLicenseWindowController
+
 @interface SCLicenseWindowController () <NSWindowDelegate>
 
 @property (nonatomic, strong) NSTextField *titleLabel;
@@ -30,6 +69,10 @@
                                                      backing:NSBackingStoreBuffered
                                                        defer:NO];
     window.title = @"License Required";
+
+    // Use custom content view that handles Cmd+Q
+    SCLicenseContentView *customContentView = [[SCLicenseContentView alloc] initWithFrame:frame];
+    window.contentView = customContentView;
 
     self = [super initWithWindow:window];
     if (self) {
