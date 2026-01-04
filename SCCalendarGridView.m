@@ -1191,6 +1191,13 @@ static const CGFloat kDimmedOpacity = 0.2;
 }
 
 - (void)reloadData {
+    // Rescue first responder if it's a column we're about to destroy
+    // (DayColumns are transient - destroyed and recreated on each reload)
+    NSResponder *fr = self.window.firstResponder;
+    if ([fr isKindOfClass:[NSView class]] && [(NSView *)fr isDescendantOf:self]) {
+        [self.window makeFirstResponder:self];
+    }
+
     // Get days to display
     NSArray<NSNumber *> *days;
     if (self.showOnlyRemainingDays && self.weekOffset == 0) {

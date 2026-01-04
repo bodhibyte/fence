@@ -305,7 +305,7 @@
     [self.statusMenu addItem:reportBugItem];
 
     // Check for Updates
-    NSMenuItem *updateItem = [[NSMenuItem alloc] initWithTitle:@"Check for Updates..."
+    NSMenuItem *updateItem = [[NSMenuItem alloc] initWithTitle:@"Check for Updates"
                                                         action:@selector(checkForUpdates:)
                                                  keyEquivalent:@""];
     updateItem.target = self;
