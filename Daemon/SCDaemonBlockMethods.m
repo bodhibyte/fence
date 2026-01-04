@@ -307,13 +307,30 @@ NSTimeInterval CHECKUP_LOCK_TIMEOUT = 0.5; // use a shorter lock timeout for che
     if (![SCDaemonBlockMethods lockOrTimeout: nil timeout: CHECKUP_LOCK_TIMEOUT]) {
         return;
     }
-    
+
     [SCSentry addBreadcrumb: @"Daemon method checkupBlock called" category: @"daemon"];
 
     NSTimeInterval integrityCheckIntervalSecs = 15.0;
     static NSDate* lastBlockIntegrityCheck;
+    static NSDate* lastCheckupLog;
     if (lastBlockIntegrityCheck == nil) {
         lastBlockIntegrityCheck = [NSDate distantPast];
+    }
+    if (lastCheckupLog == nil) {
+        lastCheckupLog = [NSDate distantPast];
+    }
+
+    // Log checkup state every 30 seconds to avoid log spam
+    BOOL shouldLogCheckup = [[NSDate date] timeIntervalSinceDate:lastCheckupLog] > 30.0;
+    if (shouldLogCheckup) {
+        lastCheckupLog = [NSDate date];
+        SCSettings* settings = [SCSettings sharedSettings];
+        NSDate* blockEndDate = [settings valueForKey:@"BlockEndDate"];
+        NSArray* blocklist = [settings valueForKey:@"ActiveBlocklist"];
+        NSLog(@"CHECKUP: blockIsRunning=%d, blockEndDate=%@, blocklist count=%lu",
+              [SCBlockUtilities anyBlockIsRunning],
+              blockEndDate,
+              (unsigned long)blocklist.count);
     }
 
     BOOL shouldRunIntegrityCheck = NO;
@@ -323,14 +340,15 @@ NSTimeInterval CHECKUP_LOCK_TIMEOUT = 0.5; // use a shorter lock timeout for che
         // but for safety and to avoid permablocks (we no longer know when the block should end)
         // we should clear the block now.
         // but let them know that we noticed their (likely) cheating and we're not happy!
-        NSLog(@"INFO: Checkup ran, no active block found.");
-        
+        NSLog(@"=== CHECKUP: NO BLOCK RUNNING ===");
+        NSLog(@"CHECKUP: Clearing any remnant rules...");
+
         [SCSentry captureMessage: @"Checkup ran and no active block found! Removing block, tampering suspected..."];
-        
+
         [SCHelperToolUtilities removeBlock];
 
         [SCHelperToolUtilities sendConfigurationChangedNotification];
-        
+
         // Temporarily disabled the TamperingDetection flag because it was sometimes causing false positives
         // (i.e. people having the background set repeatedly despite no attempts to cheat)
         // We will try to bring this feature back once we can debug it
@@ -338,12 +356,20 @@ NSTimeInterval CHECKUP_LOCK_TIMEOUT = 0.5; // use a shorter lock timeout for che
         // [settings setValue: @YES forKey: @"TamperingDetected"];
         //        [settings synchronizeSettings];
         //
-        
+
         // once the checkups stop, the daemon will clear itself in a while due to inactivity
+        NSLog(@"CHECKUP: Stopping checkup timer");
         [[SCDaemon sharedDaemon] stopCheckupTimer];
     } else if ([SCBlockUtilities currentBlockIsExpired]) {
-        NSLog(@"INFO: Checkup ran, block expired, removing block.");
-        
+        SCSettings* settings = [SCSettings sharedSettings];
+        NSDate* blockEndDate = [settings valueForKey:@"BlockEndDate"];
+        NSArray* blocklist = [settings valueForKey:@"ActiveBlocklist"];
+
+        NSLog(@"=== CHECKUP: BLOCK EXPIRED ===");
+        NSLog(@"CHECKUP: blockEndDate was %@", blockEndDate);
+        NSLog(@"CHECKUP: blocklist had %lu entries: %@", (unsigned long)blocklist.count, blocklist);
+        NSLog(@"CHECKUP: Removing expired block...");
+
         [SCHelperToolUtilities removeBlock];
 
         [SCHelperToolUtilities sendConfigurationChangedNotification];
@@ -351,6 +377,7 @@ NSTimeInterval CHECKUP_LOCK_TIMEOUT = 0.5; // use a shorter lock timeout for che
         [SCSentry addBreadcrumb: @"Daemon found and cleared expired block" category: @"daemon"];
 
         // once the checkups stop, the daemon will clear itself in a while due to inactivity
+        NSLog(@"CHECKUP: Stopping checkup timer (next segment should start via launchd job)");
         [[SCDaemon sharedDaemon] stopCheckupTimer];
     } else if ([[NSDate date] timeIntervalSinceDate: lastBlockIntegrityCheck] > integrityCheckIntervalSecs) {
         lastBlockIntegrityCheck = [NSDate date];
@@ -359,10 +386,10 @@ NSTimeInterval CHECKUP_LOCK_TIMEOUT = 0.5; // use a shorter lock timeout for che
         // re-add them.
         shouldRunIntegrityCheck = YES;
     }
-    
+
     [[SCDaemon sharedDaemon] resetInactivityTimer];
     [self.daemonMethodLock unlock];
-    
+
     // if we need to run an integrity check, we need to do it at the very end after we give up our lock
     // because checkBlockIntegrity requests its own lock, and we don't want it to deadlock
     if (shouldRunIntegrityCheck) {

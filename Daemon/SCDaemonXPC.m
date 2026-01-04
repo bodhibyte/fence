@@ -117,7 +117,9 @@
 - (void)startScheduledBlockWithID:(NSString*)scheduleId
                           endDate:(NSDate*)endDate
                             reply:(void(^)(NSError* error))reply {
-    NSLog(@"XPC method called: startScheduledBlockWithID: %@", scheduleId);
+    NSLog(@"=== DAEMON: startScheduledBlockWithID ===");
+    NSLog(@"DAEMON: scheduleId = %@", scheduleId);
+    NSLog(@"DAEMON: requested endDate = %@", endDate);
 
     // NO authorization check - we trust the schedule because it was pre-approved
     // and stored in root-only settings file
@@ -125,21 +127,37 @@
     // Look up the approved schedule
     SCSettings* settings = [SCSettings sharedSettings];
     NSDictionary* approvedSchedules = [settings valueForKey: @"ApprovedSchedules"];
+    NSLog(@"DAEMON: ApprovedSchedules count = %lu", (unsigned long)approvedSchedules.count);
+    NSLog(@"DAEMON: ApprovedSchedules keys = %@", [approvedSchedules allKeys]);
+
     NSDictionary* schedule = approvedSchedules[scheduleId];
 
     if (schedule == nil) {
-        NSLog(@"ERROR: Schedule ID %@ not found in approved schedules", scheduleId);
+        NSLog(@"DAEMON ERROR: Schedule ID %@ NOT FOUND in approved schedules!", scheduleId);
+        NSLog(@"DAEMON: Available schedules: %@", approvedSchedules);
         reply([SCErr errorWithCode: 403 subDescription: @"Schedule not registered or unauthorized"]);
         return;
     }
 
-    NSLog(@"INFO: Found approved schedule %@, starting block", scheduleId);
+    NSLog(@"DAEMON: Found approved schedule %@", scheduleId);
 
     // Extract schedule parameters
     NSArray* blocklist = schedule[@"blocklist"];
     BOOL isAllowlist = [schedule[@"isAllowlist"] boolValue];
     NSDictionary* blockSettings = schedule[@"blockSettings"];
     uid_t controllingUID = [schedule[@"controllingUID"] unsignedIntValue];
+
+    NSLog(@"DAEMON: blocklist count = %lu", (unsigned long)blocklist.count);
+    NSLog(@"DAEMON: blocklist = %@", blocklist);
+    NSLog(@"DAEMON: isAllowlist = %d", isAllowlist);
+    NSLog(@"DAEMON: controllingUID = %u", controllingUID);
+    NSLog(@"DAEMON: blockSettings = %@", blockSettings);
+
+    if (blocklist.count == 0) {
+        NSLog(@"DAEMON WARNING: Blocklist is EMPTY! Block may not do anything.");
+    }
+
+    NSLog(@"DAEMON: Calling startBlockWithControllingUID...");
 
     // Start the block without authorization (it was pre-approved)
     [SCDaemonBlockMethods startBlockWithControllingUID: controllingUID
@@ -148,7 +166,15 @@
                                                endDate: endDate
                                          blockSettings: blockSettings
                                          authorization: nil
-                                                 reply: reply];
+                                                 reply:^(NSError *error) {
+        if (error) {
+            NSLog(@"DAEMON ERROR: startBlock failed: %@", error);
+        } else {
+            NSLog(@"DAEMON: Block started successfully for schedule %@", scheduleId);
+        }
+        NSLog(@"=== DAEMON: startScheduledBlockWithID COMPLETE ===");
+        reply(error);
+    }];
 }
 
 // Unregister a schedule - requires authorization

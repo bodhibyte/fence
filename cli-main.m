@@ -90,28 +90,41 @@ int main(int argc, char* argv[]) {
             NSString* scheduleId = [arguments firstObjectForSignature: scheduleIdSig];
             if (scheduleId != nil && scheduleId.length > 0) {
                 // This is a scheduled block - use pre-authorized flow (NO password prompt)
-                NSLog(@"INFO: Starting pre-authorized scheduled block with ID: %@", scheduleId);
+                NSLog(@"=== SCHEDULED BLOCK START ===");
+                NSLog(@"CLI: Received scheduled block request");
+                NSLog(@"CLI: scheduleId = %@", scheduleId);
+                NSLog(@"CLI: raw enddate arg = %@", [arguments firstObjectForSignature: blockEndDateSig]);
 
                 NSDate* blockEndDateArg = [[NSISO8601DateFormatter new] dateFromString: [arguments firstObjectForSignature: blockEndDateSig]];
+                NSLog(@"CLI: parsed endDate = %@", blockEndDateArg);
+                NSLog(@"CLI: timeIntervalSinceNow = %.1f seconds", [blockEndDateArg timeIntervalSinceNow]);
+
                 if (blockEndDateArg == nil || [blockEndDateArg timeIntervalSinceNow] < 1) {
                     NSLog(@"ERROR: Scheduled block requires valid --enddate in the future");
                     exit(EX_USAGE);
                 }
 
+                NSLog(@"CLI: Creating XPC client...");
                 SCXPCClient* xpc = [SCXPCClient new];
                 dispatch_semaphore_t scheduledBlockSema = dispatch_semaphore_create(0);
 
                 [xpc connectAndExecuteCommandBlock:^(NSError *connectError) {
+                    if (connectError) {
+                        NSLog(@"CLI ERROR: XPC connection failed: %@", connectError);
+                    } else {
+                        NSLog(@"CLI: XPC connected, calling startScheduledBlockWithID...");
+                    }
                     // Try to start the scheduled block (no password needed!)
                     [xpc startScheduledBlockWithID: scheduleId
                                            endDate: blockEndDateArg
                                              reply:^(NSError * _Nonnull error) {
                         if (error != nil) {
-                            NSLog(@"ERROR: Failed to start scheduled block with error %@", error);
+                            NSLog(@"CLI ERROR: Daemon returned error: %@", error);
                             exit(EX_SOFTWARE);
                             return;
                         }
-                        NSLog(@"INFO: Scheduled block %@ successfully started.", scheduleId);
+                        NSLog(@"CLI: Scheduled block %@ successfully started!", scheduleId);
+                        NSLog(@"=== SCHEDULED BLOCK START COMPLETE ===");
                         dispatch_semaphore_signal(scheduledBlockSema);
                     }];
                 }];
