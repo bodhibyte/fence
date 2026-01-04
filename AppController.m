@@ -414,6 +414,20 @@
                                                                         userDriverDelegate:nil];
     NSLog(@"[Sparkle] Updater initialized");
 
+    // Register as login item so app launches at startup
+    if (@available(macOS 13.0, *)) {
+        SMAppService *appService = [SMAppService mainAppService];
+        if (appService.status != SMAppServiceStatusEnabled) {
+            NSError *error = nil;
+            [appService registerAndReturnError:&error];
+            if (error) {
+                NSLog(@"Failed to enable launch at login: %@", error);
+            } else {
+                NSLog(@"Registered as login item");
+            }
+        }
+    }
+
     [SCSentry startSentry: @"org.eyebeam.SelfControl"];
     [SCLogger ensureDirectoriesExist];
 
