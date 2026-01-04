@@ -391,20 +391,37 @@ typedef NS_ENUM(NSInteger, SCLicenseErrorCode) {
 - (NSString *)retrieveLicenseFromStorage {
     // Try iCloud first
     NSUbiquitousKeyValueStore *store = [NSUbiquitousKeyValueStore defaultStore];
-    NSString *code = [store stringForKey:kLicenseStorageKey];
+    NSString *iCloudCode = [store stringForKey:kLicenseStorageKey];
 
-    if (code) {
+    if (iCloudCode) {
         NSLog(@"[SCLicenseManager] License retrieved from iCloud");
-        return code;
+        return iCloudCode;
     }
 
     // Fall back to local storage
-    code = [[NSUserDefaults standardUserDefaults] stringForKey:kLicenseStorageKey];
-    if (code) {
-        NSLog(@"[SCLicenseManager] License retrieved from local storage (iCloud unavailable)");
+    NSString *localCode = [[NSUserDefaults standardUserDefaults] stringForKey:kLicenseStorageKey];
+    if (localCode) {
+        NSLog(@"[SCLicenseManager] License found in local storage but not in iCloud - attempting sync");
+
+        // Try to sync local license to iCloud
+        @try {
+            if (store) {
+                [store setString:localCode forKey:kLicenseStorageKey];
+                BOOL synced = [store synchronize];
+                if (synced) {
+                    NSLog(@"[SCLicenseManager] Successfully synced local license to iCloud");
+                } else {
+                    NSLog(@"[SCLicenseManager] iCloud sync requested but synchronize returned NO (will retry later)");
+                }
+            } else {
+                NSLog(@"[SCLicenseManager] iCloud store unavailable - cannot sync local license");
+            }
+        } @catch (NSException *exception) {
+            NSLog(@"[SCLicenseManager] Error syncing license to iCloud: %@ - %@", exception.name, exception.reason);
+        }
     }
 
-    return code;
+    return localCode;
 }
 
 - (void)deleteLicenseFromStorage {
