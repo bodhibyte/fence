@@ -230,7 +230,7 @@
     if (licenseStatus != SCLicenseStatusValid) {
         [self.statusMenu addItem:[NSMenuItem separatorItem]];
 
-        NSMenuItem *licenseItem = [[NSMenuItem alloc] initWithTitle:@"Purchase License"
+        NSMenuItem *licenseItem = [[NSMenuItem alloc] initWithTitle:@"Enter License"
                                                              action:@selector(enterLicenseClicked:)
                                                       keyEquivalent:@""];
         licenseItem.target = self;
@@ -485,6 +485,9 @@
 }
 
 - (void)checkForUpdates:(id)sender {
+    // Bring app to foreground so Sparkle dialogs are visible
+    [NSApp activateIgnoringOtherApps:YES];
+
     AppController *appController = (AppController *)[NSApp delegate];
     [appController.updaterController checkForUpdates:sender];
 }

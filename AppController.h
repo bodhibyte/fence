@@ -27,6 +27,7 @@
 @class SPUStandardUpdaterController;
 
 #import <Cocoa/Cocoa.h>
+#import <Sparkle/Sparkle.h>
 #import "DomainListWindowController.h"
 #import "TimerWindowController.h"
 #import <Security/Security.h>
