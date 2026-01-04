@@ -922,10 +922,14 @@ static BOOL const kUseCalendarUI = YES;
     self.bundleEditorController = [[SCBundleEditorController alloc] initWithBundle:bundle];
     self.bundleEditorController.delegate = self;
 
-    // Lock editor only if current week is committed AND this bundle has a schedule for current week
-    BOOL currentWeekCommitted = [manager isCommittedForWeekOffset:0];
-    SCWeeklySchedule *scheduleForCurrentWeek = [manager scheduleForBundleID:bundle.bundleID weekOffset:0];
-    self.bundleEditorController.isCommitted = (currentWeekCommitted && scheduleForCurrentWeek != nil);
+    // Lock editor if bundle is used in ANY committed schedule (This Week OR Next Week)
+    BOOL thisWeekCommitted = [manager isCommittedForWeekOffset:0];
+    BOOL nextWeekCommitted = [manager isCommittedForWeekOffset:1];
+    SCWeeklySchedule *scheduleForThisWeek = [manager scheduleForBundleID:bundle.bundleID weekOffset:0];
+    SCWeeklySchedule *scheduleForNextWeek = [manager scheduleForBundleID:bundle.bundleID weekOffset:1];
+    BOOL usedInCommittedSchedule = (thisWeekCommitted && scheduleForThisWeek != nil)
+                                || (nextWeekCommitted && scheduleForNextWeek != nil);
+    self.bundleEditorController.isCommitted = usedInCommittedSchedule;
 
     [self.bundleEditorController beginSheetModalForWindow:self.window completionHandler:nil];
 }
@@ -954,10 +958,14 @@ static BOOL const kUseCalendarUI = YES;
     self.bundleEditorController = [[SCBundleEditorController alloc] initWithBundle:bundle];
     self.bundleEditorController.delegate = self;
 
-    // Lock editor only if current week is committed AND this bundle has a schedule for current week
-    BOOL currentWeekCommitted = [manager isCommittedForWeekOffset:0];
-    SCWeeklySchedule *scheduleForCurrentWeek = [manager scheduleForBundleID:bundle.bundleID weekOffset:0];
-    self.bundleEditorController.isCommitted = (currentWeekCommitted && scheduleForCurrentWeek != nil);
+    // Lock editor if bundle is used in ANY committed schedule (This Week OR Next Week)
+    BOOL thisWeekCommitted = [manager isCommittedForWeekOffset:0];
+    BOOL nextWeekCommitted = [manager isCommittedForWeekOffset:1];
+    SCWeeklySchedule *scheduleForThisWeek = [manager scheduleForBundleID:bundle.bundleID weekOffset:0];
+    SCWeeklySchedule *scheduleForNextWeek = [manager scheduleForBundleID:bundle.bundleID weekOffset:1];
+    BOOL usedInCommittedSchedule = (thisWeekCommitted && scheduleForThisWeek != nil)
+                                || (nextWeekCommitted && scheduleForNextWeek != nil);
+    self.bundleEditorController.isCommitted = usedInCommittedSchedule;
 
     [self.bundleEditorController beginSheetModalForWindow:self.window completionHandler:nil];
 }

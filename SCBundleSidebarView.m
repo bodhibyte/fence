@@ -256,9 +256,9 @@ static const CGFloat kHeaderHeight = 30.0;
         pill.doubleClickAction = @selector(pillDoubleClicked:);
         pill.isSelected = [bundle.bundleID isEqualToString:self.selectedBundleID];
 
-        // Grey out bundles that have a schedule for this week (actively blocking)
+        // Grey out bundles only if BOTH: has schedule for viewed week AND week is committed
         SCWeeklySchedule *schedule = self.schedules[bundle.bundleID];
-        pill.isCommitted = (schedule != nil);
+        pill.isCommitted = (schedule != nil && self.isCommitted);
 
         [self.pillContainer addSubview:pill];
         [self.pillViews addObject:pill];
