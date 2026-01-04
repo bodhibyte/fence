@@ -3,16 +3,21 @@
 //  SelfControl
 //
 //  Orchestrates startup safety check to verify blocking/unblocking works.
-//  Runs on version change (macOS or app version).
+//  Runs once on first launch (fresh install only), never again.
 //
 
 #import "SCStartupSafetyCheck.h"
 #import "SCVersionTracker.h"
 #import "SCXPCClient.h"
 #import "SCSettings.h"
+#import "SCBlockUtilities.h"
 #import "HostFileBlocker.h"
 #import "PacketFilter.h"
 #import <AppKit/AppKit.h>
+
+// Keys for tracking safety check completion
+static NSString* const kSafetyCheckCompletedKey = @"SafetyCheckCompleted";
+static NSString* const kLastTestedAppVersionKey = @"LastTestedAppVersion"; // For backwards compat
 
 // Test constants
 static NSString* const kTestWebsite = @"example.com";
@@ -85,12 +90,30 @@ static const NSTimeInterval kEmergencyTestBlockDurationSeconds = 300.0; // 5 min
 @implementation SCStartupSafetyCheck
 
 + (BOOL)safetyCheckNeeded {
-    return [SCVersionTracker anyVersionChanged];
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+
+    // Already completed - never run again
+    if ([defaults boolForKey:kSafetyCheckCompletedKey]) {
+        return NO;
+    }
+
+    // Backwards compat: if user has old version keys, treat as completed
+    if ([defaults stringForKey:kLastTestedAppVersionKey] != nil) {
+        return NO;
+    }
+
+    // Skip if block is running (edge case: somehow have block on first launch)
+    if ([SCBlockUtilities anyBlockIsRunning]) {
+        return NO;
+    }
+
+    return YES;  // Fresh install, no block - run safety check
 }
 
 + (void)skipSafetyCheck {
-    [SCVersionTracker updateLastTestedVersions];
-    NSLog(@"SCStartupSafetyCheck: Skipped - versions marked as tested");
+    [[NSUserDefaults standardUserDefaults] setBool:YES forKey:kSafetyCheckCompletedKey];
+    [[NSUserDefaults standardUserDefaults] synchronize];
+    NSLog(@"SCStartupSafetyCheck: Skipped - marked as completed");
 }
 
 + (NSString*)testWebsite {
@@ -643,9 +666,10 @@ static const NSTimeInterval kEmergencyTestBlockDurationSeconds = 300.0; // 5 min
     // Clean up Calculator if still running
     [self killCalculatorIfRunning];
 
-    // Mark versions as tested if passed
+    // Mark as completed if passed (one-time flag)
     if (result.passed) {
-        [SCVersionTracker updateLastTestedVersions];
+        [[NSUserDefaults standardUserDefaults] setBool:YES forKey:kSafetyCheckCompletedKey];
+        [[NSUserDefaults standardUserDefaults] synchronize];
     }
 
     [self finishWithResult:result];
