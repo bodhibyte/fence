@@ -51,11 +51,12 @@
     [output appendFormat:@"\n"];
 
     // Collect logs from unified logging system
+    // Captures: main app, daemon, CLI (launchd jobs), app blocker helper, and launchd job events
     NSTask* task = [[NSTask alloc] init];
     task.launchPath = @"/usr/bin/log";
     task.arguments = @[
         @"show",
-        @"--predicate", @"process == \"Fence\" OR process == \"SelfControl\" OR process == \"selfcontrold\" OR process == \"org.eyebeam.selfcontrold\"",
+        @"--predicate", @"process == \"Fence\" OR process == \"SelfControl\" OR process == \"selfcontrold\" OR process == \"selfcontrol-cli\" OR process == \"SCKillerHelper\" OR (process == \"launchd\" AND eventMessage CONTAINS \"eyebeam\")",
         @"--last", @"24h",
         @"--style", @"compact"
     ];
