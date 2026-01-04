@@ -13,6 +13,8 @@
 #import "SCTestBlockWindowController.h"
 #import "SCSettings.h"
 #import "Common/Utility/SCBlockUtilities.h"
+#import "AppController.h"
+#import <Sparkle/Sparkle.h>
 
 @interface SCMenuBarController ()
 
@@ -302,6 +304,13 @@
     reportBugItem.target = self;
     [self.statusMenu addItem:reportBugItem];
 
+    // Check for Updates
+    NSMenuItem *updateItem = [[NSMenuItem alloc] initWithTitle:@"Check for Updates..."
+                                                        action:@selector(checkForUpdates:)
+                                                 keyEquivalent:@""];
+    updateItem.target = self;
+    [self.statusMenu addItem:updateItem];
+
     [self.statusMenu addItem:[NSMenuItem separatorItem]];
 
     // Quit
@@ -473,6 +482,11 @@
 
 - (void)reportBugClicked:(id)sender {
     [SCLogger exportLogsForSupport];
+}
+
+- (void)checkForUpdates:(id)sender {
+    AppController *appController = (AppController *)[NSApp delegate];
+    [appController.updaterController checkForUpdates:sender];
 }
 
 #ifdef DEBUG

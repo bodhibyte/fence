@@ -6,6 +6,29 @@
     <description>Updates for Fence</description>
     <language>en</language>
 
+    <item>
+      <title>Version 3.0</title>
+      <sparkle:version>600</sparkle:version>
+      <sparkle:shortVersionString>3.0</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>12.0</sparkle:minimumSystemVersion>
+      <pubDate>Sat, 04 Jan 2026 12:00:00 +0000</pubDate>
+      <enclosure
+        url="https://usefence.app/updates/Fence-3.0.zip"
+        length="2956131"
+        type="application/octet-stream"
+        sparkle:edSignature="cUItZiB67FP9864HRXPU4g61cwTELdcoKwXoJ/SUC/ngQH1Khh2/4RamSIJV8FoV3z/WaShwdR3dLsd1LThaCw=="
+      />
+      <description><![CDATA[
+        <h2>What's New in 3.0</h2>
+        <ul>
+          <li>Fix scheduled block transitions failing after sleep/wake</li>
+          <li>Fix UI not updating after wake from sleep (NOW line, status bar)</li>
+          <li>Fix bundles without allow blocks not showing locked state after commit</li>
+          <li>Add warning when committing bundles that will be blocked all week</li>
+        </ul>
+      ]]></description>
+    </item>
+
     <!-- Add new versions above this line -->
 
   </channel>

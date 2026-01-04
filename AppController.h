@@ -24,6 +24,7 @@
 @class TimerWindowController;
 @class SCSafetyCheckWindowController;
 @class SCWeekScheduleWindowController;
+@class SPUStandardUpdaterController;
 
 #import <Cocoa/Cocoa.h>
 #import "DomainListWindowController.h"
@@ -60,6 +61,8 @@
 @property (assign) BOOL addingBlock;
 
 @property (nonatomic, strong) SCSafetyCheckWindowController* safetyCheckWindowController;
+
+@property (nonatomic, strong, readonly) SPUStandardUpdaterController* updaterController;
 
 // Called when the block duration slider is moved.  Updates the label that gives
 // the block duration in words (hours and minutes).

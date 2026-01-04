@@ -45,6 +45,7 @@
 #import "SCLogger.h"
 #import "Common/SCLicenseManager.h"
 #import "SCLicenseWindowController.h"
+#import <Sparkle/Sparkle.h>
 
 @interface AppController () {}
 
@@ -52,6 +53,7 @@
 @property (nonatomic, strong) SCWeekScheduleWindowController* weekScheduleWindowController;
 @property (nonatomic, strong, nullable) SCLicenseWindowController* licenseWindowController;
 @property (nonatomic, strong, nullable) SCTestBlockWindowController* testBlockWindowController;
+@property (nonatomic, strong, readwrite) SPUStandardUpdaterController* updaterController;
 
 @end
 
@@ -405,6 +407,12 @@
 
 - (void)applicationDidFinishLaunching:(NSNotification *)aNotification {
 	[NSApplication sharedApplication].delegate = self;
+
+    // Initialize Sparkle updater for automatic updates
+    self.updaterController = [[SPUStandardUpdaterController alloc] initWithStartingUpdater:YES
+                                                                           updaterDelegate:nil
+                                                                        userDriverDelegate:nil];
+    NSLog(@"[Sparkle] Updater initialized");
 
     [SCSentry startSentry: @"org.eyebeam.SelfControl"];
     [SCLogger ensureDirectoriesExist];
