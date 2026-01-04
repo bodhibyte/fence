@@ -40,5 +40,11 @@ docs/WEB_LAUNCH_HANDOVER.md
 .claude/handover_*.md
 .env
 
+# Build logs and profiling data (may contain secrets via compiler flags)
+Build *.txt
+*.profraw
+*.log
+
 # Release artifacts
 dist/
+Sparkle.framework/
