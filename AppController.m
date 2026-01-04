@@ -468,24 +468,34 @@
     //   3. There's a daemon but it's an old version, and should be replaced.
     // in any case, let's go try to reinstall the daemon
     // (we debounce this call so it happens only once, after the connection has been invalidated for an extended period)
-    if ([SCBlockUtilities modernBlockIsRunning]) {
+    BOOL blockIsRunning = [SCBlockUtilities modernBlockIsRunning];
+    NSLog(@"AppController: Daemon update check - modernBlockIsRunning=%@, appVersion=%@",
+          blockIsRunning ? @"YES" : @"NO", SELFCONTROL_VERSION_STRING);
+
+    if (blockIsRunning) {
+        NSLog(@"AppController: Block is running, will check daemon version in 0.5s...");
         [NSTimer scheduledTimerWithTimeInterval: 0.5 repeats: NO block:^(NSTimer * _Nonnull timer) {
             [self.xpc getVersion:^(NSString * _Nonnull daemonVersion, NSError * _Nonnull error) {
                 if (error == nil) {
+                    NSLog(@"AppController: Daemon version check - daemonVersion=%@, appVersion=%@",
+                          daemonVersion, SELFCONTROL_VERSION_STRING);
                     if ([SELFCONTROL_VERSION_STRING compare: daemonVersion options: NSNumericSearch] == NSOrderedDescending) {
-                        NSLog(@"Daemon version of %@ is out of date (current version is %@).", daemonVersion, SELFCONTROL_VERSION_STRING);
+                        NSLog(@"AppController: Daemon OUTDATED (%@ < %@) - reinstalling...",
+                              daemonVersion, SELFCONTROL_VERSION_STRING);
                         [SCSentry addBreadcrumb: @"Detected out-of-date daemon" category: @"app"];
                         [self reinstallDaemon];
                     } else {
                         [SCSentry addBreadcrumb: @"Detected up-to-date daemon" category:@"app"];
-                        NSLog(@"Daemon version of %@ is up-to-date!", daemonVersion);
+                        NSLog(@"AppController: Daemon UP-TO-DATE (%@) - no action needed", daemonVersion);
                     }
                 } else {
-                    NSLog(@"ERROR: Fetching daemon version failed with error %@", error);
+                    NSLog(@"AppController: ERROR fetching daemon version: %@ - reinstalling...", error);
                     [self reinstallDaemon];
                 }
             }];
         }];
+    } else {
+        NSLog(@"AppController: No block running - skipping daemon version check (will update on next commit)");
     }
 
     // Register observers on both distributed and normal notification centers

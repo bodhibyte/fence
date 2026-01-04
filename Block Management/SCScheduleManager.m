@@ -427,6 +427,9 @@ static const NSInteger kDefaultEmergencyUnlockCredits = 5;
 }
 
 - (void)commitToWeekWithOffset:(NSInteger)weekOffset {
+    // Clean up old week data from NSUserDefaults before committing
+    [self cleanupExpiredCommitments];
+
     NSCalendar *calendar = [NSCalendar currentCalendar];
 
     // Get the Monday of the target week
@@ -814,6 +817,28 @@ static const NSInteger kDefaultEmergencyUnlockCredits = 5;
             // Clear the commitment metadata
             NSString *storageKey = [kWeekCommitmentPrefix stringByAppendingString:weekKey];
             [[NSUserDefaults standardUserDefaults] removeObjectForKey:storageKey];
+        }
+    }
+
+    // Clean up old week schedule data (SCWeekSchedules_* and SCWeekCommitment_* for past weeks)
+    NSString *currentWeekKey = [self weekKeyForOffset:0];
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+
+    for (NSString *key in [defaults dictionaryRepresentation].allKeys) {
+        NSString *weekKey = nil;
+
+        if ([key hasPrefix:kWeekSchedulesPrefix]) {
+            weekKey = [key substringFromIndex:kWeekSchedulesPrefix.length];
+        } else if ([key hasPrefix:kWeekCommitmentPrefix]) {
+            weekKey = [key substringFromIndex:kWeekCommitmentPrefix.length];
+        }
+
+        if (weekKey) {
+            // ISO date strings sort chronologically - delete only past weeks
+            if ([weekKey compare:currentWeekKey] == NSOrderedAscending) {
+                NSLog(@"SCScheduleManager: Removing old week data: %@", key);
+                [defaults removeObjectForKey:key];
+            }
         }
     }
 
