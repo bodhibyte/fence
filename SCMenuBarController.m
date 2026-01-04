@@ -45,12 +45,19 @@
                                                  selector:@selector(scheduleDidChange:)
                                                      name:SCScheduleManagerDidChangeNotification
                                                    object:nil];
+
+        // Listen for wake from sleep to refresh status
+        [[[NSWorkspace sharedWorkspace] notificationCenter] addObserver:self
+                                                               selector:@selector(systemDidWake:)
+                                                                   name:NSWorkspaceDidWakeNotification
+                                                                 object:nil];
     }
     return self;
 }
 
 - (void)dealloc {
     [[NSNotificationCenter defaultCenter] removeObserver:self];
+    [[[NSWorkspace sharedWorkspace] notificationCenter] removeObserver:self];
     [self.updateTimer invalidate];
 }
 
@@ -383,8 +390,8 @@
 - (void)startUpdateTimer {
     [self.updateTimer invalidate];
 
-    // Update every minute
-    self.updateTimer = [NSTimer scheduledTimerWithTimeInterval:60.0
+    // Update every 15 seconds to catch block state changes
+    self.updateTimer = [NSTimer scheduledTimerWithTimeInterval:15.0
                                                         target:self
                                                       selector:@selector(timerFired:)
                                                       userInfo:nil
@@ -404,6 +411,13 @@
 #pragma mark - Notifications
 
 - (void)scheduleDidChange:(NSNotification *)note {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [self updateStatus];
+    });
+}
+
+- (void)systemDidWake:(NSNotification *)note {
+    // Refresh status after wake from sleep - block state may have changed
     dispatch_async(dispatch_get_main_queue(), ^{
         [self updateStatus];
     });

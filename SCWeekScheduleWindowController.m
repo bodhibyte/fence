@@ -61,6 +61,9 @@ static BOOL const kUseCalendarUI = YES;
 // Event monitor for Cmd+Q during alert sheets
 @property (nonatomic, strong) id cmdQMonitor;
 
+// Periodic refresh timer (5 min) for NOW line and status updates
+@property (nonatomic, strong) NSTimer *refreshTimer;
+
 @end
 
 @implementation SCWeekScheduleWindowController
@@ -91,6 +94,8 @@ static BOOL const kUseCalendarUI = YES;
 
 - (void)dealloc {
     [[NSNotificationCenter defaultCenter] removeObserver:self];
+    [[[NSWorkspace sharedWorkspace] notificationCenter] removeObserver:self];
+    [self.refreshTimer invalidate];
 }
 
 - (void)setupUI {
@@ -282,6 +287,20 @@ static BOOL const kUseCalendarUI = YES;
                                              selector:@selector(showWeekScheduleWindowRequested:)
                                                  name:@"SCShowWeekScheduleWindow"
                                                object:nil];
+
+    // Observe wake from sleep to refresh NOW line and status
+    [[[NSWorkspace sharedWorkspace] notificationCenter] addObserver:self
+                                                           selector:@selector(systemDidWake:)
+                                                               name:NSWorkspaceDidWakeNotification
+                                                             object:nil];
+
+    // 5-minute timer to refresh NOW line and status (block boundaries are covered by SCScheduleManagerDidChangeNotification)
+    self.refreshTimer = [NSTimer scheduledTimerWithTimeInterval:300.0  // 5 minutes
+                                                         target:self
+                                                       selector:@selector(refreshTimerFired:)
+                                                       userInfo:nil
+                                                        repeats:YES];
+    [[NSRunLoop currentRunLoop] addTimer:self.refreshTimer forMode:NSRunLoopCommonModes];
 }
 
 - (void)showWeekScheduleWindowRequested:(NSNotification*)note {
@@ -291,6 +310,21 @@ static BOOL const kUseCalendarUI = YES;
 - (void)windowDidResize:(NSNotification *)note {
     // Update grid view height when window resizes (e.g., fullscreen)
     [self reloadData];
+}
+
+- (void)systemDidWake:(NSNotification *)note {
+    // Refresh UI after wake from sleep - NOW line position and status may have changed
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [self reloadData];
+        // Force calendar grid to redraw NOW line
+        [self.calendarGridView setNeedsDisplay:YES];
+    });
+}
+
+- (void)refreshTimerFired:(NSTimer *)timer {
+    // Periodic refresh for NOW line position and status updates
+    [self reloadData];
+    [self.calendarGridView setNeedsDisplay:YES];
 }
 
 #pragma mark - Data
@@ -613,10 +647,46 @@ static BOOL const kUseCalendarUI = YES;
         lastDay = [SCWeeklySchedule displayNameForDay:[[days lastObject] integerValue]];
     }
 
-    alert.informativeText = [NSString stringWithFormat:
-                             @"Once committed, the schedule is locked and cannot be modified. "
-                             @"This commitment lasts until %@.\n\n"
-                             @"You will still be able to add apps and websites to bundles.", lastDay];
+    // Check for bundles with no allow blocks (will be blocked all week)
+    NSMutableArray<NSString *> *bundlesWithNoAllowBlocks = [NSMutableArray array];
+    for (SCBlockBundle *bundle in manager.bundles) {
+        if (!bundle.enabled) continue;
+        SCWeeklySchedule *schedule = [manager scheduleForBundleID:bundle.bundleID weekOffset:self.currentWeekOffset];
+        // No schedule OR schedule with no allowed windows = blocked all week
+        BOOL hasAnyAllowWindows = NO;
+        if (schedule) {
+            for (NSString *dayKey in schedule.daySchedules) {
+                if ([schedule.daySchedules[dayKey] count] > 0) {
+                    hasAnyAllowWindows = YES;
+                    break;
+                }
+            }
+        }
+        if (!hasAnyAllowWindows) {
+            [bundlesWithNoAllowBlocks addObject:bundle.name];
+        }
+    }
+
+    // Main informative text
+    NSString *mainText = [NSString stringWithFormat:
+        @"Once committed, the schedule is locked till %@ (expires midnight) and cannot be modified, "
+        @"except for adding apps and websites to active bundles.", lastDay];
+
+    if (bundlesWithNoAllowBlocks.count > 0) {
+        // Show warning in red using accessory view
+        alert.informativeText = mainText;
+
+        NSString *bundleList = [bundlesWithNoAllowBlocks componentsJoinedByString:@", "];
+        NSString *warningText = [NSString stringWithFormat:@"Warning: %@ will be blocked for the entire week (no allow windows scheduled).", bundleList];
+        NSTextField *warningLabel = [NSTextField wrappingLabelWithString:warningText];
+        warningLabel.textColor = [NSColor systemRedColor];
+        warningLabel.font = [NSFont systemFontOfSize:12 weight:NSFontWeightMedium];
+        [warningLabel setFrameSize:NSMakeSize(300, 40)];
+        alert.accessoryView = warningLabel;
+    } else {
+        alert.informativeText = mainText;
+    }
+
     [alert addButtonWithTitle:@"Commit"];
     [alert addButtonWithTitle:@"Cancel"];
 

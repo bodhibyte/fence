@@ -470,6 +470,17 @@ static const NSInteger kDefaultEmergencyUnlockCredits = 5;
         }
     }
 
+    // Ensure all enabled bundles have a persisted schedule for the committed week
+    // Bundles with no drawn allow blocks get an empty schedule (blocked all week)
+    // This is scoped to weekOffset, so it won't affect other weeks
+    for (SCBlockBundle *bundle in enabledBundles) {
+        SCWeeklySchedule *schedule = [self scheduleForBundleID:bundle.bundleID weekOffset:weekOffset];
+        if (!schedule) {
+            NSLog(@"SCScheduleManager: Creating empty schedule for bundle '%@' (no allow blocks drawn)", bundle.name);
+            [self createScheduleForBundle:bundle weekOffset:weekOffset];
+        }
+    }
+
     if (enabledBundles.count == 0) {
         NSLog(@"SCScheduleManager: No enabled bundles to schedule");
     } else {
