@@ -6,7 +6,7 @@
 
 ## About
 
-**Fence** is a free and open-source macOS application that blocks distracting websites and apps on a weekly schedule. Set your blocking schedule for the entire week, commit to it once, and stick with it—no undos, no exceptions.
+**Fence** is an open-source macOS application that blocks distracting websites and apps on a weekly schedule. Set your blocking schedule for the entire week, commit to it once, and stick with it—no undos, no exceptions.
 
 Unlike traditional website blockers that let you disable blocking on a whim, Fence enforces your commitment. Once you start a block:
 - ✅ **Schedule for the week** - Define when sites/apps are blocked each day
