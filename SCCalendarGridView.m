@@ -893,8 +893,8 @@ static const CGFloat kDimmedOpacity = 0.2;
 
     for (SCAllowBlockView *blockView in blockViews) {
         if (!blockView.timeRange || blockView.bounds.size.height <= 30) {
-            // Too short for any labels
-            worstMode = MAX(worstMode, 3);
+            // Too short for any labels - skip this block but don't affect others
+            // (drawRect has its own height check for this block)
             continue;
         }
 
