@@ -50,6 +50,10 @@ NS_ASSUME_NONNULL_BEGIN
 // Query PF state from daemon (which runs as root)
 - (void)isPFBlockActive:(void(^)(BOOL active, NSError* _Nullable error))reply;
 
+// Cleanup a stale schedule (expired endDate) - removes from ApprovedSchedules and launchd
+- (void)cleanupStaleSchedule:(NSString*)scheduleId
+                       reply:(void(^)(NSError* _Nullable error))reply;
+
 @end
 
 NS_ASSUME_NONNULL_END

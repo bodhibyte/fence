@@ -6,6 +6,7 @@
 //
 
 #import "SCDaemonXPC.h"
+#import "SCDaemon.h"
 #import "SCDaemonBlockMethods.h"
 #import "SCXPCAuthorization.h"
 #import "SCHelperToolUtilities.h"
@@ -274,6 +275,19 @@
     }
 
     [SCDaemonBlockMethods stopTestBlock:reply];
+}
+
+- (void)cleanupStaleScheduleWithID:(NSString*)scheduleId
+                             reply:(void(^)(NSError* error))reply {
+    NSLog(@"XPC method called: cleanupStaleScheduleWithID: %@", scheduleId);
+
+    // NO authorization required - this is cleanup of pre-authorized schedules
+    // that have expired (endDate in the past)
+
+    [[SCDaemon sharedDaemon] cleanupStaleScheduleWithID:scheduleId];
+
+    NSLog(@"INFO: Stale schedule %@ cleaned up successfully", scheduleId);
+    reply(nil);
 }
 
 @end

@@ -35,6 +35,10 @@ NS_ASSUME_NONNULL_BEGIN
 // The daemon will die if goes for too long without activity.
 - (void)resetInactivityTimer;
 
+// Cleans up a stale schedule by removing it from ApprovedSchedules
+// and deleting the corresponding launchd job plist.
+- (void)cleanupStaleScheduleWithID:(NSString *)scheduleId;
+
 @end
 
 NS_ASSUME_NONNULL_END

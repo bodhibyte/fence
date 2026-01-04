@@ -516,6 +516,27 @@
     }];
 }
 
+- (void)cleanupStaleSchedule:(NSString*)scheduleId
+                       reply:(void(^)(NSError* error))reply {
+    // Note: This method does NOT require authorization - cleanup of expired pre-authorized schedules
+    [self connectAndExecuteCommandBlock:^(NSError * connectError) {
+        if (connectError != nil) {
+            NSLog(@"Cleanup stale schedule failed with connection error: %@", connectError);
+            reply(connectError);
+        } else {
+            [[self.daemonConnection remoteObjectProxyWithErrorHandler:^(NSError * proxyError) {
+                NSLog(@"Cleanup stale schedule failed with remote object proxy error: %@", proxyError);
+                reply(proxyError);
+            }] cleanupStaleScheduleWithID:scheduleId reply:^(NSError* error) {
+                if (error != nil) {
+                    NSLog(@"Cleanup stale schedule failed with error = %@\n", error);
+                }
+                reply(error);
+            }];
+        }
+    }];
+}
+
 - (NSString*)selfControlHelperToolPath {
     static NSString* path;
 

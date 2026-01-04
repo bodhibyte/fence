@@ -686,9 +686,10 @@
 
     NSLog(@"SCScheduleLaunchdBridge: Registered schedule %@ with daemon", segmentID);
 
-    // Format end date as ISO8601
+    // Format start and end dates as ISO8601
     NSISO8601DateFormatter *isoFormatter = [[NSISO8601DateFormatter alloc] init];
     isoFormatter.formatOptions = NSISO8601DateFormatWithInternetDateTime;
+    NSString *startDateStr = [isoFormatter stringFromDate:startDate];
     NSString *endDateStr = [isoFormatter stringFromDate:endDate];
 
     // Job label: org.eyebeam.selfcontrol.schedule.merged-{segmentID}.{day}.{time}
@@ -709,12 +710,14 @@
 
     // Build the plist - use --schedule-id instead of --blocklist for pre-authorized blocks
     // Note: XPMArgumentParser requires --flag=value format (not --flag value)
+    // startdate is used to validate the job hasn't fired prematurely (e.g., next week's Sunday job firing this week)
     NSDictionary *plist = @{
         @"Label": label,
         @"ProgramArguments": @[
             cliPath,
             @"start",
             [NSString stringWithFormat:@"--schedule-id=%@", segmentID],
+            [NSString stringWithFormat:@"--startdate=%@", startDateStr],
             [NSString stringWithFormat:@"--enddate=%@", endDateStr]
         ],
         @"StartCalendarInterval": calendarInterval,

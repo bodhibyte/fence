@@ -100,6 +100,10 @@ extern NSNotificationName const SCScheduleManagerDidChangeNotification;
 /// Called on app launch and periodically
 - (void)cleanupExpiredCommitments;
 
+/// Cleans up stale (expired) schedule jobs only.
+/// Preserves valid jobs from other weeks, enabling multi-week commits.
+- (void)cleanupStaleScheduleJobs;
+
 #pragma mark - Status Display (UX Only)
 
 /// Returns status string for a specific bundle

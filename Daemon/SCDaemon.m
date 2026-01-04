@@ -254,28 +254,47 @@ float const INACTIVITY_LIMIT_SECS = 60 * 2; // 2 minutes
         NSInteger jobMinute = [startInterval[@"Minute"] integerValue];
         NSInteger jobStartMinutes = jobHour * 60 + jobMinute;
 
-        // Get end date from ProgramArguments
+        // Get start and end dates from ProgramArguments
         NSArray *args = jobPlist[@"ProgramArguments"];
+        NSDate *startDate = nil;
         NSDate *endDate = nil;
+        NSISO8601DateFormatter *isoFormatter = [[NSISO8601DateFormatter alloc] init];
         for (NSString *arg in args) {
-            if ([arg hasPrefix:@"--enddate="]) {
+            if ([arg hasPrefix:@"--startdate="]) {
+                NSString *startDateStr = [arg substringFromIndex:12];
+                startDate = [isoFormatter dateFromString:startDateStr];
+            } else if ([arg hasPrefix:@"--enddate="]) {
                 NSString *endDateStr = [arg substringFromIndex:10];
-                NSISO8601DateFormatter *isoFormatter = [[NSISO8601DateFormatter alloc] init];
                 endDate = [isoFormatter dateFromString:endDateStr];
-                break;
             }
         }
 
         if (!endDate) continue;
 
-        [debugLog appendFormat:@"Job %@: weekday=%ld, start=%ld, end=%@\n",
-                  segmentID, (long)jobWeekday, (long)jobStartMinutes, endDate];
+        [debugLog appendFormat:@"Job %@: weekday=%ld, startMinutes=%ld, startDate=%@, endDate=%@\n",
+                  segmentID, (long)jobWeekday, (long)jobStartMinutes, startDate, endDate];
 
-        // Check if this segment is active NOW
+        // Check if job has expired (endDate is in the past)
+        BOOL expired = ([endDate timeIntervalSinceNow] <= 0);
+        if (expired) {
+            [debugLog appendFormat:@"  -> EXPIRED, cleaning up\n"];
+            NSLog(@"SCDaemon: Job %@ has expired (endDate=%@), cleaning up", segmentID, endDate);
+            [self cleanupStaleScheduleWithID:segmentID];
+            continue;
+        }
+
+        // Check if job is for a future week (startDate hasn't arrived yet)
+        BOOL tooEarly = (startDate != nil && [now compare:startDate] == NSOrderedAscending);
+        if (tooEarly) {
+            [debugLog appendFormat:@"  -> TOO EARLY (startDate=%@), skipping\n", startDate];
+            continue;
+        }
+
+        // Check if this segment is active NOW (using time-of-day check as before)
         // Active if: same weekday, started in past (or same time), ends in future
         BOOL sameWeekday = (jobWeekday == nowWeekday);
         BOOL startedOrNow = (jobStartMinutes <= nowMinutes);
-        BOOL endsInFuture = ([endDate timeIntervalSinceNow] > 0);
+        BOOL endsInFuture = YES;  // Already checked above
 
         [debugLog appendFormat:@"  sameWeekday=%d, startedOrNow=%d, endsInFuture=%d\n",
                   sameWeekday, startedOrNow, endsInFuture];
@@ -327,6 +346,65 @@ float const INACTIVITY_LIMIT_SECS = 60 * 2; // 2 minutes
             NSLog(@"SCDaemon: Successfully started approved segment %@", activeSegmentID);
         }
     }];
+}
+
+#pragma mark - Schedule Cleanup
+
+/// Cleans up a stale schedule by removing it from ApprovedSchedules and deleting the launchd job.
+/// Called when a job fires with an expired endDate.
+- (void)cleanupStaleScheduleWithID:(NSString *)scheduleId {
+    NSLog(@"SCDaemon: Cleaning up stale schedule %@", scheduleId);
+
+    // 1. Remove from ApprovedSchedules
+    SCSettings *settings = [SCSettings sharedSettings];
+    NSMutableDictionary *approved = [[settings valueForKey:@"ApprovedSchedules"] mutableCopy];
+    if (approved && approved[scheduleId]) {
+        [approved removeObjectForKey:scheduleId];
+        [settings setValue:approved forKey:@"ApprovedSchedules"];
+        [settings synchronizeSettings];
+        NSLog(@"SCDaemon: Removed %@ from ApprovedSchedules", scheduleId);
+    }
+
+    // 2. Find and remove launchd job plist
+    uid_t consoleUID = [SCMiscUtilities consoleUserUID];
+    if (consoleUID == 0) {
+        NSLog(@"SCDaemon: No console user, skipping launchd cleanup");
+        return;
+    }
+
+    struct passwd *pw = getpwuid(consoleUID);
+    if (!pw) {
+        NSLog(@"SCDaemon: Could not get home directory for user %d", consoleUID);
+        return;
+    }
+
+    NSString *homeDir = [NSString stringWithUTF8String:pw->pw_dir];
+    NSString *launchAgentsDir = [homeDir stringByAppendingPathComponent:@"Library/LaunchAgents"];
+    NSFileManager *fm = [NSFileManager defaultManager];
+
+    NSString *pattern = [NSString stringWithFormat:@"merged-%@", scheduleId];
+
+    for (NSString *file in [fm contentsOfDirectoryAtPath:launchAgentsDir error:nil]) {
+        if ([file containsString:pattern] && [file hasSuffix:@".plist"]) {
+            NSString *fullPath = [launchAgentsDir stringByAppendingPathComponent:file];
+            NSString *label = [file stringByDeletingPathExtension];
+
+            // Unload from launchctl (run as console user)
+            NSTask *task = [[NSTask alloc] init];
+            task.executableURL = [NSURL fileURLWithPath:@"/bin/launchctl"];
+            task.arguments = @[@"bootout", [NSString stringWithFormat:@"gui/%d/%@", consoleUID, label]];
+            [task launchAndReturnError:nil];
+            [task waitUntilExit];
+
+            // Delete plist file
+            NSError *removeError = nil;
+            if ([fm removeItemAtPath:fullPath error:&removeError]) {
+                NSLog(@"SCDaemon: Deleted launchd job %@", label);
+            } else {
+                NSLog(@"SCDaemon: Failed to delete %@: %@", fullPath, removeError);
+            }
+        }
+    }
 }
 
 #pragma mark - NSXPCListenerDelegate

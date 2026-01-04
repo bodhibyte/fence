@@ -457,8 +457,8 @@ static const NSInteger kDefaultEmergencyUnlockCredits = 5;
     SCScheduleLaunchdBridge *bridge = [[SCScheduleLaunchdBridge alloc] init];
     NSError *error = nil;
 
-    // First, uninstall all existing schedule jobs
-    [bridge uninstallAllScheduleJobs:nil];
+    // Cleanup only stale (expired) schedule jobs, preserving valid ones from other weeks
+    [self cleanupStaleScheduleJobs];
 
     // Collect all enabled bundles
     NSMutableArray<SCBlockBundle *> *enabledBundles = [NSMutableArray array];
@@ -818,6 +818,85 @@ static const NSInteger kDefaultEmergencyUnlockCredits = 5;
     }
 
     [[NSUserDefaults standardUserDefaults] synchronize];
+}
+
+/// Cleans up stale (expired) schedule jobs.
+/// Only removes jobs where endDate is in the past, preserving valid jobs from other weeks.
+/// This allows multi-week commits without destroying jobs from other committed weeks.
+- (void)cleanupStaleScheduleJobs {
+    NSDate *now = [NSDate date];
+    NSISO8601DateFormatter *isoFormatter = [[NSISO8601DateFormatter alloc] init];
+
+    // Scan all schedule job plists
+    NSString *launchAgentsDir = [@"~/Library/LaunchAgents" stringByExpandingTildeInPath];
+    NSFileManager *fm = [NSFileManager defaultManager];
+    NSString *prefix = @"org.eyebeam.selfcontrol.schedule.merged-";
+
+    NSArray *files = [fm contentsOfDirectoryAtPath:launchAgentsDir error:nil];
+    NSMutableArray *staleSegmentIDs = [NSMutableArray array];
+
+    for (NSString *file in files) {
+        if (![file hasPrefix:prefix] || ![file hasSuffix:@".plist"]) continue;
+
+        NSString *path = [launchAgentsDir stringByAppendingPathComponent:file];
+        NSDictionary *plist = [NSDictionary dictionaryWithContentsOfFile:path];
+        if (!plist) continue;
+
+        // Parse endDate from ProgramArguments
+        NSDate *endDate = nil;
+        NSArray *args = plist[@"ProgramArguments"];
+        for (NSString *arg in args) {
+            if ([arg hasPrefix:@"--enddate="]) {
+                NSString *endDateStr = [arg substringFromIndex:10];
+                endDate = [isoFormatter dateFromString:endDateStr];
+                break;
+            }
+        }
+
+        // If expired (endDate in past), mark for cleanup
+        if (endDate && [now compare:endDate] == NSOrderedDescending) {
+            // Extract segmentID from label
+            NSString *label = plist[@"Label"];
+            NSArray *parts = [label componentsSeparatedByString:@".merged-"];
+            if (parts.count > 1) {
+                NSString *remainder = parts[1];
+                NSString *segmentID = [remainder componentsSeparatedByString:@"."].firstObject;
+                if (segmentID.length > 0) {
+                    [staleSegmentIDs addObject:segmentID];
+                    NSLog(@"SCScheduleManager: Found stale job %@ (endDate=%@)", segmentID, endDate);
+                }
+            }
+        }
+    }
+
+    // Cleanup stale jobs via daemon XPC
+    if (staleSegmentIDs.count > 0) {
+        NSLog(@"SCScheduleManager: Cleaning up %lu stale schedule jobs", (unsigned long)staleSegmentIDs.count);
+        SCXPCClient *xpc = [[SCXPCClient alloc] init];
+
+        for (NSString *segmentID in staleSegmentIDs) {
+            dispatch_semaphore_t sema = dispatch_semaphore_create(0);
+            [xpc cleanupStaleSchedule:segmentID reply:^(NSError *error) {
+                if (error) {
+                    NSLog(@"SCScheduleManager: Cleanup failed for %@: %@", segmentID, error);
+                } else {
+                    NSLog(@"SCScheduleManager: Cleaned up stale schedule %@", segmentID);
+                }
+                dispatch_semaphore_signal(sema);
+            }];
+
+            // Wait for cleanup (with run loop to avoid deadlock)
+            if (![NSThread isMainThread]) {
+                dispatch_semaphore_wait(sema, DISPATCH_TIME_FOREVER);
+            } else {
+                while (dispatch_semaphore_wait(sema, DISPATCH_TIME_NOW)) {
+                    [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.1]];
+                }
+            }
+        }
+    } else {
+        NSLog(@"SCScheduleManager: No stale schedule jobs to cleanup");
+    }
 }
 
 #pragma mark - Status Display

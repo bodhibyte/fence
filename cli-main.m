@@ -38,6 +38,7 @@ int main(int argc, char* argv[]) {
           * controllingUIDSig = [XPMArgumentSignature argumentSignatureWithFormat:@"[--uid]="],
           * startSig = [XPMArgumentSignature argumentSignatureWithFormat:@"[start --start --install]"],
           * blocklistSig = [XPMArgumentSignature argumentSignatureWithFormat:@"[--blocklist -b]="],
+          * blockStartDateSig = [XPMArgumentSignature argumentSignatureWithFormat:@"[--startdate]="],  // For scheduled block validation
           * blockEndDateSig = [XPMArgumentSignature argumentSignatureWithFormat:@"[--enddate -d]="],
           * blockSettingsSig = [XPMArgumentSignature argumentSignatureWithFormat:@"[--settings -s]="],
           * scheduleIdSig = [XPMArgumentSignature argumentSignatureWithFormat:@"[--schedule-id]="],  // For pre-authorized scheduled blocks
@@ -45,7 +46,7 @@ int main(int argc, char* argv[]) {
           * printSettingsSig = [XPMArgumentSignature argumentSignatureWithFormat:@"[print-settings --printsettings -p]"],
           * isRunningSig = [XPMArgumentSignature argumentSignatureWithFormat:@"[is-running --isrunning -r]"],
           * versionSig = [XPMArgumentSignature argumentSignatureWithFormat:@"[version --version -v]"];
-        NSArray * signatures = @[controllingUIDSig, startSig, blocklistSig, blockEndDateSig, blockSettingsSig, scheduleIdSig, removeSig, printSettingsSig, isRunningSig, versionSig];
+        NSArray * signatures = @[controllingUIDSig, startSig, blocklistSig, blockStartDateSig, blockEndDateSig, blockSettingsSig, scheduleIdSig, removeSig, printSettingsSig, isRunningSig, versionSig];
         XPMArgumentPackage * arguments = [[NSProcessInfo processInfo] xpmargs_parseArgumentsWithSignatures:signatures];
 
         // We'll need the controlling UID to know what settings to read
@@ -93,16 +94,53 @@ int main(int argc, char* argv[]) {
                 NSLog(@"=== SCHEDULED BLOCK START ===");
                 NSLog(@"CLI: Received scheduled block request");
                 NSLog(@"CLI: scheduleId = %@", scheduleId);
-                NSLog(@"CLI: raw enddate arg = %@", [arguments firstObjectForSignature: blockEndDateSig]);
 
-                NSDate* blockEndDateArg = [[NSISO8601DateFormatter new] dateFromString: [arguments firstObjectForSignature: blockEndDateSig]];
+                // Parse dates
+                NSISO8601DateFormatter* isoFormatter = [NSISO8601DateFormatter new];
+                NSDate* blockStartDateArg = [isoFormatter dateFromString: [arguments firstObjectForSignature: blockStartDateSig]];
+                NSDate* blockEndDateArg = [isoFormatter dateFromString: [arguments firstObjectForSignature: blockEndDateSig]];
+                NSDate* now = [NSDate date];
+
+                NSLog(@"CLI: parsed startDate = %@", blockStartDateArg);
                 NSLog(@"CLI: parsed endDate = %@", blockEndDateArg);
-                NSLog(@"CLI: timeIntervalSinceNow = %.1f seconds", [blockEndDateArg timeIntervalSinceNow]);
+                NSLog(@"CLI: now = %@", now);
 
-                if (blockEndDateArg == nil || [blockEndDateArg timeIntervalSinceNow] < 1) {
-                    NSLog(@"ERROR: Scheduled block requires valid --enddate in the future");
-                    exit(EX_USAGE);
+                // Check if this job is for a future week (startDate hasn't arrived yet)
+                // This handles the case where "Next Week's Sunday" job fires on "This Week's Sunday"
+                if (blockStartDateArg != nil && [now compare:blockStartDateArg] == NSOrderedAscending) {
+                    NSLog(@"CLI: Job is for future week (startDate=%@), skipping without cleanup", blockStartDateArg);
+                    exit(EXIT_SUCCESS);  // Exit quietly, don't cleanup - job is valid but not yet
                 }
+
+                // Check if this job has expired (endDate is in the past)
+                if (blockEndDateArg == nil || [now compare:blockEndDateArg] == NSOrderedDescending) {
+                    NSLog(@"CLI: Job has expired (endDate=%@), cleaning up stale schedule", blockEndDateArg);
+
+                    // Cleanup the stale schedule via XPC
+                    SCXPCClient* xpc = [SCXPCClient new];
+                    dispatch_semaphore_t cleanupSema = dispatch_semaphore_create(0);
+
+                    [xpc cleanupStaleSchedule:scheduleId reply:^(NSError* error) {
+                        if (error) {
+                            NSLog(@"CLI: Cleanup failed: %@", error);
+                        } else {
+                            NSLog(@"CLI: Successfully cleaned up stale schedule %@", scheduleId);
+                        }
+                        dispatch_semaphore_signal(cleanupSema);
+                    }];
+
+                    // Wait for cleanup to complete
+                    if (![NSThread isMainThread]) {
+                        dispatch_semaphore_wait(cleanupSema, DISPATCH_TIME_FOREVER);
+                    } else {
+                        while (dispatch_semaphore_wait(cleanupSema, DISPATCH_TIME_NOW)) {
+                            [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.1]];
+                        }
+                    }
+                    exit(EXIT_SUCCESS);
+                }
+
+                NSLog(@"CLI: Job is valid (startDate <= now <= endDate), proceeding with block start");
 
                 NSLog(@"CLI: Creating XPC client...");
                 SCXPCClient* xpc = [SCXPCClient new];
