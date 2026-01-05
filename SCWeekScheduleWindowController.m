@@ -126,7 +126,7 @@ static BOOL const kUseCalendarUI = YES;
     [contentView addSubview:self.titleLabel];
 
     // Week navigation (right side): [< This Week] [Week Label] [Next Week >]
-    CGFloat navX = contentView.bounds.size.width - 350 - padding;
+    CGFloat navX = contentView.bounds.size.width - 390 - padding;
 
     // Previous week button (This Week)
     self.prevWeekButton = [[NSButton alloc] initWithFrame:NSMakeRect(navX, y, 90, 24)];
@@ -140,7 +140,7 @@ static BOOL const kUseCalendarUI = YES;
     [contentView addSubview:self.prevWeekButton];
 
     // Week label (center of navigation)
-    self.weekLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(navX + 95, y, 160, 24)];
+    self.weekLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(navX + 95, y, 200, 24)];
     self.weekLabel.alignment = NSTextAlignmentCenter;
     self.weekLabel.font = [NSFont systemFontOfSize:13 weight:NSFontWeightMedium];
     self.weekLabel.textColor = [NSColor labelColor];
@@ -152,7 +152,7 @@ static BOOL const kUseCalendarUI = YES;
     [contentView addSubview:self.weekLabel];
 
     // Next week button
-    self.nextWeekButton = [[NSButton alloc] initWithFrame:NSMakeRect(navX + 260, y, 90, 24)];
+    self.nextWeekButton = [[NSButton alloc] initWithFrame:NSMakeRect(navX + 300, y, 90, 24)];
     self.nextWeekButton.title = @"Next Week →";
     self.nextWeekButton.bezelStyle = NSBezelStyleRounded;
     self.nextWeekButton.font = [NSFont systemFontOfSize:11];
