@@ -1456,6 +1456,9 @@ static const CGFloat kDimmedOpacity = 0.2;
                         return [@([a startMinutes]) compare:@([b startMinutes])];
                     }];
 
+                    // Merge overlapping ranges (same behavior as drag-end)
+                    windows = [[column mergeOverlappingRanges:windows] mutableCopy];
+
                     [schedule setAllowedWindows:windows forDay:column.day];
 
                     if (column.onScheduleUpdated) {
