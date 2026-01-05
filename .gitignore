@@ -48,3 +48,6 @@ Build *.txt
 # Release artifacts
 dist/
 Sparkle.framework/
+logs.txt
+logs.txt
+default.profraw
