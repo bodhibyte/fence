@@ -516,6 +516,27 @@
     }];
 }
 
+- (void)clearExpiredBlock:(void(^)(NSError* error))reply {
+    // Note: This method does NOT require authorization - the block is already expired
+    // This clears PF rules, /etc/hosts, AppBlocker, and sets BlockIsRunning=NO
+    [self connectAndExecuteCommandBlock:^(NSError * connectError) {
+        if (connectError != nil) {
+            NSLog(@"Clear expired block failed with connection error: %@", connectError);
+            reply(connectError);
+        } else {
+            [[self.daemonConnection remoteObjectProxyWithErrorHandler:^(NSError * proxyError) {
+                NSLog(@"Clear expired block failed with remote object proxy error: %@", proxyError);
+                reply(proxyError);
+            }] clearExpiredBlockWithReply:^(NSError* error) {
+                if (error != nil) {
+                    NSLog(@"Clear expired block failed with error = %@\n", error);
+                }
+                reply(error);
+            }];
+        }
+    }];
+}
+
 - (void)cleanupStaleSchedule:(NSString*)scheduleId
                        reply:(void(^)(NSError* error))reply {
     // Note: This method does NOT require authorization - cleanup of expired pre-authorized schedules

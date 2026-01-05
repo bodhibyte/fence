@@ -56,6 +56,11 @@ NS_ASSUME_NONNULL_BEGIN
 // XPC method to stop a test block (only works when IsTestBlock=YES, no auth required)
 - (void)stopTestBlockWithReply:(void(^)(NSError* _Nullable error))reply;
 
+// XPC method to clear an expired block (no auth required - block already expired)
+// This clears PF rules, /etc/hosts, AppBlocker, and sets BlockIsRunning=NO
+// Used when CLI detects an expired block that wasn't cleared (e.g., after sleep/wake)
+- (void)clearExpiredBlockWithReply:(void(^)(NSError* _Nullable error))reply;
+
 // XPC method to cleanup a stale schedule (expired endDate)
 // Removes from ApprovedSchedules and deletes launchd job plist
 // No authorization required - this is cleanup of pre-authorized schedules

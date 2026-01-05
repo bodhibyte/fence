@@ -183,10 +183,25 @@ float const INACTIVITY_LIMIT_SECS = 60 * 2; // 2 minutes
     // Get console user's home directory to find launchd jobs
     uid_t consoleUID = [SCMiscUtilities consoleUserUID];
     [debugLog appendFormat:@"consoleUID: %d\n", consoleUID];
+
+    // If no console user, try to get controllingUID from any approved schedule
     if (consoleUID == 0) {
-        [debugLog appendString:@"EXIT: No console user\n"];
+        [debugLog appendString:@"No console user, trying controllingUID from ApprovedSchedules...\n"];
+        for (NSString *schedId in approvedSchedules) {
+            NSDictionary *sched = approvedSchedules[schedId];
+            NSNumber *ctrlUID = sched[@"controllingUID"];
+            if (ctrlUID && [ctrlUID unsignedIntValue] != 0) {
+                consoleUID = [ctrlUID unsignedIntValue];
+                [debugLog appendFormat:@"Using controllingUID %d from schedule %@\n", consoleUID, schedId];
+                break;
+            }
+        }
+    }
+
+    if (consoleUID == 0) {
+        [debugLog appendString:@"EXIT: No console user and no controllingUID found\n"];
         [debugLog writeToFile:@"/tmp/selfcontrol_debug.log" atomically:YES encoding:NSUTF8StringEncoding error:nil];
-        NSLog(@"SCDaemon: No console user found");
+        NSLog(@"SCDaemon: No console user found and no controllingUID in ApprovedSchedules");
         return;
     }
 

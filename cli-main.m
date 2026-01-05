@@ -82,9 +82,56 @@ int main(int argc, char* argv[]) {
 		if([arguments booleanValueForSignature: startSig]) {
             [SCSentry addBreadcrumb: @"CLI method --install called" category: @"cli"];
 
-            if ([SCBlockUtilities anyBlockIsRunning]) {
-                NSLog(@"ERROR: Block is already running");
-                exit(EX_CONFIG);
+            // Detailed logging for debugging block state
+            SCSettings* checkSettings = [SCSettings sharedSettings];
+            BOOL blockIsRunningFlag = [checkSettings boolForKey:@"BlockIsRunning"];
+            NSDate* existingEndDate = [checkSettings valueForKey:@"BlockEndDate"];
+            BOOL isExpired = [SCBlockUtilities currentBlockIsExpired];
+            BOOL modernRunning = [SCBlockUtilities modernBlockIsRunning];
+            BOOL legacyRunning = [SCBlockUtilities legacyBlockIsRunning];
+            BOOL anyRunning = [SCBlockUtilities anyBlockIsRunning];
+
+            NSLog(@"=== CLI BLOCK STATE CHECK ===");
+            NSLog(@"CLI: BlockIsRunning flag = %d", blockIsRunningFlag);
+            NSLog(@"CLI: BlockEndDate = %@", existingEndDate);
+            NSLog(@"CLI: currentBlockIsExpired = %d", isExpired);
+            NSLog(@"CLI: modernBlockIsRunning = %d", modernRunning);
+            NSLog(@"CLI: legacyBlockIsRunning = %d", legacyRunning);
+            NSLog(@"CLI: anyBlockIsRunning = %d", anyRunning);
+            NSLog(@"CLI: now = %@", [NSDate date]);
+
+            if (anyRunning) {
+                if (isExpired) {
+                    // Block exists but is expired - this happens after sleep/wake when
+                    // the daemon's checkup timer couldn't run to clear the expired block.
+                    // We need to call removeBlock to clear PF rules, /etc/hosts, AppBlocker.
+                    NSLog(@"CLI: Block is running but EXPIRED - clearing stale block rules...");
+                    NSLog(@"CLI: Expired block end date was: %@", existingEndDate);
+
+                    SCXPCClient* clearXpc = [SCXPCClient new];
+                    dispatch_semaphore_t clearSema = dispatch_semaphore_create(0);
+                    __block NSError* clearError = nil;
+
+                    [clearXpc clearExpiredBlock:^(NSError* error) {
+                        clearError = error;
+                        dispatch_semaphore_signal(clearSema);
+                    }];
+
+                    dispatch_semaphore_wait(clearSema, DISPATCH_TIME_FOREVER);
+
+                    if (clearError) {
+                        NSLog(@"CLI: Failed to clear expired block: %@", clearError);
+                        exit(EX_CONFIG);
+                    }
+
+                    NSLog(@"CLI: Expired block cleared (PF rules, /etc/hosts, AppBlocker), proceeding with new block");
+                    // Fall through to start the new block
+                } else {
+                    // Block is running and NOT expired - this is a real conflict
+                    NSLog(@"ERROR: Block is already running (modern=%d, legacy=%d, expired=%d)",
+                          modernRunning, legacyRunning, isExpired);
+                    exit(EX_CONFIG);
+                }
             }
 
             // Check if this is a pre-authorized scheduled block

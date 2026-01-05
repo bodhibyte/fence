@@ -47,6 +47,11 @@ NS_ASSUME_NONNULL_BEGIN
 // Stop a test block (only works when IsTestBlock=YES, no auth required)
 - (void)stopTestBlock:(void(^)(NSError* error))reply;
 
+// Clear an expired block (no auth required - block already expired)
+// Clears PF rules, /etc/hosts, AppBlocker, and sets BlockIsRunning=NO
+// Used when CLI detects an expired block that wasn't cleared (e.g., after sleep/wake)
+- (void)clearExpiredBlock:(void(^)(NSError* _Nullable error))reply;
+
 // Query PF state from daemon (which runs as root)
 - (void)isPFBlockActive:(void(^)(BOOL active, NSError* _Nullable error))reply;
 

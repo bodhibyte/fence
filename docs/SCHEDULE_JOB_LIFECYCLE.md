@@ -143,11 +143,22 @@ flowchart TB
 
 ## Cleanup Mechanisms
 
+There are **two types of cleanup** for different scenarios:
+
+| Cleanup Type | Purpose | What it clears |
+|--------------|---------|----------------|
+| `cleanupStaleScheduleWithID:` | Remove expired **job definition** | launchd plist + ApprovedSchedules entry |
+| `clearExpiredBlockWithReply:` | Remove expired **blocking rules** | PF rules + /etc/hosts + AppBlocker + BlockIsRunning flag |
+
+### Job Cleanup (cleanupStaleScheduleWithID)
+
+Used when a scheduled job's `endDate` has passed - removes the job definition.
+
 ```mermaid
 flowchart TB
-    subgraph Triggers["Cleanup Triggers"]
-        T1[CLI detects<br/>now > endDate]
-        T2[Daemon startup detects<br/>now > endDate]
+    subgraph Triggers["Job Cleanup Triggers"]
+        T1[CLI detects<br/>job endDate passed]
+        T2[Daemon startup detects<br/>job endDate passed]
         T3[Commit flow detects<br/>stale jobs]
     end
 
@@ -175,6 +186,49 @@ flowchart TB
     C4 --> R2
     C4 --> R3
 ```
+
+### Block Cleanup (clearExpiredBlockWithReply)
+
+Used when an active block has expired but wasn't cleared (e.g., after sleep/wake when checkup timer couldn't run).
+
+```mermaid
+flowchart TB
+    subgraph Trigger["Block Cleanup Trigger"]
+        T1[CLI detects:<br/>anyBlockIsRunning=YES<br/>AND currentBlockIsExpired=YES]
+    end
+
+    subgraph Cleanup["clearExpiredBlockWithReply:"]
+        C1[Verify block is<br/>actually expired]
+        C2[Clear PF firewall rules]
+        C3[Restore /etc/hosts]
+        C4[Stop AppBlocker]
+        C5[Set BlockIsRunning=NO]
+        C6[Send config notification]
+    end
+
+    subgraph Result["Result"]
+        R1[Blocking infrastructure<br/>removed]
+        R2[New block can<br/>start cleanly]
+    end
+
+    T1 --> C1
+    C1 --> C2
+    C2 --> C3
+    C3 --> C4
+    C4 --> C5
+    C5 --> C6
+    C6 --> R1
+    C6 --> R2
+```
+
+**Sleep/Wake Scenario:**
+1. Block runs from 9:00-10:00
+2. User closes laptop at 9:30 (sleep)
+3. At 10:00, block should expire, but checkup timer is suspended
+4. At 11:00, next scheduled block tries to start
+5. CLI detects: `anyBlockIsRunning=YES` but `currentBlockIsExpired=YES`
+6. CLI calls `clearExpiredBlock` to clear stale blocking rules
+7. New block starts successfully
 
 ## Data Structures
 
@@ -302,9 +356,9 @@ sequenceDiagram
 |------|---------|
 | `Block Management/SCScheduleManager.m` | Commit flow, segment calculation, cleanup orchestration |
 | `Block Management/SCScheduleLaunchdBridge.m` | Plist creation with startDate/endDate |
-| `selfcontrol-cli/main.m` | CLI arg parsing, validation, XPC calls |
+| `cli-main.m` | CLI arg parsing, validation, expired block detection, XPC calls |
 | `Daemon/SCDaemon.m` | Startup recovery, cleanup helper method |
-| `Daemon/SCDaemonXPC.m` | XPC handlers for start block + cleanup |
+| `Daemon/SCDaemonXPC.m` | XPC handlers for start block + cleanup + clearExpiredBlock |
 | `Daemon/SCDaemonBlockMethods.m` | Actual block execution, checkup timer |
 
 ---

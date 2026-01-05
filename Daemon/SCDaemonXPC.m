@@ -277,6 +277,36 @@
     [SCDaemonBlockMethods stopTestBlock:reply];
 }
 
+- (void)clearExpiredBlockWithReply:(void(^)(NSError* error))reply {
+    NSLog(@"XPC method called: clearExpiredBlock");
+
+    // NO authorization required - the block is already expired, user's commitment fulfilled
+    // This is the same operation that checkupBlock would do automatically
+    // We're just doing it synchronously when CLI detects the situation (e.g., after sleep/wake)
+
+    // Safety check: ONLY clear if block is actually expired
+    if (![SCBlockUtilities currentBlockIsExpired]) {
+        NSLog(@"ERROR: clearExpiredBlock called but block is NOT expired!");
+        reply([SCErr errorWithCode: 310 subDescription: @"Block is not expired - cannot clear"]);
+        return;
+    }
+
+    // Log what we're clearing
+    SCSettings* settings = [SCSettings sharedSettings];
+    NSDate* blockEndDate = [settings valueForKey:@"BlockEndDate"];
+    NSArray* blocklist = [settings valueForKey:@"ActiveBlocklist"];
+    NSLog(@"clearExpiredBlock: Clearing block that expired at %@", blockEndDate);
+    NSLog(@"clearExpiredBlock: Block had %lu entries", (unsigned long)blocklist.count);
+
+    // This clears: PF rules, /etc/hosts, AppBlocker, BlockIsRunning=NO
+    // Same logic as checkupBlock uses for expired blocks
+    [SCHelperToolUtilities removeBlock];
+    [SCHelperToolUtilities sendConfigurationChangedNotification];
+
+    NSLog(@"clearExpiredBlock: Successfully cleared expired block");
+    reply(nil);
+}
+
 - (void)cleanupStaleScheduleWithID:(NSString*)scheduleId
                              reply:(void(^)(NSError* error))reply {
     NSLog(@"XPC method called: cleanupStaleScheduleWithID: %@", scheduleId);
