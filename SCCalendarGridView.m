@@ -1405,6 +1405,11 @@ static const CGFloat kDimmedOpacity = 0.2;
         }
     }
 
+    // Cmd+S = Disable (schedule auto-saves, don't trigger blocklist save)
+    if (cmdPressed && !shiftPressed && [chars isEqualToString:@"s"]) {
+        return YES;
+    }
+
     // Cmd+C = Copy selected block
     if (cmdPressed && !shiftPressed && [chars isEqualToString:@"c"]) {
         // Find the selected block from any day column
