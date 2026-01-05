@@ -6,6 +6,7 @@
 //
 
 #import "SCLogger.h"
+#import "SCLogExportWindowController.h"
 
 @implementation SCLogger
 
@@ -26,6 +27,10 @@
 
 + (void)exportLogsForSupport {
     NSLog(@"SCLogger: exportLogsForSupport called");
+
+    // Show loading window immediately (on main thread)
+    [[SCLogExportWindowController sharedController] show];
+
     // Run log collection on background thread
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
         NSLog(@"SCLogger: Starting log collection on background thread");
@@ -33,7 +38,12 @@
         NSLog(@"SCLogger: Log collection complete, length=%lu", (unsigned long)logOutput.length);
 
         dispatch_async(dispatch_get_main_queue(), ^{
-            NSLog(@"SCLogger: Back on main thread, calling saveLogsAndComposeEmail");
+            NSLog(@"SCLogger: Back on main thread, closing loading window");
+
+            // Close loading window
+            [[SCLogExportWindowController sharedController] close];
+
+            NSLog(@"SCLogger: Calling saveLogsAndComposeEmail");
             [self saveLogsAndComposeEmail:logOutput];
         });
     });
