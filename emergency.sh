@@ -50,8 +50,22 @@ for key in $(sudo -u "$CONSOLE_USER" defaults read org.eyebeam.Fence 2>/dev/null
     sudo -u "$CONSOLE_USER" defaults delete org.eyebeam.Fence "$key" 2>/dev/null || true
 done
 
+# 7. Uninstall schedule launchd jobs
+echo "Uninstalling schedule jobs..."
+CONSOLE_USER=$(stat -f "%Su" /dev/console)
+CONSOLE_UID=$(id -u "$CONSOLE_USER")
+for plist in /Users/"$CONSOLE_USER"/Library/LaunchAgents/org.eyebeam.selfcontrol.schedule.*.plist; do
+    if [ -f "$plist" ]; then
+        label=$(basename "$plist" .plist)
+        sudo -u "$CONSOLE_USER" launchctl bootout gui/"$CONSOLE_UID"/"$label" 2>/dev/null || true
+        rm "$plist"
+        echo "  Removed $label"
+    fi
+done
+
 echo ""
 echo "=== Wipe Complete ==="
 echo "Verify with:"
 echo "  pfctl -a org.eyebeam -sr  (should show nothing)"
 echo "  cat /etc/hosts  (no SelfControl entries)"
+echo "  ls ~/Library/LaunchAgents/org.eyebeam.selfcontrol.schedule.* (should show no matches)"

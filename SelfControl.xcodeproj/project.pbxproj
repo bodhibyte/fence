@@ -623,6 +623,7 @@
 		228355232EFB7C8100E77469 /* SCDayScheduleEditorController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = SCDayScheduleEditorController.m; sourceTree = "<group>"; };
 		228355242EFB7C8100E77469 /* SCMenuBarController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SCMenuBarController.h; sourceTree = "<group>"; };
 		228355252EFB7C8100E77469 /* SCMenuBarController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = SCMenuBarController.m; sourceTree = "<group>"; };
+		229A86A42F0B1D0A00F5D2B7 /* SelfControlRelease.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = SelfControlRelease.entitlements; sourceTree = "<group>"; };
 		22AE30852F056A6D00B0FDE8 /* SCBundleSidebarView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SCBundleSidebarView.h; sourceTree = "<group>"; };
 		22AE30862F056A6D00B0FDE8 /* SCBundleSidebarView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = SCBundleSidebarView.m; sourceTree = "<group>"; };
 		22AE30872F056A6D00B0FDE8 /* SCCalendarGridView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SCCalendarGridView.h; sourceTree = "<group>"; };
@@ -1701,6 +1702,7 @@
 		29B97314FDCFA39411CA2CEA /* SelfControl */ = {
 			isa = PBXGroup;
 			children = (
+				229A86A42F0B1D0A00F5D2B7 /* SelfControlRelease.entitlements */,
 				22AE30852F056A6D00B0FDE8 /* SCBundleSidebarView.h */,
 				22AE30862F056A6D00B0FDE8 /* SCBundleSidebarView.m */,
 				22AE30872F056A6D00B0FDE8 /* SCCalendarGridView.h */,
@@ -4401,7 +4403,7 @@
 			buildSettings = {
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
-				CODE_SIGN_ENTITLEMENTS = SelfControl.entitlements;
+				CODE_SIGN_ENTITLEMENTS = SelfControlRelease.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;

@@ -368,3 +368,166 @@ A: Show a notification before the block starts: "These apps will be blocked: Ter
 
 **Q: Can users work around this by renaming apps?**
 A: Bundle IDs are embedded in the app. Renaming doesn't change the ID. They'd have to modify the app bundle, which breaks code signing.
+
+---
+
+## Future macOS Risks & Watchlist
+
+> **Purpose:** Track macOS changes that could break the blocking mechanism. Updated based on historical analysis of SelfControl's evolution.
+
+### Historical Context
+
+SelfControl has only been **forced** to change its core blocking mechanism **once** in 15+ years:
+
+| Year | Change | Reason |
+|------|--------|--------|
+| 2014 | ipfw → pf | Apple removed ipfw entirely in macOS 10.10 Yosemite |
+
+The "two walls" architecture (firewall + hosts file) has been stable since 2009.
+
+---
+
+### Risk Assessment by Component
+
+#### Wall 1: /etc/hosts — MEDIUM-HIGH RISK
+
+| Threat | Likelihood | Impact | Mitigation |
+|--------|------------|--------|------------|
+| **DNS-over-HTTPS (DoH) system-wide** | HIGH | Bypasses hosts file entirely | Would need Network Extension |
+| **DNS-over-TLS (DoT) default** | MEDIUM | Same as DoH | Same as above |
+| **SIP protection of /etc/hosts** | LOW | Can't write to hosts file | Would need different approach |
+| **MDM-only DNS settings** | LOW | Consumer apps can't modify DNS | Would break for non-enterprise |
+
+**What to watch:**
+- Safari/system DoH settings in System Preferences
+- WWDC sessions mentioning "encrypted DNS" or "private DNS"
+- Changes to `/etc/hosts` permissions in macOS betas
+
+**Search terms:** `"macOS encrypted DNS" system-wide`, `"Apple DoH" bypass hosts file`
+
+---
+
+#### Wall 2: pf (Packet Filter) — MEDIUM RISK
+
+| Threat | Likelihood | Impact | Mitigation |
+|--------|------------|--------|------------|
+| **pf deprecated for userspace** | MEDIUM | Would need rewrite | Migrate to Network Extension |
+| **Write access to /etc/pf.conf restricted** | MEDIUM | Can't add anchor rules | Need System Extension |
+| **pfctl requires additional entitlements** | LOW-MEDIUM | App signing changes | Update entitlements |
+| **Network Extension becomes required** | MEDIUM | Major architecture change | NEFilterDataProvider |
+
+**What to watch:**
+- Console warnings about pf deprecation
+- New entitlements required for `/sbin/pfctl`
+- Apple documentation pushing Network Extensions over pf
+
+**Search terms:** `"NEFilterDataProvider" tutorial`, `"macOS Network Extension" content filter`, `"pf" deprecated macOS`
+
+---
+
+#### Wall 3: App Blocking (libproc) — LOW-MEDIUM RISK
+
+| Threat | Likelihood | Impact | Mitigation |
+|--------|------------|--------|------------|
+| **libproc APIs restricted** | LOW | Can't enumerate processes | Use Endpoint Security |
+| **SIGKILL restricted for apps** | LOW | Can't terminate apps | Need ES_EVENT_TYPE_AUTH_EXEC |
+| **Endpoint Security required** | MEDIUM | Need System Extension | Already documented as Option B |
+
+**What to watch:**
+- Entitlement requirements for `proc_listpids`
+- TCC prompts for process enumeration
+- Endpoint Security becoming the only blessed path
+
+**Search terms:** `"Endpoint Security" macOS app blocking`, `"proc_listpids" entitlement macOS`
+
+---
+
+#### Daemon Architecture (XPC + SMJobBless) — MEDIUM RISK ⚠️
+
+**Status:** `SMJobBless` is **already deprecated** as of macOS 13.0 (Ventura, 2022). Still works, but will eventually be removed.
+
+| Threat | Likelihood | Impact | Mitigation |
+|--------|------------|--------|------------|
+| **SMJobBless removed entirely** | MEDIUM | Daemon can't install | Use workarounds below |
+| **SMAppService doesn't survive app deletion** | HIGH (by design) | Block bypassed by trashing app | Self-extract or .pkg |
+| **XPC connection restrictions** | LOW | Auth changes | Follow Apple's XPC guidelines |
+
+**The SMAppService Problem:**
+
+Apple's replacement (`SMAppService`) keeps the helper **inside the app bundle**. Delete the app → helper gone → block bypassed. This breaks SelfControl's security model.
+
+```
+SMJobBless (current):   App deleted → Daemon SURVIVES ✅
+SMAppService (new):     App deleted → Daemon GONE ❌
+```
+
+**Workarounds when SMJobBless is removed:**
+
+| Approach | How It Works | Effort |
+|----------|--------------|--------|
+| **.pkg installer** | postinstall script copies daemon to /Library/PrivilegedHelperTools/ | Low |
+| **Self-extract hack** | Daemon copies itself out of app bundle on first block start | Medium |
+| **Bootstrap helper** | Minimal SMAppService helper installs persistent daemon elsewhere | High |
+
+**Recommended:** Switch to **.pkg installer** distribution. Many security tools do this (Little Snitch, etc.). Clean and Apple-approved.
+
+**What to watch:**
+- SMJobBless stops working (not just deprecated)
+- Xcode refuses to build with SMJobBless
+- Console errors about SMJobBless
+
+**Search terms:** `"SMAppService" daemon persistent`, `"SMJobBless" removed macOS`, `pkg postinstall LaunchDaemon`
+
+---
+
+### Recommended Monitoring
+
+**Check before each major macOS release:**
+
+1. [ ] Test on beta — do blocks still work?
+2. [ ] Check Console.app for deprecation warnings
+3. [ ] Review Xcode build warnings
+4. [ ] Search Apple Developer Forums for "pf", "hosts", "firewall"
+5. [ ] Review WWDC sessions tagged "Security" or "Networking"
+
+**Red flags that require immediate attention:**
+
+- `/etc/hosts` no longer affects system DNS resolution
+- `pfctl` requires new entitlements or TCC prompt
+- System Preferences gains "Content Filter" that overrides pf
+- Apple announces Network Extension requirement deadline
+- **SMJobBless stops compiling or throws runtime errors**
+
+---
+
+### Escape Hatches (If Forced to Migrate)
+
+#### If /etc/hosts stops working:
+→ Implement `NEDNSProxyProvider` to intercept DNS at the system level
+
+#### If pf stops working:
+→ Implement `NEFilterDataProvider` for content filtering
+→ Requires System Extension (user approval in System Preferences)
+
+#### If both stop working:
+→ Full migration to Network Extension framework
+→ This is likely Apple's intended long-term direction
+
+#### If SMJobBless stops working:
+→ Switch to **.pkg installer** distribution (recommended)
+→ postinstall script installs daemon to `/Library/PrivilegedHelperTools/`
+→ Daemon persists independently of app bundle
+→ Alternative: Self-extracting daemon that copies itself out on first block
+
+**Reference implementations:**
+- Little Snitch, Lulu — Network Extension for filtering
+- Homebrew, MacPorts — .pkg with persistent LaunchDaemons
+
+---
+
+### Version History
+
+| Date | Update |
+|------|--------|
+| 2025-01 | Initial risk assessment based on 15-year codebase analysis |
+| 2025-01 | Updated SMJobBless risk to MEDIUM — already deprecated in macOS 13. Added workarounds (.pkg installer, self-extract) |
