@@ -24,8 +24,9 @@ function calculateTrialExpiry() {
   let daysUntilSunday = (7 - dayOfWeek) % 7;
   if (daysUntilSunday === 0) daysUntilSunday = 7;
 
-  // 3rd Sunday = next Sunday + 14 days
-  const totalDays = daysUntilSunday + 14;
+  // Trial expires Saturday 23:59:59 before the "3rd Sunday"
+  // so user CANNOT commit on the 3rd Sunday (they're blocked)
+  const totalDays = daysUntilSunday + 13;
 
   const expiry = new Date(now);
   expiry.setDate(expiry.getDate() + totalDays);

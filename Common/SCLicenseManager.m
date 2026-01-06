@@ -117,12 +117,13 @@ typedef NS_ENUM(NSInteger, SCLicenseErrorCode) {
         daysUntilSunday = 7;
     }
 
-    // "3rd Sunday" = Next Sunday + 2 weeks (14 days)
-    NSInteger totalDays = daysUntilSunday + 14;
+    // Trial expires Saturday 23:59:59 before the "3rd Sunday"
+    // so user CANNOT commit on the 3rd Sunday (they're blocked)
+    NSInteger totalDays = daysUntilSunday + 13;
 
     NSDate *expiry = [calendar dateByAddingUnit:NSCalendarUnitDay value:totalDays toDate:today options:0];
 
-    // Set to end of day (23:59:59) so user gets the full Sunday
+    // Set to end of Saturday (23:59:59) so trial expires at midnight into Sunday
     return [calendar dateBySettingHour:23 minute:59 second:59 ofDate:expiry options:0];
 }
 
