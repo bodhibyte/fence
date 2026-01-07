@@ -9,6 +9,7 @@
 | App blocking | [BLOCKING_MECHANISM.md#app-blocking](BLOCKING_MECHANISM.md#app-blocking-implementation) | AppBlocker.m, SCBlockEntry.m |
 | Safety/Robustness | [BLOCK_SAFETY_ANALYSIS.md](BLOCK_SAFETY_ANALYSIS.md) | SCStartupSafetyCheck.m, emergency.sh |
 | Scheduling | [dictionary.md](dictionary.md) | SCScheduleManager.m, SCScheduleLaunchdBridge.m |
+| **Timezone Handling** | [TIMEZONE_HANDLING.md](TIMEZONE_HANDLING.md) | SCScheduleManager.m, cli-main.m, SCDaemon.m |
 | Terminology | [dictionary.md](dictionary.md) | See dictionary/ folder for full entries |
 | Debug features | [SYSTEM_ARCHITECTURE.md#6-debug-features](../SYSTEM_ARCHITECTURE.md#6-debug-features) | SCDebugUtilities.m |
 | UI | - | AppController.m, *.xib |
@@ -74,6 +75,7 @@ graph TB
 2. **Privilege separation:** App (user) -> XPC -> Daemon (root)
 3. **Persistence:** Settings in /usr/local/etc/.{hash}.plist
 4. **Continuous verification:** 1-second checkup timer
+5. **Timezone-rigid design:** Blocks use UTC timestamps for anti-circumvention. See [TIMEZONE_HANDLING.md](TIMEZONE_HANDLING.md)
 
 ## Adding Features
 

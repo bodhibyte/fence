@@ -171,6 +171,7 @@ static const CGFloat kHeaderHeight = 30.0;
 @property (nonatomic, strong) NSScrollView *scrollView;
 @property (nonatomic, strong) NSView *pillContainer;
 @property (nonatomic, strong) NSButton *addButton;
+@property (nonatomic, strong) NSButton *timezoneInfoButton;
 @property (nonatomic, strong) NSMutableArray<SCBundlePillView *> *pillViews;
 
 @end
@@ -211,8 +212,8 @@ static const CGFloat kHeaderHeight = 30.0;
     [self addSubview:self.headerLabel];
 
     // Scroll view for pills
-    CGFloat scrollHeight = y - kPadding - 40; // Leave room for add button at bottom
-    self.scrollView = [[NSScrollView alloc] initWithFrame:NSMakeRect(0, 40, kSidebarWidth, scrollHeight)];
+    CGFloat scrollHeight = y - kPadding - 58; // Leave room for add button + timezone link at bottom
+    self.scrollView = [[NSScrollView alloc] initWithFrame:NSMakeRect(0, 58, kSidebarWidth, scrollHeight)];
     self.scrollView.hasVerticalScroller = YES;
     self.scrollView.hasHorizontalScroller = NO;
     self.scrollView.autohidesScrollers = YES;
@@ -225,8 +226,8 @@ static const CGFloat kHeaderHeight = 30.0;
     self.scrollView.documentView = self.pillContainer;
     [self addSubview:self.scrollView];
 
-    // Add bundle button at bottom
-    self.addButton = [[NSButton alloc] initWithFrame:NSMakeRect(kPadding, kPadding, kSidebarWidth - kPadding * 2, 24)];
+    // Add bundle button
+    self.addButton = [[NSButton alloc] initWithFrame:NSMakeRect(kPadding, 30, kSidebarWidth - kPadding * 2, 24)];
     self.addButton.title = @"+ Add Bundle";
     self.addButton.bezelStyle = NSBezelStyleRounded;
     self.addButton.font = [NSFont systemFontOfSize:11];
@@ -234,6 +235,18 @@ static const CGFloat kHeaderHeight = 30.0;
     self.addButton.action = @selector(addButtonClicked:);
     self.addButton.autoresizingMask = NSViewMaxYMargin;
     [self addSubview:self.addButton];
+
+    // Timezone info link at bottom
+    self.timezoneInfoButton = [[NSButton alloc] initWithFrame:NSMakeRect(kPadding, kPadding, kSidebarWidth - kPadding * 2, 16)];
+    self.timezoneInfoButton.title = @"Traveling?";
+    self.timezoneInfoButton.bezelStyle = NSBezelStyleInline;
+    self.timezoneInfoButton.bordered = NO;
+    self.timezoneInfoButton.font = [NSFont systemFontOfSize:10];
+    self.timezoneInfoButton.contentTintColor = [NSColor secondaryLabelColor];
+    self.timezoneInfoButton.target = self;
+    self.timezoneInfoButton.action = @selector(timezoneInfoClicked:);
+    self.timezoneInfoButton.autoresizingMask = NSViewMaxYMargin;
+    [self addSubview:self.timezoneInfoButton];
 }
 
 - (void)reloadData {
@@ -318,6 +331,35 @@ static const CGFloat kHeaderHeight = 30.0;
     if ([self.delegate respondsToSelector:@selector(bundleSidebarDidRequestAddBundle:)]) {
         [self.delegate bundleSidebarDidRequestAddBundle:self];
     }
+}
+
+- (void)timezoneInfoClicked:(id)sender {
+    NSPopover *popover = [[NSPopover alloc] init];
+    popover.behavior = NSPopoverBehaviorTransient;
+
+    // Create content view controller
+    NSViewController *vc = [[NSViewController alloc] init];
+    NSView *contentView = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 280, 180)];
+
+    // Create text content
+    NSString *infoText = @"Planning to travel?\n\n"
+        @"Blocks are locked to your Mac's current timezone. Two options:\n\n"
+        @"Option 1: Adjust block times manually (e.g., +3 hours for traveling east)\n\n"
+        @"Option 2: Change your Mac's timezone to the destination before committing\n\n"
+        @"(This prevents bypassing blocks by changing timezone.)";
+
+    NSTextField *textField = [NSTextField wrappingLabelWithString:infoText];
+    textField.frame = NSMakeRect(12, 12, 256, 156);
+    textField.font = [NSFont systemFontOfSize:11];
+    textField.textColor = [NSColor labelColor];
+    [contentView addSubview:textField];
+
+    vc.view = contentView;
+    popover.contentViewController = vc;
+
+    [popover showRelativeToRect:self.timezoneInfoButton.bounds
+                         ofView:self.timezoneInfoButton
+                  preferredEdge:NSRectEdgeMaxX];
 }
 
 - (void)clearSelection {

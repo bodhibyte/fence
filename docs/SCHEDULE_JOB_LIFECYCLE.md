@@ -2,6 +2,8 @@
 
 This document describes the complete lifecycle of scheduled blocking jobs, from user input to cleanup.
 
+> **Note:** For timezone handling and travel scenarios, see [TIMEZONE_HANDLING.md](TIMEZONE_HANDLING.md).
+
 ## Overview Diagram
 
 ```mermaid
