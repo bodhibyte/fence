@@ -14,6 +14,7 @@
 		1F27973C853B40AD9E95BB1E /* SCDebugUtilities.m in Sources */ = {isa = PBXBuildFile; fileRef = 520B6A02C0CE497EBCB5CCF3 /* SCDebugUtilities.m */; };
 		1FEB91F11AD92FF528C0B287 /* SCStartupSafetyCheck.m in Sources */ = {isa = PBXBuildFile; fileRef = 3F481A9B3BB13815269D74D1 /* SCStartupSafetyCheck.m */; };
 		2200E8E92F0474350025985E /* SCDeviceIdentifier.m in Sources */ = {isa = PBXBuildFile; fileRef = 2200E8E82F0474350025985E /* SCDeviceIdentifier.m */; };
+		22320A212F0E98BF00912FF3 /* SCTimezoneInfoWindowController.m in Sources */ = {isa = PBXBuildFile; fileRef = 22320A202F0E98BF00912FF3 /* SCTimezoneInfoWindowController.m */; };
 		224577BA2F0198C80050F2F4 /* emergency.sh in Resources */ = {isa = PBXBuildFile; fileRef = 224577B92F0198C80050F2F4 /* emergency.sh */; };
 		224DFCA02F0409E600D97A1C /* SCLogger.m in Sources */ = {isa = PBXBuildFile; fileRef = 224DFC9F2F0409E600D97A1C /* SCLogger.m */; };
 		224DFCF72F0417F700D97A1C /* SCLicenseManager.m in Sources */ = {isa = PBXBuildFile; fileRef = 224DFCF62F0417F700D97A1C /* SCLicenseManager.m */; };
@@ -598,6 +599,8 @@
 		1FF38B4CA7B04483AB6E70BB /* AppBlocker.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AppBlocker.h; sourceTree = "<group>"; };
 		2200E8E72F0474350025985E /* SCDeviceIdentifier.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SCDeviceIdentifier.h; sourceTree = "<group>"; };
 		2200E8E82F0474350025985E /* SCDeviceIdentifier.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = SCDeviceIdentifier.m; sourceTree = "<group>"; };
+		22320A1F2F0E98BF00912FF3 /* SCTimezoneInfoWindowController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SCTimezoneInfoWindowController.h; sourceTree = "<group>"; };
+		22320A202F0E98BF00912FF3 /* SCTimezoneInfoWindowController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = SCTimezoneInfoWindowController.m; sourceTree = "<group>"; };
 		224577B92F0198C80050F2F4 /* emergency.sh */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; path = emergency.sh; sourceTree = "<group>"; };
 		224DFC9E2F0409E600D97A1C /* SCLogger.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SCLogger.h; sourceTree = "<group>"; };
 		224DFC9F2F0409E600D97A1C /* SCLogger.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = SCLogger.m; sourceTree = "<group>"; };
@@ -1705,6 +1708,8 @@
 		29B97314FDCFA39411CA2CEA /* SelfControl */ = {
 			isa = PBXGroup;
 			children = (
+				22320A1F2F0E98BF00912FF3 /* SCTimezoneInfoWindowController.h */,
+				22320A202F0E98BF00912FF3 /* SCTimezoneInfoWindowController.m */,
 				229A86A42F0B1D0A00F5D2B7 /* SelfControlRelease.entitlements */,
 				22AE30852F056A6D00B0FDE8 /* SCBundleSidebarView.h */,
 				22AE30862F056A6D00B0FDE8 /* SCBundleSidebarView.m */,
@@ -3985,6 +3990,7 @@
 				CB81AB8A25B8E6BE006956F7 /* SCBlockEntry.m in Sources */,
 				CBD4848A19D764440020F949 /* PreferencesGeneralViewController.m in Sources */,
 				CB1CA65E25ABA6150084A551 /* SCXPCClient.m in Sources */,
+				22320A212F0E98BF00912FF3 /* SCTimezoneInfoWindowController.m in Sources */,
 				CBEE50C10F48C21F00F5DF1C /* TimerWindowController.m in Sources */,
 				CB90BF830F49F430006D202D /* HostImporter.m in Sources */,
 				CB21D0A825BA7B4400236680 /* PacketFilter.m in Sources */,

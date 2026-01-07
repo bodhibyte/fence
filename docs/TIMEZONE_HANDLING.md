@@ -22,6 +22,27 @@ SelfControl uses a **timezone-rigid** design for anti-circumvention:
 | Commitment end date | NSUserDefaults (`SCWeekCommitment_{weekKey}`) | NSDate (absolute timestamp) |
 | Week key | Derived from local time | String (`"2024-12-23"`) |
 
+### Drawn Allow Windows (Before Commit)
+
+Allow windows drawn in the UI are stored as **timezone-agnostic minute offsets**:
+
+```objc
+// SCTimeRange stores just minutes from midnight
+@property NSInteger startMinutes;  // e.g., 960 = 4pm (16 * 60)
+@property NSInteger endMinutes;    // e.g., 1080 = 6pm (18 * 60)
+```
+
+**Key point:** 4pm is always 4pm in the UI - drawn blocks don't shift when you change timezone.
+
+The timezone conversion only happens **at commit time**:
+1. User draws 4pm-6pm allow window → stored as minutes (960-1080)
+2. User changes Mac timezone to destination
+3. User clicks "Commit"
+4. App uses `[NSCalendar currentCalendar]` (now destination timezone) to calculate absolute dates
+5. "4pm local" becomes the correct UTC time for the destination
+
+This is why changing timezone before committing works - the drawn blocks stay visually the same, but the UTC conversion uses the new timezone.
+
 ### The Timezone Mismatch
 
 There's an intentional mismatch between job firing and job validation:

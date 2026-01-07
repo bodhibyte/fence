@@ -9,6 +9,7 @@
 #import "SCCalendarGridView.h"
 #import "SCDayScheduleEditorController.h"
 #import "SCBundleEditorController.h"
+#import "SCTimezoneInfoWindowController.h"
 #import "SCMenuBarController.h"
 #import "SCUIUtilities.h"
 #import "Block Management/SCScheduleManager.h"
@@ -16,6 +17,48 @@
 #import "Block Management/SCWeeklySchedule.h"
 #import "Common/SCLicenseManager.h"
 #import "SCLicenseWindowController.h"
+
+#pragma mark - SCHoverableLinkButton (Private)
+
+/// A button that shows shadow on hover to indicate clickability
+@interface SCHoverableLinkButton : NSButton
+@end
+
+@implementation SCHoverableLinkButton {
+    NSTrackingArea *_trackingArea;
+}
+
+- (void)updateTrackingAreas {
+    [super updateTrackingAreas];
+    if (_trackingArea) {
+        [self removeTrackingArea:_trackingArea];
+    }
+    _trackingArea = [[NSTrackingArea alloc] initWithRect:self.bounds
+                                                 options:(NSTrackingMouseEnteredAndExited | NSTrackingActiveInKeyWindow)
+                                                   owner:self
+                                                userInfo:nil];
+    [self addTrackingArea:_trackingArea];
+}
+
+- (void)mouseEntered:(NSEvent *)event {
+    [super mouseEntered:event];
+    self.layer.shadowOpacity = 0.3;
+    self.layer.shadowColor = [NSColor.labelColor CGColor];
+    self.layer.shadowOffset = CGSizeMake(0, 1);
+    self.layer.shadowRadius = 3.0;
+}
+
+- (void)mouseExited:(NSEvent *)event {
+    [super mouseExited:event];
+    self.layer.shadowOpacity = 0;
+}
+
+- (void)resetCursorRects {
+    [super resetCursorRects];
+    [self addCursorRect:self.bounds cursor:[NSCursor pointingHandCursor]];
+}
+
+@end
 
 // Feature flag to switch between old grid and new calendar UI
 static BOOL const kUseCalendarUI = YES;
@@ -42,6 +85,7 @@ static BOOL const kUseCalendarUI = YES;
 // New Calendar UI Elements
 @property (nonatomic, strong) SCBundleSidebarView *bundleSidebar;
 @property (nonatomic, strong) SCCalendarGridView *calendarGridView;
+@property (nonatomic, strong) SCHoverableLinkButton *travelingButton;
 @property (nonatomic, copy, nullable) NSString *focusedBundleID;  // nil = All-Up state
 
 // Week navigation
@@ -194,6 +238,22 @@ static BOOL const kUseCalendarUI = YES;
         self.bundleSidebar.delegate = self;
         self.bundleSidebar.autoresizingMask = NSViewHeightSizable | NSViewMaxXMargin;
         [contentView addSubview:self.bundleSidebar];
+
+        // "Traveling?" button below sidebar (positioned at bottom, above main controls)
+        CGFloat travelingButtonY = 53; // Position between sidebar (85) and commit buttons (45)
+        self.travelingButton = [[SCHoverableLinkButton alloc] initWithFrame:NSMakeRect(padding, travelingButtonY, sidebarWidth, 20)];
+        self.travelingButton.title = @"Traveling?";
+        self.travelingButton.bezelStyle = NSBezelStyleInline;
+        self.travelingButton.bordered = NO;
+        self.travelingButton.wantsLayer = YES;
+        self.travelingButton.layer.masksToBounds = NO; // Allow shadow to show
+        self.travelingButton.font = [NSFont systemFontOfSize:11];
+        self.travelingButton.contentTintColor = [NSColor secondaryLabelColor];
+        self.travelingButton.alphaValue = 1.0;
+        self.travelingButton.target = self;
+        self.travelingButton.action = @selector(travelingButtonClicked:);
+        self.travelingButton.autoresizingMask = NSViewMaxYMargin | NSViewMaxXMargin;
+        [contentView addSubview:self.travelingButton];
 
         // Calendar grid (to the right of sidebar)
         CGFloat calendarX = padding + sidebarWidth + padding;
@@ -585,6 +645,10 @@ static BOOL const kUseCalendarUI = YES;
     // New bundles have no schedule yet, so never locked
     self.bundleEditorController.isCommitted = NO;
     [self.bundleEditorController beginSheetModalForWindow:self.window completionHandler:nil];
+}
+
+- (void)travelingButtonClicked:(id)sender {
+    [SCTimezoneInfoWindowController showAsSheetForWindow:self.window];
 }
 
 - (void)navigateToPrevWeek:(id)sender {
