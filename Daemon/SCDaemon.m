@@ -30,6 +30,7 @@ float const INACTIVITY_LIMIT_SECS = 60 * 2; // 2 minutes
 @property (nonatomic, strong, readwrite) NSXPCListener* listener;
 @property (strong, readwrite) NSTimer* checkupTimer;
 @property (strong, readwrite) NSTimer* inactivityTimer;
+@property (strong, readwrite) NSTimer* scheduleCheckTimer;
 @property (nonatomic, strong, readwrite) NSDate* lastActivityDate;
 
 @property (nonatomic, strong) SCFileWatcher* hostsFileWatcher;
@@ -72,6 +73,17 @@ float const INACTIVITY_LIMIT_SECS = 60 * 2; // 2 minutes
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
         [self startMissedBlockIfNeeded];
     });
+
+    // Periodic check for scheduled blocks (handles launchd permission bypass, sleep/wake)
+    NSLog(@"SCDaemon: Starting schedule check timer (every 1 minute)");
+    self.scheduleCheckTimer = [NSTimer scheduledTimerWithTimeInterval: 60 // 1 minute
+                                                              repeats: YES
+                                                                block:^(NSTimer * _Nonnull timer) {
+        NSLog(@"SCDaemon: Schedule check timer fired");
+        dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+            [self startMissedBlockIfNeeded];
+        });
+    }];
 
     [self startInactivityTimer];
     [self resetInactivityTimer];

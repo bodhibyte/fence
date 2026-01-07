@@ -3,6 +3,8 @@
 This document describes the complete lifecycle of scheduled blocking jobs, from user input to cleanup.
 
 > **Note:** For timezone handling and travel scenarios, see [TIMEZONE_HANDLING.md](TIMEZONE_HANDLING.md).
+>
+> **Note:** For daemon timers, persistence, and sleep/wake behavior, see [DAEMON_LIFECYCLE.md](DAEMON_LIFECYCLE.md).
 
 ## Overview Diagram
 
@@ -45,11 +47,20 @@ flowchart TB
 
 ## Job Firing Paths
 
+There are **three paths** that can trigger a scheduled block:
+
+| Path | Trigger | Use Case |
+|------|---------|----------|
+| **Path 1** | launchd fires at scheduled time | Normal operation |
+| **Path 2** | Daemon startup | Reboot during scheduled window |
+| **Path 3** | Periodic daemon sweep (1 min) | Sleep/wake, launchd failures, background permission disabled |
+
 ```mermaid
 flowchart TB
     subgraph Trigger["Job Trigger"]
         T1[launchd fires at<br/>StartCalendarInterval<br/>day + time]
         T2[System reboot<br/>during scheduled block]
+        T3[Daemon sweep timer<br/>fires every 1 minute]
     end
 
     subgraph Path1["Path 1: Launchd → CLI → Daemon"]
@@ -71,6 +82,14 @@ flowchart TB
         P2F[cleanupStaleScheduleWithID]
         P2G[SCDaemonBlockMethods<br/>startBlock directly]
         P2H[Skip - future week]
+    end
+
+    subgraph Path3["Path 3: Periodic Daemon Sweep"]
+        P3A[scheduleCheckTimer fires<br/>every 60 seconds]
+        P3B[startMissedBlockIfNeeded]
+        P3C{Block already<br/>running?}
+        P3D[Exit early]
+        P3E[Same as Path 2:<br/>Scan + validate + start]
     end
 
     subgraph Daemon["Daemon Block Execution"]
@@ -102,11 +121,30 @@ flowchart TB
     P2F --> Cleanup
     P2G --> D4
 
+    T3 --> P3A
+    P3A --> P3B
+    P3B --> P3C
+    P3C -->|Yes| P3D
+    P3C -->|No| P3E
+    P3E --> D4
+
     D1 --> D2
     D2 --> D3
     D3 --> D4
     D4 --> D5
 ```
+
+### Path 3: Why Periodic Sweep?
+
+The 1-minute periodic sweep exists as a **backup mechanism** for cases where launchd (Path 1) fails:
+
+| Scenario | launchd Behavior | Path 3 Saves the Day |
+|----------|------------------|----------------------|
+| **Sleep/wake** | May not fire jobs during sleep | Sweep catches it within 60s of wake |
+| **Background permission disabled** | Jobs not loaded | Sweep bypasses launchd entirely |
+| **launchd edge cases** | Rare timing issues | Sweep provides redundancy |
+
+**Race condition safety:** The sweep always checks `anyBlockIsRunning` first. If launchd already started the block, the sweep exits early. Both paths can fire — only one will actually start the block.
 
 ## Block Lifecycle & Expiration
 
@@ -359,7 +397,7 @@ sequenceDiagram
 | `Block Management/SCScheduleManager.m` | Commit flow, segment calculation, cleanup orchestration |
 | `Block Management/SCScheduleLaunchdBridge.m` | Plist creation with startDate/endDate |
 | `cli-main.m` | CLI arg parsing, validation, expired block detection, XPC calls |
-| `Daemon/SCDaemon.m` | Startup recovery, cleanup helper method |
+| `Daemon/SCDaemon.m` | Startup recovery, cleanup helper, **1-minute schedule sweep timer** |
 | `Daemon/SCDaemonXPC.m` | XPC handlers for start block + cleanup + clearExpiredBlock |
 | `Daemon/SCDaemonBlockMethods.m` | Actual block execution, checkup timer |
 

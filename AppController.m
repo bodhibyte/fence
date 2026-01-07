@@ -247,6 +247,9 @@
 			[SCMenuBarController sharedController].onShowBlocklist = ^{
 				[weakSelf showDomainList:weakSelf];
 			};
+			[SCMenuBarController sharedController].onEnterLicense = ^{
+				[weakSelf showWeekSchedule:weakSelf];
+			};
 
             // apparently, a block is running, so make sure FirstBlockStarted is true
             [defaults_ setBool: YES forKey: @"FirstBlockStarted"];
@@ -285,6 +288,9 @@
             };
             [SCMenuBarController sharedController].onShowBlocklist = ^{
                 [weakSelf showDomainList:weakSelf];
+            };
+            [SCMenuBarController sharedController].onEnterLicense = ^{
+                [weakSelf showWeekSchedule:weakSelf];
             };
         } else if (blockWasOn) {
             // Not committed + just transitioned off: show week schedule
@@ -486,31 +492,28 @@
     NSLog(@"AppController: Daemon update check - modernBlockIsRunning=%@, appVersion=%@",
           blockIsRunning ? @"YES" : @"NO", SELFCONTROL_VERSION_STRING);
 
-    if (blockIsRunning) {
-        NSLog(@"AppController: Block is running, will check daemon version in 0.5s...");
-        [NSTimer scheduledTimerWithTimeInterval: 0.5 repeats: NO block:^(NSTimer * _Nonnull timer) {
-            [self.xpc getVersion:^(NSString * _Nonnull daemonVersion, NSError * _Nonnull error) {
-                if (error == nil) {
-                    NSLog(@"AppController: Daemon version check - daemonVersion=%@, appVersion=%@",
+    // Always check daemon version on app launch (cheap operation, ensures daemon stays up-to-date)
+    NSLog(@"AppController: Checking daemon version in 0.5s...");
+    [NSTimer scheduledTimerWithTimeInterval: 0.5 repeats: NO block:^(NSTimer * _Nonnull timer) {
+        [self.xpc getVersion:^(NSString * _Nonnull daemonVersion, NSError * _Nonnull error) {
+            if (error == nil) {
+                NSLog(@"AppController: Daemon version check - daemonVersion=%@, appVersion=%@",
+                      daemonVersion, SELFCONTROL_VERSION_STRING);
+                if ([SELFCONTROL_VERSION_STRING compare: daemonVersion options: NSNumericSearch] == NSOrderedDescending) {
+                    NSLog(@"AppController: Daemon OUTDATED (%@ < %@) - reinstalling...",
                           daemonVersion, SELFCONTROL_VERSION_STRING);
-                    if ([SELFCONTROL_VERSION_STRING compare: daemonVersion options: NSNumericSearch] == NSOrderedDescending) {
-                        NSLog(@"AppController: Daemon OUTDATED (%@ < %@) - reinstalling...",
-                              daemonVersion, SELFCONTROL_VERSION_STRING);
-                        [SCSentry addBreadcrumb: @"Detected out-of-date daemon" category: @"app"];
-                        [self reinstallDaemon];
-                    } else {
-                        [SCSentry addBreadcrumb: @"Detected up-to-date daemon" category:@"app"];
-                        NSLog(@"AppController: Daemon UP-TO-DATE (%@) - no action needed", daemonVersion);
-                    }
-                } else {
-                    NSLog(@"AppController: ERROR fetching daemon version: %@ - reinstalling...", error);
+                    [SCSentry addBreadcrumb: @"Detected out-of-date daemon" category: @"app"];
                     [self reinstallDaemon];
+                } else {
+                    [SCSentry addBreadcrumb: @"Detected up-to-date daemon" category:@"app"];
+                    NSLog(@"AppController: Daemon UP-TO-DATE (%@) - no action needed", daemonVersion);
                 }
-            }];
+            } else {
+                NSLog(@"AppController: ERROR fetching daemon version: %@ - reinstalling...", error);
+                [self reinstallDaemon];
+            }
         }];
-    } else {
-        NSLog(@"AppController: No block running - skipping daemon version check (will update on next commit)");
-    }
+    }];
 
     // Register observers on both distributed and normal notification centers
 	// to receive notifications from the helper tool and the other parts of the

@@ -9,6 +9,8 @@
 | App blocking | [BLOCKING_MECHANISM.md#app-blocking](BLOCKING_MECHANISM.md#app-blocking-implementation) | AppBlocker.m, SCBlockEntry.m |
 | Safety/Robustness | [BLOCK_SAFETY_ANALYSIS.md](BLOCK_SAFETY_ANALYSIS.md) | SCStartupSafetyCheck.m, emergency.sh |
 | Scheduling | [dictionary.md](dictionary.md) | SCScheduleManager.m, SCScheduleLaunchdBridge.m |
+| Schedule job lifecycle | [SCHEDULE_JOB_LIFECYCLE.md](SCHEDULE_JOB_LIFECYCLE.md) | SCScheduleManager.m, cli-main.m, SCDaemon.m |
+| **Daemon Lifecycle** | [DAEMON_LIFECYCLE.md](DAEMON_LIFECYCLE.md) | SCDaemon.m, org.eyebeam.selfcontrold.plist |
 | **Timezone Handling** | [TIMEZONE_HANDLING.md](TIMEZONE_HANDLING.md) | SCScheduleManager.m, cli-main.m, SCDaemon.m |
 | Terminology | [dictionary.md](dictionary.md) | See dictionary/ folder for full entries |
 | Debug features | [SYSTEM_ARCHITECTURE.md#6-debug-features](../SYSTEM_ARCHITECTURE.md#6-debug-features) | SCDebugUtilities.m |
