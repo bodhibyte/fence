@@ -14,11 +14,9 @@ Unlike traditional website blockers that let you disable blocking on a whim, Fen
 - ✅ **No escape hatches** - Blocks persist even through reboots or app deletion
 - ✅ **Block websites AND apps** - Prevent access to both web distractions and desktop apps (Terminal, Cursor, etc.)
 
-## Support This Project
+## Download
 
-If Fence helps you stay focused, consider supporting its development:
-
-<a href="https://buymeacoffee.com/vishalja1n" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 60px !important;width: 217px !important;" ></a>
+To download the built app, visit [usefence.app](https://usefence.app).
 
 ## Credits
 
@@ -31,6 +29,8 @@ Fence was created and is maintained by [Vishal Jain](https://github.com/vishalja
 Fence is free software under the GPL. See [this file](./COPYING) for more details.
 
 ## Building and Running Fence
+
+> **Want to fork/run without licensing?** See [SETUP.md](./SETUP.md#removing-licensing-logic-for-forks) for instructions on removing the licensing system.
 
 ### Prerequisites
 
@@ -128,3 +128,7 @@ This will create a distributable DMG in the `build/` directory.
 ### Contributing
 
 Contributions are welcome! Please feel free to submit pull requests or open issues for bugs and feature requests.
+
+## Support This Project
+
+If Fence helps you stay focused, consider [purchasing a license](https://usefence.app) or contributing any amount via [Buy Me a Coffee](https://buymeacoffee.com/vishalja1n) - either one helps keep development going.
