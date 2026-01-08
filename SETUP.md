@@ -175,3 +175,91 @@ sudo rm -f /usr/local/etc/.*.plist
 sudo dscacheutil -flushcache
 sudo killall -HUP mDNSResponder
 ```
+
+## Removing Licensing Logic (For Forks)
+
+If you're forking this project and want to remove the licensing/trial system entirely, follow these steps:
+
+### Option 1: Always Return Licensed (Simplest)
+
+Edit `Common/SCLicenseManager.m` and modify two methods:
+
+```objc
+// Around line 162
+- (BOOL)canCommit {
+    return YES;  // Always allow commits
+}
+
+// Around line 169
+- (SCLicenseStatus)currentStatus {
+    return SCLicenseStatusValid;  // Always report as licensed
+}
+```
+
+This leaves all the licensing code in place but makes it a no-op.
+
+### Option 2: Full Removal (Clean)
+
+#### Files to Delete
+```bash
+rm Common/SCLicenseManager.h
+rm Common/SCLicenseManager.m
+rm Common/SCDeviceIdentifier.h
+rm Common/SCDeviceIdentifier.m
+rm SCLicenseWindowController.h
+rm SCLicenseWindowController.m
+rm docs/LICENSING_CURRENT.md
+rm generate-test-license.js
+rm Secrets.xcconfig  # If it exists
+```
+
+#### Files to Modify
+
+**1. `AppController.m`**
+- Remove `#import "Common/SCLicenseManager.h"`
+- Remove `syncTrialStatusWithCompletion:` call (~line 463-466)
+- Remove `attemptLicenseRecoveryWithCompletion:` call (~line 468-475)
+- Remove license check before commit (~line 134-143)
+- Remove `showLicenseModalWithCompletion:` method
+
+**2. `SCMenuBarController.m`**
+- Remove `#import "Common/SCLicenseManager.h"`
+- Remove trial status display in menu (~lines 185-208)
+- Remove "Enter License" menu item (~lines 230-238)
+- Remove debug menu items for trial reset/expire
+- Remove `enterLicenseClicked:` and `showLicenseWindowWithParent:` methods
+
+**3. `SCWeekScheduleWindowController.m`**
+- Remove `#import "Common/SCLicenseManager.h"`
+- Remove `canCommit` check before commit (~line 687-697)
+- Remove `showLicenseModalWithCompletion:` method
+
+**4. `SelfControl.xcodeproj/project.pbxproj`**
+- Remove references to deleted files (or just remove from Xcode UI)
+
+### Server Components (If Removing Online Licensing)
+
+The licensing server is separate from the main app. If you don't need it:
+
+```bash
+rm -rf server/  # Railway API server code
+```
+
+The server endpoints (not needed if licensing removed):
+- `POST /api/trial/check` - Trial sync
+- `POST /api/activate` - License activation
+- `GET /api/recover` - License recovery
+
+### Licensing Documentation
+
+Current licensing implementation is documented in:
+- `docs/LICENSING_CURRENT.md` - Full flow diagrams and code references
+
+### Build Settings
+
+If using Option 1, you may still need a `Secrets.xcconfig` with a placeholder:
+```
+LICENSE_SECRET_KEY = placeholder_not_used
+```
+
+Or add to your build settings directly in Xcode.

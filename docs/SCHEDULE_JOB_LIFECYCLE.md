@@ -181,6 +181,124 @@ flowchart TB
     E5 --> E6
 ```
 
+## Live Blocklist Updates (Strictify)
+
+While a block is running, users can **add** items to bundles and have them take effect immediately. This is called "live strictify" — the block can only get **stricter**, never looser.
+
+### Monotonic Security Constraint
+
+| Action | Allowed? | Behavior |
+|--------|----------|----------|
+| **Add** item to bundle | ✅ Yes | Immediately blocked |
+| **Remove** item from bundle | ❌ No | Silently ignored, logged as warning |
+
+This prevents users from bypassing blocks by removing entries mid-session.
+
+### Update Flow Diagram
+
+```mermaid
+sequenceDiagram
+    participant UI as Frontend<br/>(SCScheduleManager)
+    participant XPC as XPC Client
+    participant D as Daemon<br/>(SCDaemonBlockMethods)
+    participant BM as BlockManager
+    participant PF as PacketFilter
+    participant HB as HostBlocker
+    participant AB as AppBlocker
+
+    Note over UI: User edits bundle<br/>(adds twitter.com)
+
+    UI->>UI: updateBundle:
+    UI->>UI: Check isCommittedForWeekOffset:0
+    UI->>UI: Check anyBlockIsRunning
+
+    alt Block is running
+        UI->>XPC: updateBlocklist:bundle.entries
+        XPC->>D: XPC call with new blocklist
+
+        D->>D: Compare old vs new entries
+        Note over D: added = newList - oldList<br/>removed = oldList - newList
+
+        alt Items were removed
+            D->>D: Log WARNING:<br/>"removed items will not be updated"
+        end
+
+        D->>BM: enterAppendMode
+        D->>BM: addBlockEntriesFromStrings:added
+
+        BM->>PF: Append new PF rules
+        BM->>HB: Append to /etc/hosts
+
+        D->>BM: finishAppending
+
+        BM->>BM: waitUntilAllOperationsAreFinished<br/>(DNS resolution)
+        BM->>HB: writeNewFileContents
+        BM->>PF: refreshPFRules (pfctl reload)
+        BM->>AB: findAndKillBlockedApps
+
+        D->>D: Update ActiveBlocklist in SCSettings
+        D->>D: syncSettingsAndWait:5
+        D-->>XPC: Success
+        XPC-->>UI: Reply
+    end
+```
+
+### Timing
+
+The update is **synchronous** — typically completes in **1-2 seconds**:
+
+| Step | Time |
+|------|------|
+| XPC connection | ~100ms |
+| DNS resolution for new domains | ~500ms-1s |
+| Write /etc/hosts | ~10ms |
+| Reload PF rules (pfctl) | ~100ms |
+| Kill blocked apps | ~50ms |
+
+### Launch Path Independence
+
+The update mechanism works identically regardless of how the block was started:
+
+| Launch Path | Storage Location | Update Works? |
+|-------------|------------------|---------------|
+| Path 1 (launchd) | `SCSettings.ActiveBlocklist` | ✅ Yes |
+| Path 2 (daemon startup) | `SCSettings.ActiveBlocklist` | ✅ Yes |
+| Path 3 (daemon sweep) | `SCSettings.ActiveBlocklist` | ✅ Yes |
+
+All paths store the blocklist in the same `SCSettings` location (`/usr/local/etc/.hash.plist`), so `updateBlocklist:` reads from and writes to the same place regardless of how the block was initiated.
+
+### Key Source Files
+
+| File | Method | Purpose |
+|------|--------|---------|
+| `Block Management/SCScheduleManager.m` | `updateBundle:` | Frontend trigger, checks if committed + running |
+| `Common/SCXPCClient.m` | `updateBlocklist:reply:` | XPC client wrapper |
+| `Daemon/SCDaemonXPC.m` | `updateBlocklist:authorization:reply:` | XPC handler, auth check |
+| `Daemon/SCDaemonBlockMethods.m` | `updateBlocklist:authorization:reply:` | Core logic: diff, append-only, sync |
+| `Block Management/BlockManager.m` | `enterAppendMode`, `finishAppending` | Append to existing block |
+| `Block Management/PacketFilter.m` | `enterAppendMode`, `finishAppending` | PF rule appending |
+
+### Code Snippet: Monotonic Enforcement
+
+From `SCDaemonBlockMethods.m:200-209`:
+
+```objc
+NSArray* activeBlocklist = [settings valueForKey: @"ActiveBlocklist"];
+NSMutableArray* added = [NSMutableArray arrayWithArray: newBlocklist];
+[added removeObjectsInArray: activeBlocklist];      // Items to ADD
+NSMutableArray* removed = [NSMutableArray arrayWithArray: activeBlocklist];
+[removed removeObjectsInArray: newBlocklist];       // Items user tried to REMOVE
+
+// Removed items are IGNORED - monotonic security
+if (removed.count > 0) {
+    NSLog(@"WARNING: Active blocklist has removed items; these will not be updated. Removed items are %@", removed);
+}
+
+[blockManager enterAppendMode];
+[blockManager addBlockEntriesFromStrings: added];   // Only ADD, never remove
+[blockManager finishAppending];
+```
+
 ## Cleanup Mechanisms
 
 There are **two types of cleanup** for different scenarios:
@@ -394,12 +512,15 @@ sequenceDiagram
 
 | File | Purpose |
 |------|---------|
-| `Block Management/SCScheduleManager.m` | Commit flow, segment calculation, cleanup orchestration |
+| `Block Management/SCScheduleManager.m` | Commit flow, segment calculation, cleanup orchestration, **live strictify trigger** |
 | `Block Management/SCScheduleLaunchdBridge.m` | Plist creation with startDate/endDate |
+| `Block Management/BlockManager.m` | Block installation, **append mode for live updates** |
+| `Block Management/PacketFilter.m` | PF rule management, **append mode for live updates** |
 | `cli-main.m` | CLI arg parsing, validation, expired block detection, XPC calls |
+| `Common/SCXPCClient.m` | XPC client wrapper, **updateBlocklist:** |
 | `Daemon/SCDaemon.m` | Startup recovery, cleanup helper, **1-minute schedule sweep timer** |
-| `Daemon/SCDaemonXPC.m` | XPC handlers for start block + cleanup + clearExpiredBlock |
-| `Daemon/SCDaemonBlockMethods.m` | Actual block execution, checkup timer |
+| `Daemon/SCDaemonXPC.m` | XPC handlers for start block + cleanup + clearExpiredBlock + **updateBlocklist** |
+| `Daemon/SCDaemonBlockMethods.m` | Actual block execution, checkup timer, **monotonic update enforcement** |
 
 ---
 

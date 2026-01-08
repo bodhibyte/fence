@@ -204,8 +204,9 @@
 #pragma mark - Actions
 
 - (void)activateClicked:(id)sender {
-    NSString *code = [self.licenseCodeField.stringValue stringByTrimmingCharactersInSet:
-                      [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    // Remove ALL whitespace (not just trim) - handles line-wrapped codes from emails
+    NSString *code = [[self.licenseCodeField.stringValue componentsSeparatedByCharactersInSet:
+                       [NSCharacterSet whitespaceAndNewlineCharacterSet]] componentsJoinedByString:@""];
 
     if (code.length == 0) {
         self.errorLabel.stringValue = @"Please enter a license code.";
