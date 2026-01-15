@@ -15,7 +15,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          submodules: recursive
+          submodules: false  # We'll init submodules manually due to stale commit ref
+
+      - name: Initialize Submodules
+        run: |
+          # The submodule references a commit that may not exist anymore
+          # Clone the ArgumentParser repo and checkout the latest from master
+          git submodule update --init --recursive || {
+            echo "Submodule update failed, cloning fresh..."
+            rm -rf ArgumentParser
+            git clone --depth 1 https://github.com/mysteriouspants/ArgumentParser.git ArgumentParser
+          }
 
       - name: Setup Ruby
         uses: ruby/setup-ruby@v1
