@@ -37,6 +37,7 @@ jobs:
         run: |
           gem install cocoapods
           gem install cocoapods-prune-localizations
+          gem install xcpretty
 
       - name: Cache CocoaPods
         uses: actions/cache@v4
@@ -58,22 +59,24 @@ jobs:
 
       - name: Build
         run: |
+          set -o pipefail
           xcodebuild -workspace SelfControl.xcworkspace \
             -scheme SelfControl \
             -configuration Debug \
-            -destination 'platform=macOS' \
+            -destination 'platform=macOS,arch=arm64' \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
-            build | xcpretty && exit ${PIPESTATUS[0]}
+            build 2>&1 | xcpretty
 
       - name: Build CLI
         run: |
+          set -o pipefail
           xcodebuild -workspace SelfControl.xcworkspace \
             -scheme selfcontrol-cli \
             -configuration Debug \
-            -destination 'platform=macOS' \
+            -destination 'platform=macOS,arch=arm64' \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
-            build | xcpretty && exit ${PIPESTATUS[0]}
+            build 2>&1 | xcpretty
