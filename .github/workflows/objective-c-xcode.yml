@@ -53,6 +53,13 @@ jobs:
       - name: Install Pods
         run: pod install
 
+      - name: Create Secrets Config
+        run: |
+          # Create dummy Secrets.xcconfig for CI builds
+          # For production builds, use GitHub Secrets to inject real values
+          echo "// CI Build Secrets" > Secrets.xcconfig
+          echo "LICENSE_SECRET_KEY = 0000000000000000000000000000000000000000000000000000000000000000" >> Secrets.xcconfig
+
       - name: Run Setup Script
         run: |
           chmod +x scripts/setup_macos26.sh
@@ -60,7 +67,6 @@ jobs:
 
       - name: Build
         run: |
-          set -o pipefail
           xcodebuild -workspace SelfControl.xcworkspace \
             -scheme SelfControl \
             -configuration Debug \
@@ -68,11 +74,10 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
-            build 2>&1
+            build
 
       - name: Build CLI
         run: |
-          set -o pipefail
           xcodebuild -workspace SelfControl.xcworkspace \
             -scheme selfcontrol-cli \
             -configuration Debug \
@@ -80,4 +85,4 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
-            build 2>&1
+            build
