@@ -95,6 +95,7 @@ jobs:
             -scheme SelfControl \
             -configuration Debug \
             -destination 'platform=macOS,arch=arm64' \
+            -derivedDataPath build \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
@@ -107,8 +108,25 @@ jobs:
             -scheme selfcontrol-cli \
             -configuration Debug \
             -destination 'platform=macOS,arch=arm64' \
+            -derivedDataPath build \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
             COMPILER_INDEX_STORE_ENABLE=NO \
             build
+
+      - name: Create DMG
+        run: |
+          # Create a temporary directory for the DMG contents
+          mkdir -p dmg_root
+          # Copy the .app into it
+          cp -R "build/Build/Products/Debug/Fence.app" dmg_root/
+          # Create the DMG
+          hdiutil create -volname "Fence" -srcfolder dmg_root -ov -format UDZO Fence.dmg
+          echo "DMG created at Fence.dmg"
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fence.dmg
+          path: Fence.dmg
