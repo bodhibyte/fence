@@ -1,0 +1,59 @@
+name: Build SelfControl
+
+on:
+  push:
+    branches: [ "master", "main" ]
+  pull_request:
+    branches: [ "master", "main" ]
+
+jobs:
+  build:
+    name: Build SelfControl
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2'
+          bundler-cache: true
+
+      - name: Install CocoaPods
+        run: |
+          gem install cocoapods
+          gem install cocoapods-prune-localizations
+
+      - name: Install Pods
+        run: pod install
+
+      - name: Run Setup Script
+        run: |
+          chmod +x scripts/setup_macos26.sh
+          ./scripts/setup_macos26.sh
+
+      - name: Build
+        run: |
+          xcodebuild -workspace SelfControl.xcworkspace \
+            -scheme SelfControl \
+            -configuration Debug \
+            -destination 'platform=macOS' \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            build | xcpretty && exit ${PIPESTATUS[0]}
+
+      - name: Build CLI
+        run: |
+          xcodebuild -workspace SelfControl.xcworkspace \
+            -scheme selfcontrol-cli \
+            -configuration Debug \
+            -destination 'platform=macOS' \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            build | xcpretty && exit ${PIPESTATUS[0]}
