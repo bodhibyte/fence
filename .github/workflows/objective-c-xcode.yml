@@ -115,6 +115,12 @@ jobs:
             COMPILER_INDEX_STORE_ENABLE=NO \
             build
 
+      - name: Fix Permissions
+        run: |
+          # Ensure the binary inside the app bundle is executable
+          chmod +x "build/Build/Products/Debug/Fence.app/Contents/MacOS/Fence"
+          echo "Permissions fixed"
+
       - name: Create DMG
         run: |
           # Create a temporary directory for the DMG contents
