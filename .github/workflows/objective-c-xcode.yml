@@ -2,9 +2,9 @@ name: Build SelfControl
 
 on:
   push:
-    branches: [ "master", "main" ]
+    branches: [ "master", "main", "disable-licensing" ]
   pull_request:
-    branches: [ "master", "main" ]
+    branches: [ "master", "main", "disable-licensing" ]
   workflow_dispatch:  # Allows manual trigger from any branch
 
 jobs:
