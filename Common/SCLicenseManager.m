@@ -160,34 +160,12 @@ typedef NS_ENUM(NSInteger, SCLicenseErrorCode) {
 #pragma mark - License Status
 
 - (BOOL)canCommit {
-    if (![self isTrialExpired]) {
-        return YES;  // Still in trial
-    }
-    return [self currentStatus] == SCLicenseStatusValid;
+    return YES;
 }
 
 - (SCLicenseStatus)currentStatus {
-    // Check for valid license FIRST (takes priority over trial)
-    NSString *storedCode = [self retrieveLicenseFromStorage];
-    if (storedCode && [self validateLicenseCode:storedCode error:nil]) {
-        NSLog(@"[SCLicenseManager] currentStatus = SCLicenseStatusValid (valid license)");
-        return SCLicenseStatusValid;
-    }
-
-    // No valid license - check trial
-    if (![self isTrialExpired]) {
-        NSLog(@"[SCLicenseManager] currentStatus = SCLicenseStatusTrial (trial not expired)");
-        return SCLicenseStatusTrial;
-    }
-
-    // Trial expired, no valid license
-    if (!storedCode) {
-        NSLog(@"[SCLicenseManager] currentStatus = SCLicenseStatusTrialExpired (no stored code)");
-        return SCLicenseStatusTrialExpired;
-    }
-
-    NSLog(@"[SCLicenseManager] currentStatus = SCLicenseStatusInvalid (invalid license)");
-    return SCLicenseStatusInvalid;
+    NSLog(@"[SCLicenseManager] Licensing disabled: bypassing checks");
+    return SCLicenseStatusValid;
 }
 
 #pragma mark - License Validation
