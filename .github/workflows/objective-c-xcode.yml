@@ -10,7 +10,7 @@ on:
 jobs:
   build:
     name: Build SelfControl
-    runs-on: macos-latest
+    runs-on: macos-14  # Use stable macOS 14 (Sonoma) instead of latest
 
     steps:
       - name: Checkout
@@ -65,6 +65,16 @@ jobs:
           chmod +x scripts/setup_macos26.sh
           ./scripts/setup_macos26.sh
 
+      - name: Select Xcode
+        run: |
+          # List available Xcode versions
+          ls /Applications | grep Xcode
+          # Use Xcode 15.4 if available, otherwise use default
+          if [ -d "/Applications/Xcode_15.4.app" ]; then
+            sudo xcode-select -s /Applications/Xcode_15.4.app/Contents/Developer
+          fi
+          xcodebuild -version
+
       - name: Build
         run: |
           xcodebuild -workspace SelfControl.xcworkspace \
@@ -74,6 +84,7 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
+            COMPILER_INDEX_STORE_ENABLE=NO \
             build
 
       - name: Build CLI
@@ -85,4 +96,5 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
+            COMPILER_INDEX_STORE_ENABLE=NO \
             build
