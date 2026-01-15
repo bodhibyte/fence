@@ -1,4 +1,5 @@
-source 'https://github.com/CocoaPods/Specs.git'
+# Use CDN instead of git clone (much faster, doesn't download 3GB repo)
+source 'https://cdn.cocoapods.org/'
 
 minVersion = '12.0'
 
