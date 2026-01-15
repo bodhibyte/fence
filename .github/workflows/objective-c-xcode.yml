@@ -121,6 +121,12 @@ jobs:
           chmod +x "build/Build/Products/Debug/Fence.app/Contents/MacOS/Fence"
           echo "Permissions fixed"
 
+      - name: Deep Sign App
+        run: |
+          # Force deep signing to ensure all nested frameworks (Sparkle) are signed
+          codesign --force --deep --sign - "build/Build/Products/Debug/Fence.app"
+          echo "App signed"
+
       - name: Create DMG
         run: |
           # Create a temporary directory for the DMG contents
