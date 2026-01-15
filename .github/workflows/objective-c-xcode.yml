@@ -53,6 +53,20 @@ jobs:
       - name: Install Pods
         run: pod install
 
+      - name: Install Sparkle Framework
+        run: |
+          # Sparkle.framework is in .gitignore, so we need to download it for CI
+          # Download latest Sparkle 2.x release
+          SPARKLE_VERSION="2.6.4"
+          curl -L -o Sparkle.tar.xz "https://github.com/sparkle-project/Sparkle/releases/download/${SPARKLE_VERSION}/Sparkle-${SPARKLE_VERSION}.tar.xz"
+          mkdir -p Sparkle-temp
+          tar -xf Sparkle.tar.xz -C Sparkle-temp
+          # Copy the framework to project root (where Xcode project expects it)
+          cp -R Sparkle-temp/Sparkle.framework .
+          rm -rf Sparkle-temp Sparkle.tar.xz
+          echo "Sparkle.framework installed"
+          ls -la Sparkle.framework/
+
       - name: Create Secrets Config
         run: |
           # Create dummy Secrets.xcconfig for CI builds
