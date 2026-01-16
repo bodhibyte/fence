@@ -451,7 +451,8 @@ float const INACTIVITY_LIMIT_SECS = 60 * 2; // 2 minutes
     SecRequirementRef isSelfControlApp;
     // versions before 4.0 didn't have hardened code signing, so aren't trustworthy to talk to the daemon
     // (plus the daemon didn't exist before 4.0 so there's really no reason they should want to run it!)
-    SecRequirementCreateWithString(CFSTR("anchor apple generic and (identifier \"org.eyebeam.Fence\" or identifier \"org.eyebeam.selfcontrol-cli\") and info [CFBundleVersion] >= \"407\" and (certificate leaf[field.1.2.840.113635.100.6.1.9] /* exists */ or certificate leaf[field.1.2.840.113635.100.6.1.12] /* exists */ or certificate 1[field.1.2.840.113635.100.6.2.6] /* exists */ and certificate leaf[field.1.2.840.113635.100.6.1.13] /* exists */) and certificate leaf[subject.OU] = L5YX8CH3F5"), kSecCSDefaultFlags, &isSelfControlApp);
+    // Relaxed requirement for ad-hoc signing support
+    SecRequirementCreateWithString(CFSTR("identifier \"org.eyebeam.Fence\" or identifier \"org.eyebeam.selfcontrol-cli\""), kSecCSDefaultFlags, &isSelfControlApp);
     OSStatus clientValidityStatus = SecCodeCheckValidity(guest, kSecCSDefaultFlags, isSelfControlApp);
 
     CFRelease(guest);
