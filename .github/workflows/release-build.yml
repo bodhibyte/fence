@@ -1,0 +1,195 @@
+name: Build Release Distribution
+
+on:
+  push:
+    tags:
+      - 'v*'  # Trigger on version tags like v1.0.0
+  workflow_dispatch:  # Allows manual trigger
+    inputs:
+      create_release:
+        description: 'Create a GitHub release'
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  build:
+    name: Build Release Distribution
+    runs-on: macos-14  # Use stable macOS 14 (Sonoma)
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: false  # We'll init submodules manually due to stale commit ref
+
+      - name: Initialize Submodules
+        run: |
+          # The submodule references a commit that may not exist anymore
+          # Clone the ArgumentParser repo and checkout the latest from master
+          git submodule update --init --recursive || {
+            echo "Submodule update failed, cloning fresh..."
+            rm -rf ArgumentParser
+            git clone --depth 1 https://github.com/mysteriouspants/ArgumentParser.git ArgumentParser
+          }
+
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2'
+          bundler-cache: true
+
+      - name: Install CocoaPods
+        run: |
+          gem install cocoapods
+          gem install cocoapods-prune-localizations
+          gem install xcpretty
+
+      - name: Cache CocoaPods
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/Library/Caches/CocoaPods
+            Pods
+          key: ${{ runner.os }}-pods-${{ hashFiles('**/Podfile.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pods-
+
+      - name: Install Pods
+        run: pod install
+
+      - name: Install Sparkle Framework
+        run: |
+          # Sparkle.framework is in .gitignore, so we need to download it for CI
+          # Download latest Sparkle 2.x release
+          SPARKLE_VERSION="2.6.4"
+          curl -L -o Sparkle.tar.xz "https://github.com/sparkle-project/Sparkle/releases/download/${SPARKLE_VERSION}/Sparkle-${SPARKLE_VERSION}.tar.xz"
+          mkdir -p Sparkle-temp
+          tar -xf Sparkle.tar.xz -C Sparkle-temp
+          # Copy the framework to project root (where Xcode project expects it)
+          cp -R Sparkle-temp/Sparkle.framework .
+          rm -rf Sparkle-temp Sparkle.tar.xz
+          echo "Sparkle.framework installed"
+          ls -la Sparkle.framework/
+
+      - name: Create Secrets Config
+        run: |
+          # Create dummy Secrets.xcconfig for CI builds
+          # For production builds, use GitHub Secrets to inject real values
+          echo "// CI Build Secrets" > Secrets.xcconfig
+          echo "LICENSE_SECRET_KEY = ${{ secrets.LICENSE_SECRET_KEY || '0000000000000000000000000000000000000000000000000000000000000000' }}" >> Secrets.xcconfig
+
+      - name: Run Setup Script
+        run: |
+          chmod +x scripts/setup_macos26.sh
+          ./scripts/setup_macos26.sh
+
+      - name: Select Xcode
+        run: |
+          # List available Xcode versions
+          ls /Applications | grep Xcode
+          # Use Xcode 15.4 if available, otherwise use default
+          if [ -d "/Applications/Xcode_15.4.app" ]; then
+            sudo xcode-select -s /Applications/Xcode_15.4.app/Contents/Developer
+          fi
+          xcodebuild -version
+
+      - name: Build Release App
+        run: |
+          xcodebuild -workspace SelfControl.xcworkspace \
+            -scheme SelfControl \
+            -configuration Release \
+            -destination 'platform=macOS,arch=arm64' \
+            -derivedDataPath build \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=YES \
+            CODE_SIGNING_ALLOWED=YES \
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            GCC_OPTIMIZATION_LEVEL=s \
+            SWIFT_OPTIMIZATION_LEVEL=-O \
+            DEBUG_INFORMATION_FORMAT=dwarf \
+            COPY_PHASE_STRIP=YES \
+            STRIP_INSTALLED_PRODUCT=YES \
+            build
+
+      - name: Build Release CLI
+        run: |
+          xcodebuild -workspace SelfControl.xcworkspace \
+            -scheme selfcontrol-cli \
+            -configuration Release \
+            -destination 'platform=macOS,arch=arm64' \
+            -derivedDataPath build \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=YES \
+            CODE_SIGNING_ALLOWED=YES \
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            GCC_OPTIMIZATION_LEVEL=s \
+            SWIFT_OPTIMIZATION_LEVEL=-O \
+            DEBUG_INFORMATION_FORMAT=dwarf \
+            COPY_PHASE_STRIP=YES \
+            STRIP_INSTALLED_PRODUCT=YES \
+            build
+
+      - name: Fix Permissions
+        run: |
+          # Ensure the binary inside the app bundle is executable
+          chmod +x "build/Build/Products/Release/Fence.app/Contents/MacOS/Fence"
+          echo "Permissions fixed"
+
+      - name: Deep Sign App
+        run: |
+          # Force deep signing to ensure all nested frameworks (Sparkle) are signed
+          codesign --force --deep --sign - "build/Build/Products/Release/Fence.app"
+          echo "App signed"
+
+      - name: Get Version
+        id: version
+        run: |
+          VERSION=$(xcodebuild -project SelfControl.xcodeproj/ -showBuildSettings 2>/dev/null | grep "MARKETING_VERSION" | sed 's/[ ]*MARKETING_VERSION = //')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION"
+
+      - name: Create DMG
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          # Create a temporary directory for the DMG contents
+          mkdir -p dmg_root
+          # Copy the .app into it
+          cp -R "build/Build/Products/Release/Fence.app" dmg_root/
+          # Create the DMG with version in name
+          hdiutil create -volname "Fence $VERSION" -srcfolder dmg_root -ov -format UDZO "Fence-${VERSION}.dmg"
+          # Also create a generic name for easy download
+          cp "Fence-${VERSION}.dmg" Fence-Release.dmg
+          echo "DMG created: Fence-${VERSION}.dmg"
+
+      - name: Create ZIP Archive
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          cd "build/Build/Products/Release"
+          zip -r "../../../../Fence-${VERSION}.zip" "Fence.app"
+          cd ../../../../
+          echo "ZIP created: Fence-${VERSION}.zip"
+
+      - name: Upload DMG Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fence-Release-DMG
+          path: Fence-*.dmg
+
+      - name: Upload ZIP Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fence-Release-ZIP
+          path: Fence-*.zip
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v') || inputs.create_release == true
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            Fence-*.dmg
+            Fence-*.zip
+          draft: true
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
